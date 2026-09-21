@@ -11,6 +11,7 @@ import {
   appSettingsSchema,
   formatLogPrefix,
   formatZodError,
+  ZCODE_PRODUCT_FLAVOR,
 } from "@zcode/shared";
 import type { ISettingService } from "./setting.js";
 import { normalizeSettingsPatch } from "#src/setting/normalizeSettingsPatch.js";
@@ -53,7 +54,13 @@ function resolveUserHomeDir() {
 }
 
 function getSettingsDir() {
-  return join(resolveUserHomeDir(), ".zcode", "v2");
+  // fork 隔离改动：Preview 桌面构建的数据根已隔离（desktopDataBaseDirBootstrap 经
+  // ZCODE_DATA_BASE_DIR 注入 host），设置文件跟随隔离根（{dataBaseDir}/.zcode/v2），
+  // 避免并排安装读写正式版 ~/.zcode/v2/setting.json。
+  // 正式版（含未注入 flavor 的 CLI / server）保持 resolveUserHomeDir() 原语义。
+  return ZCODE_PRODUCT_FLAVOR === "preview"
+    ? join(getDataBaseDir(), ".zcode", "v2")
+    : join(resolveUserHomeDir(), ".zcode", "v2");
 }
 
 function getSettingsFile() {
