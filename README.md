@@ -43,6 +43,23 @@ Agent CLI 与运行时源码位于 [apps/zcode-cli/](apps/zcode-cli/)，作为�
 
 默认 `bootstrap` 跳过远程资源准备，适合本地桌面开发。使用远程工作区或验证远程发行资源时，再运行对应准备命令。
 
+默认 `bootstrap` 跳过远程资源准备，适合本地桌面开发。使用远程工作区或验证远程发行资源时，再运行对应准备命令。
+
+### 在 Windows 上构建
+
+以下完整链路已在 Windows 10 x64（Git Bash + Node 24.14.0 + pnpm 10.33.2）验证：
+
+```bash
+pnpm bootstrap
+pnpm build:zcode --base-url https://downloads.example.com/zcode/
+pnpm bundle:desktop -- --os win --arch x64
+```
+
+- `build:zcode` 内部对 `pnpm` 与 `tar` 的调用已适配 Windows：`pnpm` 复用 `spawn-command.mjs` 的 shell 封装解析 cmd shim；`tar` 以相对路径调用，避免 Git Bash 的 GNU tar 把 `D:\...` 盘符路径按 host:path 语法当远端主机。
+- 首次在新克隆上执行 `build:zcode` 前，先运行一次 `pnpm typecheck`（`tsc -b`）为 `@zcode/shared` 等源码直出包生成 `dist`，`build:zcode` 的 SEA 资产收集依赖这些产物。
+- 桌面打包需要从网络下载 Electron 与 NSIS 等二进制；国内网络可设置 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 与 `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/` 加速。
+- 本地构建的安装包不签名：产物为 `packages/desktop/dist/ZCode-<version>-win-x64.exe`（NSIS）与 `dist/zcode/releases/<version>/zcode-<version>.tar.gz`（CLI/Web 发行包）。
+
 ## 开发与运行
 
 ### 桌面版

@@ -43,6 +43,23 @@ Additional setup and build commands:
 
 The default `bootstrap` skips remote asset preparation and is suitable for local desktop development. Run the corresponding preparation command when working with remote workspaces or validating remote distribution assets.
 
+The default `bootstrap` skips remote asset preparation and is suitable for local desktop development. Run the corresponding preparation command when working with remote workspaces or validating remote distribution assets.
+
+### Building on Windows
+
+The following pipeline has been verified on Windows 10 x64 (Git Bash, Node 24.14.0, pnpm 10.33.2):
+
+```bash
+pnpm bootstrap
+pnpm build:zcode --base-url https://downloads.example.com/zcode/
+pnpm bundle:desktop -- --os win --arch x64
+```
+
+- `build:zcode` invokes `pnpm` and `tar` in a Windows-compatible way: `pnpm` goes through the shell-aware wrapper in `spawn-command.mjs` to resolve the cmd shim, and `tar` is invoked with relative paths so Git Bash GNU tar does not misread `D:\...` drive paths as remote hosts (host:path syntax).
+- On a fresh clone, run `pnpm typecheck` (`tsc -b`) once before `build:zcode` to emit `dist` for source-first packages such as `@zcode/shared`; the SEA asset collection in `build:zcode` depends on those outputs.
+- Desktop packaging downloads Electron and NSIS binaries from the network. Users in mainland China can set `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` and `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/` to speed this up.
+- Locally built installers are unsigned: the artifacts are `packages/desktop/dist/ZCode-<version>-win-x64.exe` (NSIS) and `dist/zcode/releases/<version>/zcode-<version>.tar.gz` (CLI/Web distribution).
+
 ## Development and Usage
 
 ### Desktop

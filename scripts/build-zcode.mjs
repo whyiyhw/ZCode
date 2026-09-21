@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { loadEndpointEnv } from "./load-endpoint-env.mjs";
-import { spawnSync } from "node:child_process";
+import { runCommand } from "./spawn-command.mjs";
 import { createHash } from "node:crypto";
 import { chmod, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -100,19 +100,12 @@ function commandText(command, args) {
 
 function run(command, args, options = {}) {
   console.log(`[zcode] ${commandText(command, args)}`);
-  const result = spawnSync(command, args, {
+  // 复用 bootstrap 同款的 Windows 感知封装：win32 下 pnpm/npm 的 shim 需经 shell 解析，
+  // 直接 spawnSync("pnpm") 会 ENOENT。
+  runCommand(command, args, {
     cwd: root,
-    stdio: "inherit",
     ...options,
   });
-  if (result.error) {
-    throw new Error(`${commandText(command, args)} failed: ${result.error.message}`, {
-      cause: result.error,
-    });
-  }
-  if (result.status !== 0) {
-    throw new Error(`${commandText(command, args)} failed`);
-  }
 }
 
 async function readJson(file) {
@@ -226,7 +219,12 @@ async function createTarball({ packageParent, releaseDir, tarballName }) {
   await rm(tarball, {
     force: true,
   });
-  run("tar", ["-czf", tarball, "-C", packageParent, packageDirName]);
+  // Windows 上 Git Bash 的 GNU tar 会把绝对路径里的盘符（D:\... / D:/...）按 host:path
+  // 语法当远端主机解析；这里输出文件相对 releaseDir、输入相对 -C 目录，全程不出现
+  // 绝对路径，同时兼容 bsdtar / GNU tar / macOS tar。
+  run("tar", ["-czf", tarballName, "-C", packageParent, packageDirName], {
+    cwd: releaseDir,
+  });
   return tarball;
 }
 
