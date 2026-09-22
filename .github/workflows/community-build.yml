@@ -172,14 +172,17 @@ jobs:
       - name: 发布 GitHub Release
         run: |
           shopt -s nullglob
-          files=(artifacts/*.exe artifacts/*.exe.blockmap artifacts/*.dmg artifacts/*.dmg.blockmap artifacts/*.AppImage artifacts/*.zip artifacts/*.yml artifacts/*.txt artifacts/*.json artifacts/*.sh)
+          files=(artifacts/*.exe artifacts/*.exe.blockmap artifacts/*.dmg artifacts/*.dmg.blockmap artifacts/*.AppImage artifacts/*.zip artifacts/*.deb artifacts/*.rpm artifacts/*.pkg.tar.zst artifacts/*.yml artifacts/*.txt artifacts/*.json artifacts/*.sh)
           if [ ${#files[@]} -eq 0 ]; then
             echo "没有可发布的产物文件" >&2
             exit 1
           fi
+          # 本 job 没有 checkout，gh 无法从本地 git 推断仓库，必须显式 --repo
+          # （GITHUB_REPOSITORY 由 runner 注入）；已存在同名 release 时改为补充上传。
           gh release create "${GITHUB_REF_NAME}" "${files[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
             --title "ZCode Community ${GITHUB_REF_NAME}" \
             --notes "社区版构建（隐私断言已在 CI 通过；说明见 COMMUNITY-EDITION.md，证据见 PRIVACY-AUDIT.md）。未签名：macOS 首次打开需 xattr -rd com.apple.quarantine <App>。" \
-            || gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+            || gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
