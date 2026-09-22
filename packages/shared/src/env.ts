@@ -45,9 +45,10 @@ export const ZCODE_BUILD_COMMIT_ID_ENV = "ZCODE_BUILD_COMMIT_ID" as const;
 export const RUNTIME_ZCODE_DEBUG =
   typeof process !== "undefined" ? process.env.ZCODE_DEBUG : undefined;
 
-// 恢复原因：写死 false 会让运行时已配置的数仓/ARMS 永远空转。
-// 功能保持可用；实际出网由各出口的运行时端点检查决定，未配置不上报。
-export const ZCODE_TELEMETRY_ENABLED: boolean = true;
+// 本 fork 隐私基线：默认关闭，仅环境变量恰为 "true" 时显式开启（spec/telemetry-master-switch.md）。
+// 上游默认 true 且依赖端点未配置兜底；本仓库构建不注入端点，仍收紧为 opt-in，避免环境意外继承端点后静默上报。
+export const ZCODE_TELEMETRY_ENABLED: boolean =
+  typeof process !== "undefined" ? process.env.ZCODE_TELEMETRY_ENABLED === "true" : false;
 
 /** 数仓事件上报端点：由运行时环境变量提供，未配置即停用，构建产物不内嵌。 */
 export const ZCODE_TELEMETRY_REPORT_ENDPOINT =

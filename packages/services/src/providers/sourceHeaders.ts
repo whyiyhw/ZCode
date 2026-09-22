@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { version as readOsVersion } from "node:os";
 import { join } from "node:path";
 import {
   buildZCodeSourceHeadersFromContext,
@@ -16,8 +15,6 @@ interface ZCodeSourceHeaderOptions {
   appVersion?: string;
   arch?: string;
   clientLanguage?: string;
-  clientTimezone?: string;
-  osVersion?: string;
   platform?: NodeJS.Platform;
   releaseChannel?: string;
 }
@@ -30,12 +27,6 @@ function normalizePrintableHeaderValue(value: string | undefined): string | unde
 
 function resolveClientLanguage(): string {
   return normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().locale) ?? "unknown";
-}
-
-function resolveClientTimezone(): string {
-  return (
-    normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? "unknown"
-  );
 }
 
 function readExistingDeviceMid(): string | undefined {
@@ -71,18 +62,15 @@ export function buildZCodeSourceHeaders(
   const releaseChannel = normalizePrintableHeaderValue(options.releaseChannel ?? ZCODE_ENV);
   const clientLanguage =
     normalizePrintableHeaderValue(options.clientLanguage) ?? resolveClientLanguage();
-  const clientTimezone =
-    normalizePrintableHeaderValue(options.clientTimezone) ?? resolveClientTimezone();
-  const osVersion = normalizePrintableHeaderValue(options.osVersion ?? readOsVersion());
   const deviceMid = readExistingDeviceMid();
 
+  // 时区与 OS 内核版本不再进入头集合（PRIVACY-AUDIT.md A2/A3，shared 侧字段已 deprecated），
+  // 这里也不再读取，避免每次请求白白计算被丢弃的指纹值。
   return buildZCodeSourceHeadersFromContext({
     appVersion,
     arch,
     clientLanguage,
-    clientTimezone,
     deviceMid,
-    osVersion,
     platform,
     releaseChannel,
     sourceTitle: "electron",

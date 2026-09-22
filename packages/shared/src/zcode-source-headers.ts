@@ -10,9 +10,11 @@ export interface BuildZCodeSourceHeadersFromContextOptions {
   appVersion?: string;
   arch?: string;
   clientLanguage?: string;
+  /** @deprecated 社区版隐私基线（PRIVACY-AUDIT.md A2）：时区不再外发；字段保留以兼容调用方。 */
   clientTimezone?: string;
   deviceMid?: string;
   endpointOrigin?: string;
+  /** @deprecated 社区版隐私基线（PRIVACY-AUDIT.md A2）：OS 内核版本不再外发；字段保留以兼容调用方。 */
   osVersion?: string;
   platform?: string;
   releaseChannel?: string;
@@ -33,14 +35,18 @@ export function buildZCodeSourceHeadersFromContext(
   const appVersion = normalizeZCodeSourceHeaderValue(options.appVersion);
   const arch = normalizeZCodeSourceHeaderValue(options.arch);
   const clientLanguage = normalizeZCodeSourceHeaderValue(options.clientLanguage) ?? "unknown";
-  const clientTimezone = normalizeZCodeSourceHeaderValue(options.clientTimezone) ?? "unknown";
   const deviceMid = normalizeZCodeSourceHeaderValue(options.deviceMid);
   const endpointOrigin =
     normalizeZCodeSourceHeaderValue(options.endpointOrigin) ?? DEFAULT_ZCODE_ENDPOINT_ORIGIN;
-  const osVersion = normalizeZCodeSourceHeaderValue(options.osVersion);
   const platform = normalizeZCodeSourceHeaderValue(options.platform);
   const releaseChannel = normalizeZCodeSourceHeaderValue(options.releaseChannel);
   const sourceTitle = normalizeZCodeSourceHeaderValue(options.sourceTitle) ?? "electron";
+
+  // 社区版隐私基线（PRIVACY-AUDIT.md A2/A3）：X-Client-Timezone 与 X-Os-Version 不属于任何已知
+  // 服务端契约，直接移除；X-Device-Mid 是持久设备标识，默认不发送，仅显式设置
+  // ZCODE_SEND_DEVICE_MID=true（官方计费等服务端契约确需时）才携带。
+  const sendDeviceMid =
+    typeof process !== "undefined" && process.env.ZCODE_SEND_DEVICE_MID === "true";
 
   return {
     ...ZCODE_SOURCE_HEADERS,
@@ -51,10 +57,8 @@ export function buildZCodeSourceHeadersFromContext(
     ...(platform && arch ? { "X-Platform": `${platform}-${arch}` } : {}),
     ...(releaseChannel ? { "X-Release-Channel": releaseChannel } : {}),
     "X-Client-Language": clientLanguage,
-    "X-Client-Timezone": clientTimezone,
     ...(platform ? { "X-Os-Category": normalizeOsCategory(platform) } : {}),
-    ...(osVersion ? { "X-Os-Version": osVersion } : {}),
-    ...(deviceMid ? { "X-Device-Mid": deviceMid } : {}),
+    ...(sendDeviceMid && deviceMid ? { "X-Device-Mid": deviceMid } : {}),
   };
 }
 

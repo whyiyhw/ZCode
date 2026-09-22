@@ -27,12 +27,6 @@ export interface CreateFeedbackServiceOptions {
   apiClient: ApiClient;
   getDeviceMid?: () => string | undefined;
   apiBaseUrl?: string;
-  createFullLogArchive?: (
-    sourceDir: string,
-    options?: {
-      onProgress?: (event: { processedBytes: number; totalBytes: number }) => void;
-    },
-  ) => Promise<{ path: string; size: number }>;
   revealPath?: (path: string) => Promise<void>;
 }
 
@@ -229,11 +223,9 @@ export function createFeedbackService(options: CreateFeedbackServiceOptions): IF
         await rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
     },
-    attachLogsFromExport: async (id, attachOptions) => {
-      const archive = await prepareCompactLogArchive({
-        full: attachOptions?.full,
-        createFullArchive: options.createFullLogArchive,
-      });
+    attachLogsFromExport: async (id) => {
+      // 社区版隐私基线（PRIVACY-AUDIT.md B2）：只打 logs/ 紧凑档，不再支持 full 整目录上传。
+      const archive = await prepareCompactLogArchive();
       try {
         return await httpClient.uploadFile(
           id,
@@ -251,8 +243,6 @@ export function createFeedbackService(options: CreateFeedbackServiceOptions): IF
       const progressId = archiveOptions?.progressId;
       const progressEmitter = progressId ? getUploadProgressEmitter(progressId) : null;
       return prepareCompactLogArchive({
-        full: archiveOptions?.full,
-        createFullArchive: options.createFullLogArchive,
         onProgress: progressEmitter
           ? (event) => {
               progressEmitter.fire({

@@ -1,5 +1,6 @@
 import { ensureCliDeviceMid } from "../device/cli-device-mid.js";
 import type { EnvRecord } from "./model-execution.js";
+import { isOfficialZCodeProviderEndpoint } from "./model-source-header-policy.js";
 import { normalizeModelSessionIdForAttribution, type ModelStatusContext } from "./runner-status.js";
 
 const REDACTED_METADATA_USER_ID = "[REDACTED]";
@@ -16,11 +17,22 @@ function createAnthropicRequestMetadataUserId(input: {
 }
 
 export async function resolveAnthropicRequestMetadataUserId(input: {
+  baseURL?: string;
   env: EnvRecord;
   providerKind: string | undefined;
   sessionId?: ModelStatusContext["sessionId"];
 }): Promise<string | undefined> {
   if (input.providerKind !== "anthropic") {
+    return undefined;
+  }
+
+  // 社区版隐私基线（PRIVACY-AUDIT.md A5）：metadata.user_id 携带持久 device_id 与 session_id，
+  // 仅对官方端点发送；第三方 Anthropic 兼容端点与 ZCODE_SEND_CLIENT_HEADERS=0 时不发送，
+  // 且不触发 deviceMid 身份文件的创建。
+  if (
+    input.env.ZCODE_SEND_CLIENT_HEADERS === "0" ||
+    !isOfficialZCodeProviderEndpoint(input.baseURL, input.env)
+  ) {
     return undefined;
   }
 

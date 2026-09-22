@@ -54,9 +54,9 @@ export interface IFeedbackService {
       messageId?: string;
     },
   ): Promise<FeedbackAttachment>;
-  attachLogsFromExport(id: string, options?: { full?: boolean }): Promise<FeedbackAttachment>;
+  attachLogsFromExport(id: string): Promise<FeedbackAttachment>;
   getDeviceSnapshot(): Promise<import("@zcode/shared").FeedbackDeviceInfo>;
-  prepareCompactLogArchive(options?: { full?: boolean; progressId?: string }): Promise<{
+  prepareCompactLogArchive(options?: { progressId?: string }): Promise<{
     path: string;
     size: number;
   }>;

@@ -26,6 +26,7 @@ import { createModelOptionMapFetch, type RawRequestBodyCapture } from "./model-o
 import { createNetworkProxyFetch } from "../network/proxy-fetch.js";
 import { createOfficialCodingPlanGatewayFetch } from "./official-coding-plan-gateway.js";
 import { normalizeModelTlsFailure } from "./failure-tls.js";
+import { resolveModelSourceHeadersForEndpoint } from "./model-source-header-policy.js";
 import { mergeModelRequestHeaders } from "./model-request-headers.js";
 
 export type AiSdkProviderKind = "openai" | "anthropic" | "openai-compatible";
@@ -202,8 +203,16 @@ export class AiSdkModelExecution {
     const configuredProvider = toAiSdkProviderConfig(input.providerId, input.providerConfig);
     // 重构后模型 SDK 曾只接到用户 Header，漏掉版本和站点归因；在公共绑定边界恢复，
     // 不依赖签名成功，不给各业务重复补头，也不修改 Provider 或已绑定 Model 的配置。
+    // 社区版隐私基线（PRIVACY-AUDIT.md A4）：指纹头仅对官方端点放行，第三方端点只留 User-Agent。
     configuredProvider.headers = mergeModelRequestHeaders(
-      withOpenRouterAttributionHeaders(this.defaultHeaders, configuredProvider.baseURL),
+      withOpenRouterAttributionHeaders(
+        resolveModelSourceHeadersForEndpoint(
+          this.defaultHeaders,
+          configuredProvider.baseURL,
+          this.env,
+        ),
+        configuredProvider.baseURL,
+      ),
       configuredProvider.headers,
     );
     const apiKey = this.resolveApiKey(configuredProvider);

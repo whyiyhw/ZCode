@@ -282,6 +282,7 @@ export async function* runStreamText(input: {
         resolveModel: input.resolveModel,
       });
       const anthropicMetadataUserId = await resolveAnthropicRequestMetadataUserId({
+        baseURL: resolved.baseURL,
         env: input.env,
         providerKind: resolved.providerKind,
         sessionId: statusContext.sessionId,

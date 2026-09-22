@@ -472,7 +472,7 @@ async function uploadLogsUntilComplete(
       detail: copy.exportingLogDetail,
       indeterminate: true,
     });
-    archive = await feedbackService.prepareCompactLogArchive({ full: true, progressId });
+    archive = await feedbackService.prepareCompactLogArchive({ progressId });
     let shouldRetryLogUpload = true;
     while (shouldRetryLogUpload) {
       try {

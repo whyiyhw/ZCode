@@ -1,15 +1,15 @@
-import { arch as readOsArch, release as readOsRelease } from "node:os";
+import { arch as readOsArch } from "node:os";
 
 const PRINTABLE_HEADER_VALUE_PATTERN = /^[\x20-\x7e]+$/;
 
 export function createRuntimePlatformHeaders(): Record<string, string> {
+  // 社区版隐私基线（PRIVACY-AUDIT.md A4）：OS 内核版本（readOsRelease）不再外发，
+  // 仅保留平台/架构类别；与 shared 侧 zcode-source-headers 的策略保持一致。
   const platform = normalizePrintableHeaderValue(process.platform);
   const architecture = normalizePrintableHeaderValue(readOsArch());
-  const osVersion = normalizePrintableHeaderValue(readOsRelease());
   return {
     ...(platform && architecture ? { "X-Platform": `${platform}-${architecture}` } : {}),
     "X-Os-Category": normalizeOsCategory(process.platform),
-    ...(osVersion ? { "X-Os-Version": osVersion } : {}),
   };
 }
 

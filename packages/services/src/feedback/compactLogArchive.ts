@@ -9,21 +9,16 @@ interface ArchiveProgressEvent {
 }
 
 export async function prepareCompactLogArchive(options?: {
-  full?: boolean;
-  createFullArchive?: (
-    sourceDir: string,
-    options?: { onProgress?: (event: ArchiveProgressEvent) => void },
-  ) => Promise<{ path: string; size: number }>;
   onProgress?: (event: ArchiveProgressEvent) => void;
 }): Promise<{ path: string; size: number }> {
+  // 社区版隐私基线（PRIVACY-AUDIT.md B2）：反馈日志只允许打包 {appConfigDir}/logs 且 ≤2MB。
+  // 移除 full 整目录档——完整 appConfigDir 会裹入凭据备份、设置文件与 rollout/debug 的
+  // model-io 明文，不应随反馈工单出网。
   const sourceDir = getAppConfigDir();
-  if (options?.full && options.createFullArchive) {
-    return options.createFullArchive(sourceDir, { onProgress: options.onProgress });
-  }
   return createFeedbackDiagnosticArchive({
     sources: [{ directory: join(sourceDir, "logs"), archivePrefix: "logs" }],
     outputRootDir: getFeedbackLogArchiveDir(),
-    ...(!options?.full ? { maxTotalBytes: 2 * 1024 * 1024 } : {}),
+    maxTotalBytes: 2 * 1024 * 1024,
     onProgress: options?.onProgress,
   });
 }

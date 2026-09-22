@@ -48,10 +48,12 @@ function buildCliZCodeSourceHeaders(
   env: EnvRecord,
   options: Pick<RuntimeExecutionConfigOptions, "appVersion" | "sourceTitle"> = {},
 ): Record<string, string> {
+  // 社区版隐私基线（PRIVACY-AUDIT.md A4）：该头集合经 adapters 侧 model-source-header-policy
+  // 按端点放行——仅官方端点收到全集，第三方 provider 只会收到最简 User-Agent；
+  // 时区不外发，与 shared 侧 zcode-source-headers 策略一致。
   const sourceTitle = options.sourceTitle ?? detectDefaultProviderSourceTitle();
   const appVersion = resolveAppVersionForHeaders(env, options);
   const locale = normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().locale);
-  const timezone = normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().timeZone);
   return {
     "HTTP-Referer": resolveRuntimeZCodeEndpointOrigin(env),
     "User-Agent": `ZCode/${appVersion ?? "unknown"}`,
@@ -59,7 +61,6 @@ function buildCliZCodeSourceHeaders(
     "X-Title": `Z Code@${sourceTitle}`,
     "X-Release-Channel": resolveRuntimeZCodeEnv(env),
     "X-Client-Language": locale ?? "unknown",
-    "X-Client-Timezone": timezone ?? "unknown",
     "X-ZCode-Agent": "glm",
     ...createRuntimePlatformHeaders(),
   };
