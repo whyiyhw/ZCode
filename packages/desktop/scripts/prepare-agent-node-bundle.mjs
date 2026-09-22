@@ -111,6 +111,16 @@ const officialPluginPackages = [
     runtimeBuildScript: "scripts/build.mjs",
     stagedPath: "packages/node-repl-host",
   },
+
+  {
+    // Computer Use 插件 wrapper（MIT 文件取自官方 glm bundle）：skill/docs/client 脚本。
+    // 执行面由 node_repl 宿主 + 本地暂存的 Helper 运行时提供（spec：
+    // packages/zcode-cua/spec/computer-use-restore.md），这里只负责 seed 资产。
+    packageName: "@zcode/zcode-cua-plugin",
+    relativePath: "apps/zcode-cli/packages/zcode-cua-plugin",
+    requiresRuntime: false,
+    stagedPath: "packages/zcode-cua-plugin",
+  },
 ];
 const includedOfficialPluginTopLevelPaths = new Set([
   ".mcp.json",

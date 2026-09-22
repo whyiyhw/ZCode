@@ -31,6 +31,8 @@ export interface CallBrokerMethodArgs {
   method: string;
   params?: unknown;
   timeoutMs?: number;
+  /** authenticate 握手附加参数（如 PiP 呈现通道的 {role:"presentation"}）。 */
+  authenticateParams?: Record<string, unknown>;
 }
 
 export declare function callBrokerMethod<T = unknown>(args: CallBrokerMethodArgs): Promise<T>;
@@ -55,21 +57,42 @@ export declare function mintBrokerSocketPath(options?: SocketPathOptions): strin
 export declare function resolveBrokerSocketPath(options?: SocketPathOptions): string;
 
 export interface BrokerRequest {
-  id?: string | null;
+  id: number;
   method: string;
-  params?: unknown;
+  params: Record<string, unknown>;
 }
 
+export type ParsedBrokerRequestLine =
+  | { ok: true; request: BrokerRequest }
+  | { ok: false; id: number; code: "invalid_request"; message: string };
+
 export interface BrokerResponse {
+  id: number;
   ok: boolean;
+  result?: unknown;
+  presentation?: unknown;
+  error?: { code: string; message: string; details?: Record<string, unknown> };
   [key: string]: unknown;
 }
 
-export declare function parseRequestLine(line: string): BrokerRequest | undefined;
-export declare function okResponse(result: unknown): BrokerResponse;
-export declare function errorResponse(message: string, options?: { code?: string }): BrokerResponse;
-export declare function errorResponseFromException(error: unknown): BrokerResponse;
+export declare function parseRequestLine(line: string): ParsedBrokerRequestLine;
+export declare function okResponse(
+  id: number,
+  result?: unknown,
+  presentation?: unknown,
+): BrokerResponse;
+export declare function errorResponse(
+  id: number,
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+): BrokerResponse;
+export declare function errorResponseFromException(id: number, error: unknown): BrokerResponse;
 export declare function serializeResponse(response: BrokerResponse): string;
+export declare function withBrokerPresentation(result: unknown, presentation: unknown): {
+  result: unknown;
+  presentation: unknown;
+};
 
 export type BrokerErrorCode = string;
 export type BrokerMethod = string;
@@ -91,6 +114,7 @@ export declare function handleRequestLine(
 
 export declare function isBrokerMethod(method: string): method is BrokerMethod;
 export declare function isReadOnlyBrokerMethod(method: string): boolean;
+export declare const BROKER_METHODS: readonly string[];
 
 export type CuaPermissionState = "granted" | "stale" | "denied" | "unknown";
 

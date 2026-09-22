@@ -31,12 +31,21 @@ export interface CuaHelperVerifierDependencies {
   [key: string]: unknown;
 }
 
+// 三个可注入验签依赖（官方 defaultCuaHelperVerifierDependencies）：lipo -archs、
+// codesign --verify --deep --strict、codesign -dv 的 TeamIdentifier 解析。
+export interface CuaHelperVerifierDependencySet {
+  readExecutableArchs?: (executablePath: string) => Promise<string[]>;
+  verifyCodeSignature?: (appPath: string) => Promise<void>;
+  verifyTeamIdentifier?: (appPath: string) => Promise<string | null>;
+  [key: string]: unknown;
+}
+
 export interface CuaHelperInstallerOptions {
   env?: NodeJS.ProcessEnv;
   logger?: unknown;
   bundledAppPath?: string;
   plan?: unknown;
-  dependencies?: Partial<CuaHelperVerifierDependencies>;
+  dependencies?: CuaHelperVerifierDependencySet;
 }
 
 export interface CuaHelperInstaller {

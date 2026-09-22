@@ -641,6 +641,23 @@ export default {
       to: `tools/${toolId}`,
       filter: ["**/*"],
     })),
+    // Computer Use Helper 运行时（官方专有产物，scripts/prepare-cua-helper.mjs 本地暂存）。
+    // 默认不打包：CI 不设 ZCODE_CUA_BUNDLE_HELPER，公开 release 保持零专有二进制；
+    // 本地自用出包显式设 1/true 才带上。win32 走产品路由 resources/tools/cua-helper
+    // （runtime-manifest.json 校验），darwin 走 installer 路由 resources/cua-helper/<Helper.app>。
+    ...(["1", "true", "on"].includes(
+      String(process.env.ZCODE_CUA_BUNDLE_HELPER ?? "")
+        .trim()
+        .toLowerCase(),
+    )
+      ? [
+          {
+            from: `bundled-tools/${targetPlatform.key}/cua-helper`,
+            to: targetPlatform.os === "darwin" ? "cua-helper" : "tools/cua-helper",
+            filter: ["**/*"],
+          },
+        ]
+      : []),
   ],
   // postinstall 会先优先复用 node-pty 自带的 Windows 预编译产物，其他平台再按需 electron-rebuild。
   // 打包阶段统一复用安装时准备好的原生文件，避免 electron-builder 再触发一轮不受控的本地编译。

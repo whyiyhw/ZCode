@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { request } from "node:http";
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { prepareDevElectronAppBundle } from "./devElectronAppBundle.mjs";
 
@@ -129,10 +129,30 @@ if (process.platform === "darwin" && existsSync(electronBinary)) {
   console.log(`[dev] Prepared macOS ZCode Dev bundle: ${devBundle.appPath}`);
 }
 
+// 检测本地暂存的 Computer Use Helper 运行时（scripts/prepare-cua-helper.mjs 产出，
+// gitignore 内的构建机私有产物）。存在时把 dev 路由指过去；不存在则保持占位包
+// 的 fail-closed 现状，不打扰未暂存的开发环境。
+const stagedCuaHelper = resolve(
+  root,
+  "bundled-tools",
+  `${process.platform}-${process.arch}`,
+  "cua-helper",
+);
+const cuaDevRoot =
+  existsSync(join(stagedCuaHelper, "package.json")) &&
+  existsSync(join(stagedCuaHelper, "runtime-manifest.json"))
+    ? stagedCuaHelper
+    : null;
+if (cuaDevRoot) console.log(`[dev] Computer Use Helper runtime staged: ${cuaDevRoot}`);
+
 const electron = spawn(electronCommand, ["."], {
   cwd: root,
   stdio: "inherit",
-  env: { ...process.env, ELECTRON_RENDERER_URL: rendererUrl },
+  env: {
+    ...process.env,
+    ELECTRON_RENDERER_URL: rendererUrl,
+    ...(cuaDevRoot ? { ZCODE_CUA_DEV_ROOT: cuaDevRoot } : {}),
+  },
   windowsHide: true,
   detached: process.platform !== "win32",
 });

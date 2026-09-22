@@ -47,11 +47,11 @@
 
 **A. 三条受同一总闸管辖的遥测通道。** 上游 `packages/shared/src/env.ts` 硬编码 `ZCODE_TELEMETRY_ENABLED = true`；端点（数仓、阿里云 ARMS RUM）由构建/运行环境注入、开源构建产物不内嵌——但官方 CI 会把它们烘焙进产物（实测官方 3.14.1 asar 内含 `proj-xtrace-….aliyuncs.com` 的 RUM 与 OTLP 端点，且环境变量名已被静态替换抹去）：
 
-| 通道 | 内容 | 频率 |
-|---|---|---|
-| 数仓事件 `/event/report` | user_id、device_mid、分辨率、时区、语言、营销归因（utm/channel_id 持久化）、UI 事件明细 | 启动 + 每 15 分钟 DAU 心跳 + 事件驱动 |
-| 阿里云 ARMS RUM | jsError/consoleError/crash/api/click/longTask 全开；agent 崩溃 stderr 尾巴 ≤4000 字符；异常堆栈可含代码文件名与行号 | 持续采集批量上报 |
-| OTLP traces/metrics | token 计数、时延、工具名（不含正文，已核验） | 5 分钟周期 / 10% 采样 |
+| 通道                     | 内容                                                                                                                | 频率                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| 数仓事件 `/event/report` | user_id、device_mid、分辨率、时区、语言、营销归因（utm/channel_id 持久化）、UI 事件明细                             | 启动 + 每 15 分钟 DAU 心跳 + 事件驱动 |
+| 阿里云 ARMS RUM          | jsError/consoleError/crash/api/click/longTask 全开；agent 崩溃 stderr 尾巴 ≤4000 字符；异常堆栈可含代码文件名与行号 | 持续采集批量上报                      |
+| OTLP traces/metrics      | token 计数、时延、工具名（不含正文，已核验）                                                                        | 5 分钟周期 / 10% 采样                 |
 
 **B. 不受任何开关管辖的指纹通道。** `buildZCodeSourceHeaders` 给**每一次**打向官方端点的 API 附加 `X-Device-Mid`（持久设备 UUID，永不轮换）、`X-Client-Timezone`、`X-Os-Version`、语言、渠道等全套识别头；CLI 侧更进一步——对**用户自建的第三方模型端点**也发同样指纹头外加 `HTTP-Referer: zcode.z.ai`，Anthropic 协议请求体里还嵌 `metadata.user_id = {device_id, session_id}`。生产身份的安装包每小时向更新清单接口发 `device_mid` 心跳。
 
@@ -65,23 +65,23 @@
 
 七项 P0 整改（2026-09-21 实施，门禁 typecheck/lint/architecture 全绿，详见 PRIVACY-AUDIT.md §九）：
 
-| # | 整改 | 位置 | 效果 |
-|---|---|---|---|
-| 1 | 遥测总闸改 opt-in 默认关 | `packages/shared/src/env.ts` | 数仓 + ARMS + 远程 crash 三条通道整体熄火 |
-| 2 | 桌面/服务侧指纹头收口 | `packages/shared/src/zcode-source-headers.ts` | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带 |
-| 3 | CLI 指纹头按端点放行 | 新增 `adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸 |
-| 4 | model-io 落盘改 opt-in | `adapters/src/model/runner-debug.ts` | 默认不再写明文提示词/代码 JSONL |
-| 5 | 反馈 full 档移除 | `services/src/feedback/*`（五处联动） | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭 |
-| 6 | server fail-closed + Origin/Host 校验 | `packages/server/src/http.ts` | 非回环监听无 token 拒绝启动；跨站 WS 劫持与 DNS rebinding 被拦 |
-| 7 | 安装脚本强制哈希校验 | `scripts/zcode-distribution/installer.mjs` | 解压前 sha256 三方一致（latest.json / sha256.txt / 实际文件） |
+| #   | 整改                                  | 位置                                                                            | 效果                                                                                                                                  |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 遥测总闸改 opt-in 默认关              | `packages/shared/src/env.ts`                                                    | 数仓 + ARMS + 远程 crash 三条通道整体熄火                                                                                             |
+| 2   | 桌面/服务侧指纹头收口                 | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带                                          |
+| 3   | CLI 指纹头按端点放行                  | 新增 `apps/zcode-cli/packages/adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸 |
+| 4   | model-io 落盘改 opt-in                | `apps/zcode-cli/packages/adapters/src/model/runner-debug.ts`                    | 默认不再写明文提示词/代码 JSONL                                                                                                       |
+| 5   | 反馈 full 档移除                      | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭                                                                                     |
+| 6   | server fail-closed + Origin/Host 校验 | `packages/server/src/http.ts`                                                   | 非回环监听无 token 拒绝启动；跨站 WS 劫持与 DNS rebinding 被拦                                                                        |
+| 7   | 安装脚本强制哈希校验                  | `scripts/zcode-distribution/installer.mjs`                                      | 解压前 sha256 三方一致（latest.json / sha256.txt / 实际文件）                                                                         |
 
 第二批整改：**性能瘦身三连删**（2026-09-22 实施，spec 见 `packages/desktop/spec/`，验证与文件清单见 PRIVACY-AUDIT.md §十一）——以「个人开发者不需要且常驻消耗 CPU/内存/网络」为标准整链删除，顺带消灭了 §二.B 所述「每小时 device_mid 更新心跳」在社区版的存在基础：
 
-| # | 删除 | 净效果 |
-|---|---|---|
-| 8 | 客户端灰度（rollout）链 | 首个 Host 前的 ≤2s 网络裁决门与 60s 刷新定时器消失；Desktop Context Prompt 静态默认关（显式注入 `"0"`） |
-| 9 | 自动更新子系统（约 25-30 文件） | 无每小时 manifest 轮询、无启动即查、无强更 gate、无更新 UI/设置项/i18n；升级 = 重装 |
-| 10 | 资源遥测族（约 50 文件，跨 6 包） | main 10s 采样 / 网络遥测 / DAU 15min 心跳 / renderer 60s heap / 24h 目录扫描 / host↔main 资源消息与 `processResourceTelemetry` capability 全部消失；CLI 60s 节拍保留但只剩会话驻留回收与 event store 修剪职责 |
+| #   | 删除                              | 净效果                                                                                                                                                                                                        |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8   | 客户端灰度（rollout）链           | 首个 Host 前的 ≤2s 网络裁决门与 60s 刷新定时器消失；Desktop Context Prompt 静态默认关（显式注入 `"0"`）                                                                                                       |
+| 9   | 自动更新子系统（约 25-30 文件）   | 无每小时 manifest 轮询、无启动即查、无强更 gate、无更新 UI/设置项/i18n；升级 = 重装                                                                                                                           |
+| 10  | 资源遥测族（约 50 文件，跨 6 包） | main 10s 采样 / 网络遥测 / DAU 15min 心跳 / renderer 60s heap / 24h 目录扫描 / host↔main 资源消息与 `processResourceTelemetry` capability 全部消失；CLI 60s 节拍保留但只剩会话驻留回收与 event store 修剪职责 |
 
 ## 四、如何阻断整个链路
 
@@ -99,13 +99,13 @@
 
 **开关一览（全部默认安全方向）：**
 
-| 环境变量 | 语义 | 默认 |
-|---|---|---|
-| `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸 | 关 |
-| `ZCODE_SEND_DEVICE_MID=true` | `X-Device-Mid` 指纹头（官方计费契约逃生口） | 关 |
-| `ZCODE_SEND_CLIENT_HEADERS=0` | CLI 指纹头与 anthropic metadata 紧急总闸 | 开（仅官方端点收全集） |
-| `ZCODE_MODEL_IO_ENABLED=1` | model-io 全量落盘（诊断用） | 关 |
-| `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行 Origin 白名单 | 空 |
+| 环境变量                       | 语义                                        | 默认                   |
+| ------------------------------ | ------------------------------------------- | ---------------------- |
+| `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸                   | 关                     |
+| `ZCODE_SEND_DEVICE_MID=true`   | `X-Device-Mid` 指纹头（官方计费契约逃生口） | 关                     |
+| `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点收全集） |
+| `ZCODE_MODEL_IO_ENABLED=1`     | model-io 全量落盘（诊断用）                 | 关                     |
+| `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行 Origin 白名单               | 空                     |
 
 **产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；`X-Client-Timezone`/`X-Os-Version` 应 0（实测 0）；新开关字符串应在（实测在）。残留的 `sdk.rum.aliyuncs` 字符串属打包在内的 ARMS SDK 死代码——总闸默认关使其不可达，SDK 物理摘除列于 P1。
 
@@ -123,5 +123,17 @@
 - 上游历史被 squash 为单提交、无可考古演进史，**每次同步上游都按全新代码审**：重点盯网络端点、权限默认值、遥测门控；
 - `packages/shared/src/env.ts` 等已知冲突点在合并时保留 opt-in 语义（spec：`packages/shared/spec/telemetry-master-switch.md`）；
 - P1/P2 路线图（ARMS SDK 摘除、凭据接入 OS keychain、CI 构建断言、`zcode doctor --privacy` 等）见 PRIVACY-AUDIT.md §七；第二批性能瘦身的边界与红线（CLI 60s 维护节拍、MCP 进程登记表保留）见 §十一与 `packages/desktop/spec/resource-telemetry-removal.md`。
+
+## 六、Computer Use 能力恢复（2026-09-22）
+
+上游开源时 `packages/zcode-cua` 是 API 兼容占位包（全部表面 fail-closed），真实实现只随官方闭源产物分发。本 fork 在源码内**干净重实现**了客户端与 14 个模型可见工具的执行器（协议按官方 0.6.3 产物对齐，属互操作逆向），并以**本地暂存脚本**引入官方 Helper 运行时。规格与验收见 `packages/zcode-cua/spec/computer-use-restore.md`。
+
+边界与红线：
+
+- **运行时仅本地自用**：`node scripts/prepare-cua-helper.mjs` 从本机官方安装暂存 Helper 到 `packages/desktop/bundled-tools/`（gitignore、不入库）；CI 不设 `ZCODE_CUA_BUNDLE_HELPER`，公开 release 恒不含专有二进制；本地自用出包显式设该 env 才会打进 `resources/tools/cua-helper`。
+- **协议不发明**：43 方法白名单、NDJSON 帧、authenticate 握手、错误码、id 分配（auth=0/业务从 1 起）与官方逐一对齐；已与真实 Helper 互操作实测（broker_info 握手、list_applications/capture_app 真实数据、业务错误码还原）。
+- **防重放语义保留**：possibly_sent 状态的动作请求绝不自动重试，以 CUA_NOT_READY 信封交给模型侧决策。
+- macOS 侧（.app 安装/LaunchServices/TCC/PiP）按契约实现，**未在真机验证**，清单见 spec 迁移边界。
+- 插件 wrapper（skill/docs/client 脚本）取自官方 MIT 文件（`apps/zcode-cli/packages/zcode-cua-plugin/`），保留 Z.ai 署名。
 
 一句话总结：**上游开源给了我们"能看"的条件，社区版把它变成"可证"的现实——默认不采、指纹最小、本地受控、分发包可验，且每一项主张都有可复现的 grep 与命令作为证据。**
