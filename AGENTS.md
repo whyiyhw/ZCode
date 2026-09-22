@@ -34,6 +34,7 @@
 - `apps/zcode-cli`：Agent CLI 与运行时。
 - `CONTEXT.md`：插件商店领域词汇；修改相关 UI 前阅读。
 - `DESIGN.md`：UI 设计规范；修改 UI 前阅读。
+- `DOCUMENTATION.md`：文档体系索引与维护规则；新增或调整文档时先读。
 
 ## 实现与验证
 
@@ -80,3 +81,9 @@
 - `info` 用于进程和会话生命周期、权限结果、一次性初始化等生产可用事件。
 - `warn` 用于可恢复异常；`error` 用于崩溃、握手失败、鉴权丢失等不可恢复错误。
 - 不在日志、示例或提交中写入凭据、真实用户数据和内部服务地址。
+
+### 落盘位置与排查口径
+
+- 正式版与开发版数据根为 `~/.zcode/v2`，日志按天写入 `~/.zcode/v2/logs/`。
+- 打包 Preview 使用独立数据根 `~/.zcode-preview/.zcode/v2`（凭据、Provider 配置、任务与日志均不与正式版共享），见 `packages/desktop/src/main/desktopDataBaseDirBootstrap.ts`；排查 Preview 问题必须看 `~/.zcode-preview/.zcode/v2/logs/`，正式版日志里不会有它的记录。
+- 生产构建下 renderer 的 UI 日志（含 `logger.warn`/`error`）整体 no-op，只有 `logger.lifecycle` 桥接到主进程落盘；排查 UI 行为以宿主日志（`[host-log]`、`[rpc:call]`）为准。

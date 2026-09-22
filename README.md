@@ -43,8 +43,6 @@ Agent CLI 与运行时源码位于 [apps/zcode-cli/](apps/zcode-cli/)，作为�
 
 默认 `bootstrap` 跳过远程资源准备，适合本地桌面开发。使用远程工作区或验证远程发行资源时，再运行对应准备命令。
 
-默认 `bootstrap` 跳过远程资源准备，适合本地桌面开发。使用远程工作区或验证远程发行资源时，再运行对应准备命令。
-
 ### 在 Windows 上构建
 
 以下完整链路已在 Windows 10 x64（Git Bash + Node 24.14.0 + pnpm 10.33.2）验证：
@@ -151,6 +149,8 @@ node apps/zcode-cli/packages/cli/dist/zcode.cjs --help
 
 运行时变量可在启动命令的环境中显式设置。随客户端发布的默认配置见 [config/README.md](config/README.md)。
 
+打包的 Preview 版本默认使用独立数据根 `~/.zcode-preview`，任务、配置、凭据与日志均不与正式版的 `~/.zcode` 共享；如需改回共享或指向其他目录，在 `~/.zcode-preview/.zcode/v2/setting.json` 里配置 `dataBaseDir`。排查 Preview 问题时日志同样在对应数据根的 `v2/logs/` 下查看。
+
 ## 打包
 
 第三方声明生成、发行校验流程及声明在发行物中的位置见 [third-party/README.md](third-party/README.md)。
@@ -222,18 +222,23 @@ node dist/zcode/debug/zcode/bin/zcode.mjs --web \
 
 ## 仓库结构
 
-| 目录                                                 | 职责                                       |
-| ---------------------------------------------------- | ------------------------------------------ |
-| `packages/desktop`                                   | Electron Main、Host、Renderer 与桌面打包   |
-| `packages/web`                                       | Web 客户端                                 |
-| `packages/server`                                    | HTTP / WebSocket 服务与远程连接            |
-| `packages/zcode-server-cli`                          | 独立 Server 启动与进程管理                 |
-| `packages/ui`                                        | 共享 React 组件、hooks 与 Zustand 状态     |
-| `packages/services`                                  | 业务服务与持久化                           |
-| `packages/shared`、`packages/rpc`、`packages/client` | 共享协议和类型、RPC 框架、Agent 客户端 SDK |
-| `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现              |
-| `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具               |
-| `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料     |
+| 目录                                                 | 职责                                           |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| `packages/desktop`                                   | Electron Main、Host、Renderer 与桌面打包       |
+| `packages/web`                                       | Web 客户端                                     |
+| `packages/server`                                    | HTTP / WebSocket 服务与远程连接                |
+| `packages/zcode-server-cli`                          | 独立 Server 启动与进程管理                     |
+| `packages/ui`                                        | 共享 React 组件、hooks 与 Zustand 状态         |
+| `packages/services`                                  | 业务服务与持久化                               |
+| `packages/shared`、`packages/rpc`、`packages/client` | 共享协议和类型、RPC 框架、Agent 客户端 SDK     |
+| `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现                  |
+| `packages/model-option-map`                          | 模型选项映射的受限 CEL 表达式编译与求值        |
+| `packages/formal-proof`                              | 产品行为状态空间枚举器（compact/fork/goal 等） |
+| `packages/zcode-cua`                                 | Computer Use 占位包（不可用即失败关闭）        |
+| `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具                   |
+| `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料         |
+
+文档体系分层与维护规则见 [DOCUMENTATION.md](DOCUMENTATION.md)。
 
 ## 项目声明
 
