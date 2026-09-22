@@ -42,11 +42,32 @@ function isRequestForEndpoint(input: string | URL, endpointOrigin: string): bool
   }
 }
 
+// zcode-plan 计费接口按参数校验缺失的 X-Client-Timezone / X-Os-Version / X-Device-Mid
+// （2026-09-22 dev 实测：production 环境且鉴权通过仍 400 "parameter error"）。仅为该
+// 路径族开启服务端契约头，其余 ZCode endpoint 请求维持社区版隐私基线（PRIVACY-AUDIT.md A2）。
+const ZCODE_PLAN_CONTRACT_PATH_PREFIX = "/api/v1/zcode-plan/";
+const BILLING_CONTRACT_DISABLE_VALUES = new Set(["0", "false", "off"]);
+
+function isZCodePlanContractRequest(input: string | URL): boolean {
+  const killSwitch = String(process.env.ZCODE_BILLING_CONTRACT_HEADERS ?? "")
+    .trim()
+    .toLowerCase();
+  if (BILLING_CONTRACT_DISABLE_VALUES.has(killSwitch)) {
+    return false;
+  }
+  try {
+    return new URL(resolveUrl(input)).pathname.startsWith(ZCODE_PLAN_CONTRACT_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
 function withZCodeEndpointHeaders(
   headers: RequestInit["headers"] | undefined,
   endpointOrigin: string,
+  serverContract: boolean,
 ): RequestInit["headers"] {
-  const next = new Headers(buildZCodeSourceHeaders());
+  const next = new Headers(buildZCodeSourceHeaders({ serverContract }));
   if (headers) {
     new Headers(headers).forEach((value, key) => {
       next.set(key, value);
@@ -70,7 +91,11 @@ function resolveRequestHeaders(
 
   // ZCode 后端请求以前只有部分业务路径手动补来源头。
   // 统一在 ApiClient 出口按 endpoint origin 注入，避免 OAuth/config/billing/snapshot 等链路遗漏。
-  return withZCodeEndpointHeaders(headers, endpointOrigin);
+  return withZCodeEndpointHeaders(
+    headers,
+    endpointOrigin,
+    isZCodePlanContractRequest(requestInput),
+  );
 }
 
 export class NodeApiClient implements ApiClient {

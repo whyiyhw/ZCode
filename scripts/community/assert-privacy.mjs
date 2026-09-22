@@ -8,16 +8,22 @@
 // 退出码：0 = 全部通过；1 = 存在违规（CI 中应挂构建）。零依赖，跨平台。
 
 import process from "node:process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-// ── 断言集（与 PRIVACY-AUDIT.md §9.5 的实测口径一致，改动前先更新审计文档）──
+// ── 断言集（与 PRIVACY-AUDIT.md §9.5 的实测口径 + §十二计费契约豁免一致，改动前先更新审计文档）──
 
 /** app.asar 中必须为零命中的真实上报端点特征（官方 CI 烘焙产物里存在，社区构建不得出现）。 */
 const ASAR_FORBIDDEN = ["proj-xtrace", "apm/trace/opentelemetry"];
 
-/** app.asar 与内置 agent 中都必须为零命名的指纹头（社区版已移除）。 */
-const BOTH_FORBIDDEN = ["X-Client-Timezone", "X-Os-Version"];
+/**
+ * 计费契约头（PRIVACY-AUDIT.md §十二豁免，2026-09-22）：`/api/v1/zcode-plan/` 路径族
+ * 服务端强制要求 X-Client-Timezone / X-Os-Version / X-Device-Mid，缺失即 400。
+ * 因此这两个头名不再是全量禁串——改为「成对证明」：只要它们出现，scoped 实现的
+ * 证据串必须同时出现（路径前缀判定 + kill-switch），证明不是无条件回滚成全量外发。
+ */
+const CONTRACT_HEADER_NAMES = ["X-Client-Timezone", "X-Os-Version"];
+const CONTRACT_SCOPED_PROOF = ["/api/v1/zcode-plan/", "ZCODE_BILLING_CONTRACT_HEADERS"];
 
 /** app.asar 中必须存在的 opt-in 开关（证明收口逻辑已编入产物）。 */
 const ASAR_REQUIRED = ["ZCODE_SEND_DEVICE_MID", "ZCODE_TELEMETRY_ENABLED"];
@@ -146,14 +152,21 @@ for (const pattern of ASAR_FORBIDDEN) {
   const count = countOccurrences(asar, pattern);
   check(count === 0, `asar 不含上报端点特征 "${pattern}"（实际 ${count}）`);
 }
-for (const pattern of BOTH_FORBIDDEN) {
+// 计费契约豁免的正向断言：scoped 实现（路径前缀 + kill-switch + 契约头名）必须都在 asar。
+// 若未来服务端取消该契约，移除相应头时须同步改回禁串口径并更新 PRIVACY-AUDIT.md §十二。
+for (const pattern of CONTRACT_SCOPED_PROOF) {
+  const count = countOccurrences(asar, pattern);
+  check(count > 0, `asar 含计费契约 scoped 实现证据 "${pattern}"（实际 ${count}）`);
+}
+for (const pattern of CONTRACT_HEADER_NAMES) {
+  const count = countOccurrences(asar, pattern);
   check(
-    countOccurrences(asar, pattern) === 0,
-    `asar 不含指纹头 "${pattern}"（实际 ${countOccurrences(asar, pattern)}）`,
+    count > 0,
+    `asar 含计费契约头 "${pattern}"（实际 ${count}；仅 /api/v1/zcode-plan/ 路径携带）`,
   );
-  check(
-    countOccurrences(agent, pattern) === 0,
-    `agent 不含指纹头 "${pattern}"（实际 ${countOccurrences(agent, pattern)}）`,
+  const agentCount = countOccurrences(agent, pattern);
+  console.log(
+    `[INFO] 计费契约头 "${pattern}"：agent ${agentCount} 处（shared 依赖副本可含契约实现代码；CLI 模型链路不调用 serverContract，且 ZCODE_SEND_CLIENT_HEADERS 总闸在 agent 必在）`,
   );
 }
 for (const pattern of ASAR_REQUIRED) {

@@ -210,3 +210,18 @@
 验证（真实执行）：根 `pnpm typecheck` exit 0（注意覆盖面：该脚本只构建 desktop 的 host 工程；main/scheduler/preload/renderer 是独立工程，评审后已补跑并经 git-stash 基线对比确认**零新增错误**——scheduler 工程曾因 root 门禁不覆盖漏进 `NodeSelfResourceSample` 悬空导入，评审抓出后已删）；CLI 子包 adapters（含 dist 重建）/bootstrap `tsc` 通过；`pnpm lint` 0 错误、57 条警告（基线 71，`--fix` 顺带清理了改动文件中的存量未用 import；终轮 55 条）；`pnpm architecture:check --changed` 0 violations；对**已删模块**的引用 grep（`singleFeatureRollout|desktopContextPromptRollout|rendererActionTraceRollout|autoUpdater|manifestUpdateProvider|forceUpdateGuard|desktopZCodeDataSizeTelemetry|desktopRemoteUsageArmsTelemetry|desktopMcpTelemetry|desktopNetworkTelemetry|appTelemetryRuntime|memoryDiagnostics|network-telemetry-middleware|hostNetworkTelemetry|hostSelfResourceTelemetry|NodeSelfResourceSample|scheduler-resource-sample|processResourceTelemetry`）在 src 内 0 命中（`rollout`/`processResource` 的其他域命中——CLI model-io 的 rollout 目录、资源管理器的 hostResourceUsage——属保留功能，不在删除面）。
 
 评审补修（2026-09-22 四路子代理评审后）：旧版桌面端 Host 连新 zcode-server 会对已删的四个动态事件发起订阅、在新端 RPC 读循环抛 "Event not found" 击穿 server——已在 `zcodeAgentConnectionScope`/`zcodeAgentService` 补 no-op 垫片（恒返回 `RpcEvent.None`，接口标注 @deprecated）；MCP tracker `recordProcessCrashed` 恢复旧登记语义（只清 process 不删 entry，保 revalidate 原地重连后 pid 不丢）；顺带清理孤儿变量/注释/死方法（含 `electron-updater` 依赖移除）与 dist 陈旧产物。
+
+## 十二、A2 计费契约豁免（2026-09-22 实测定界）
+
+第九节第 2 条的 A2 收口在真实链路上撞到服务端硬契约：`zcode.z.ai/api/v1/zcode-plan/*`（套餐余额/权益）对缺失 `X-Client-Timezone` / `X-Os-Version` / `X-Device-Mid` 的请求返回 **400 "parameter error"**，与 app_version、鉴权、`X-Release-Channel`（test/production 均复现）无关——同机官方 3.14.1（三头全发）同 URL 成功，dev 态 production 环境 + 有效 JWT 仍 400。定性：这不是指纹外发倾向，而是接口参数校验；但范围必须钉死在计费路径族，不能回滚成全量外发。
+
+落地（路径级豁免，非全局回滚）：
+
+- `shared/src/zcode-source-headers.ts`：`buildZCodeSourceHeadersFromContext` 新增 `serverContract` 选项——仅此时携带三头，语义对齐官方构建（时区缺失回退 `"unknown"`、OS 版本/设备标识仅在已有值时发）；默认路径行为不变。
+- `services/src/providers/api/nodeApiClient.ts`：唯一出口按 URL 路径前缀 `/api/v1/zcode-plan/` 判定契约请求；`ZCODE_BILLING_CONTRACT_HEADERS=0/off/false` 为紧急关闭闸。
+- `services/src/providers/sourceHeaders.ts`：契约链路补算时区（Intl）与 OS 内核版本（os.release）；缺 deviceMid 时 warn 一次（不生成新身份，deviceMid 生命周期仍归 desktop/telemetry）。
+- 单测 `packages/services/test/zcodeSourceHeadersBillingContract.test.ts`（4 用例：默认无三头 / 契约含三头且缺 deviceMid 省略 / billing 路径注入与 configs 路径不注入 / kill-switch 生效）。
+
+口径更新：A2 的处置保持"默认不外发"，本节为**计费路径族的显式豁免记录**；`ZCODE_SEND_DEVICE_MID=true` 全局逃生口语义不变。同日发现社区 CI 编译期 `ZCODE_ENV` 缺省被烧成 `"test"`（`X-Release-Channel` 错发），已在 `community-build.yml` 编译步骤补 `ZCODE_ENV=production` + `ZCODE_PREVIEW_IDENTITY=1`（Preview 身份与数据目录隔离不变）。
+
+断言门禁同步（§9.5 口径修订）：`scripts/community/assert-privacy.mjs` 的 `X-Client-Timezone`/`X-Os-Version` 全量禁串自本节起改为**成对证明**断言——头名出现时，scoped 实现证据串（`/api/v1/zcode-plan/` 前缀判定、`ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）必须在同一 asar 内存在且为正向必在项；agent 侧命中改为 INFO（shared 依赖副本可含契约实现代码，CLI 模型链路不调用 serverContract，`ZCODE_SEND_CLIENT_HEADERS` 总闸仍在 agent 必在项中）。若未来服务端取消该契约，恢复禁串口径时须同步改回本节与 §9.5。COMMUNITY-EDITION.md 的整改表/开关表/产物验证段已按本节口径同步。

@@ -93,9 +93,14 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
       # mock-cdn 远程资产仅 SSH/WSL 远程工作区需要，社区桌面包跳过下载。
+      # ZCODE_ENV 必须在编译期就是 production：tsup/vite 会把缺省 "test" 烧进
+      # __ZCODE_ENV__（X-Release-Channel 等请求头随之错发 "test"）；Preview 身份
+      # 保持产物命名与 ~/.zcode-preview 数据目录隔离，与 bundle 步骤一致。
       - run: pnpm --filter @zcode/desktop build
         env:
           ZCODE_SKIP_REMOTE_ASSETS: "1"
+          ZCODE_ENV: production
+          ZCODE_PREVIEW_IDENTITY: "1"
       # Preview 身份：仅用于产物命名与数据目录隔离（与正式版并存安装）；社区版已删除 autoUpdater/forceUpdateGuard 全链路。
       # ZCODE_ENV=production 仅作用于本步骤：electron-builder 产物后缀按它区分
       # 后端环境（缺省 test → 文件名带 _TEST）。社区发行包不标记后端环境，取干净名。

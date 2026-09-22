@@ -68,7 +68,7 @@
 | #   | 整改                                  | 位置                                                                            | 效果                                                                                                                                  |
 | --- | ------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | 遥测总闸改 opt-in 默认关              | `packages/shared/src/env.ts`                                                    | 数仓 + ARMS + 远程 crash 三条通道整体熄火                                                                                             |
-| 2   | 桌面/服务侧指纹头收口                 | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带                                          |
+| 2   | 桌面/服务侧指纹头收口                 | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带（2026-09-22 修订：`/api/v1/zcode-plan/` 计费路径族按服务端硬契约豁免补回三头，缺头即 400，见 PRIVACY-AUDIT.md §十二） |
 | 3   | CLI 指纹头按端点放行                  | 新增 `apps/zcode-cli/packages/adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸 |
 | 4   | model-io 落盘改 opt-in                | `apps/zcode-cli/packages/adapters/src/model/runner-debug.ts`                    | 默认不再写明文提示词/代码 JSONL                                                                                                       |
 | 5   | 反馈 full 档移除                      | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭                                                                                     |
@@ -102,19 +102,20 @@
 | 环境变量                       | 语义                                        | 默认                   |
 | ------------------------------ | ------------------------------------------- | ---------------------- |
 | `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸                   | 关                     |
-| `ZCODE_SEND_DEVICE_MID=true`   | `X-Device-Mid` 指纹头（官方计费契约逃生口） | 关                     |
+| `ZCODE_BILLING_CONTRACT_HEADERS=0` | 计费契约三头（时区/OS 版本/设备标识，仅 `/api/v1/zcode-plan/` 路径）紧急关闭闸 | 开（该路径族默认携带） |
+| `ZCODE_SEND_DEVICE_MID=true`   | 全局 `X-Device-Mid` 指纹头（历史逃生口；计费路径已由上一行覆盖） | 关                     |
 | `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点收全集） |
 | `ZCODE_MODEL_IO_ENABLED=1`     | model-io 全量落盘（诊断用）                 | 关                     |
 | `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行 Origin 白名单               | 空                     |
 
-**产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；`X-Client-Timezone`/`X-Os-Version` 应 0（实测 0）；新开关字符串应在（实测在）。残留的 `sdk.rum.aliyuncs` 字符串属打包在内的 ARMS SDK 死代码——总闸默认关使其不可达，SDK 物理摘除列于 P1。
+**产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七；2026-09-22 起口径见 §十二）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；计费契约头 `X-Client-Timezone`/`X-Os-Version` 自 §十二 起改为「成对出现」断言——头名必须与 scoped 实现证据（`/api/v1/zcode-plan/` 前缀判定 + `ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）同时在 asar，证明是路径级豁免而非无条件回滚；新开关字符串应在（实测在）。残留的 `sdk.rum.aliyuncs` 字符串属打包在内的 ARMS SDK 死代码——总闸默认关使其不可达，SDK 物理摘除列于 P1。
 
 **CI 门禁**：`.github/workflows/community-build.yml` 把上述断言变成会挂构建的硬门禁——所有作业在 job 级显式清空遥测端点环境变量，桌面出包后自动运行 `scripts/community/assert-privacy.mjs`（断言集与本节口径一致，零依赖可本地复跑）。该脚本已经双向验证：社区产物 PASS（10/10），官方 3.14.1 产物 FAIL（10/10，并枚举出其烘焙的 proj-xtrace 上报端点）。流水线同时产出三平台桌面安装包与 CLI/Web 发行树，`install.sh` 所需的 latest.json/releases 目录结构可一键发布到 gh-pages。
 
 **诚实的边界，两条不承诺的事：**
 
 1. **模型推理本身仍是数据出境**。你放进上下文的代码、diff、终端输出会发给所配置的模型 API——这是服务本体，不是后门，任何客户端实现都无法改变。若你的威胁模型是"厂商一个字符都不能看"，请使用本地模型。社区版做到的是把出境面收敛为"你主动喂进上下文的内容"，并让发往第三方端点的请求不携带身份指纹。
-2. **官方端点仍收到最简指纹**（版本、平台类别）。账号/计费功能要求与官方后端通信；`ZCODE_SEND_DEVICE_MID` 保留了计费契约的显式逃生口，默认关闭。
+2. **官方端点仍收到最简指纹**（版本、平台类别）。账号/计费功能要求与官方后端通信；其中 `/api/v1/zcode-plan/` 计费路径族因服务端硬契约额外携带时区/OS 内核版本/设备标识三头（缺头即 400，2026-09-22 实测定界，路径级豁免见 PRIVACY-AUDIT.md §十二），`ZCODE_BILLING_CONTRACT_HEADERS=0` 可紧急关闭。
 
 ## 五、与上游的关系
 
