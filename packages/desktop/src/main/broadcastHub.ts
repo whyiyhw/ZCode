@@ -42,11 +42,6 @@ export class BroadcastHub {
   /** 通用 opaque reservation/claim；不保存 Coding Plan 等业务状态。 */
   private readonly claims = new Map<string, BroadcastClaimRecord>();
 
-  /** 内存诊断计数器；只读 size。 */
-  collectMemoryDiagnostics(): Record<string, number> {
-    return { claims: this.claims.size, processes: this.processes.size };
-  }
-
   /** 注册 host process 并监听其广播消息 */
   register(windowId: number, child: ElectronUtilityProcess): void {
     this.processes.set(windowId, child);

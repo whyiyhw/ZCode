@@ -6,7 +6,6 @@ import {
   AppErrorBoundary,
   Root,
   GlobalDatabaseStartupLoading,
-  UpdateStatusWindowRoot,
   ZCodeIntlProvider,
   registerBaseWorkspaceServices,
   registerRemoteWorkspaceSession,
@@ -21,7 +20,6 @@ import {
   InternalChannels,
   databaseStartupStateSchema,
   type DatabaseStartupControl,
-  collectTelemetryRendererContext,
   parseLaunchMarks,
   LAUNCH_MARKS_QUERY_KEY,
   type LaunchMarks,
@@ -29,7 +27,6 @@ import {
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
 import type { IServiceAccessor } from "@zcode/services";
-import { syncAppTelemetryContext } from "../appTelemetryBridge.js";
 import { createDesktopPlatform } from "./desktopPlatform.js";
 import { startPerformanceTimelineCleanup } from "./performanceTimelineCleanup.js";
 import { initializeDesktopUserActionTrace } from "./userActionTraceBootstrap.js";
@@ -131,7 +128,6 @@ const supportsSettings = readBooleanFlag("supportsSettings", true);
 const initialWorkspaceAbsPath = readStringFlag("initialWorkspacePath");
 const initialWorkspacePurpose = readStringFlag("initialWorkspacePurpose");
 const unavailableWorkspacePath = readStringFlag("unavailableWorkspacePath");
-const windowKind = readStringFlag("windowKind");
 const initialLocaleFlag = readStringFlag("locale");
 const initialLocale: Locale =
   initialLocaleFlag === "zh-CN" || initialLocaleFlag === "en-US"
@@ -158,8 +154,7 @@ initializeDesktopUserActionTrace({
 // 导致多次 createRoot 在同一 DOM 节点上挂载。用 flag 防止重复初始化。
 let appInitialized = false;
 const databaseStartupAdmission = new DatabaseStartupAdmission();
-const appRoot =
-  windowKind === "update-status" ? null : createRoot(document.getElementById("root")!);
+const appRoot = createRoot(document.getElementById("root")!);
 const sendStartupControl = (control: DatabaseStartupControl) =>
   window.postMessage({ type: InternalChannels.DatabaseStartupControl, control }, "*");
 function renderDatabaseStartup(): void {
@@ -191,25 +186,22 @@ function enterAppIfPrepared(): void {
   const port = databaseStartupAdmission.takeReadyPort();
   if (port) initializeBusinessRoot(port);
 }
-const firstStartupStateTimer =
-  windowKind === "update-status"
-    ? undefined
-    : setTimeout(() => {
-        if (databaseStartupAdmission.state) return;
-        const now = Date.now();
-        databaseStartupAdmission.state = {
-          schemaVersion: 1,
-          startupId: "unavailable",
-          attemptId: "startup-channel-unavailable",
-          sequence: 0,
-          startedAt: rendererStartedAt,
-          updatedAt: now,
-          phase: "failed",
-          errorCode: "startup_status_timeout",
-          disk: [],
-        };
-        renderDatabaseStartup();
-      }, 30_000);
+const firstStartupStateTimer = setTimeout(() => {
+  if (databaseStartupAdmission.state) return;
+  const now = Date.now();
+  databaseStartupAdmission.state = {
+    schemaVersion: 1,
+    startupId: "unavailable",
+    attemptId: "startup-channel-unavailable",
+    sequence: 0,
+    startedAt: rendererStartedAt,
+    updatedAt: now,
+    phase: "failed",
+    errorCode: "startup_status_timeout",
+    disk: [],
+  };
+  renderDatabaseStartup();
+}, 30_000);
 
 function registerRemoteWorkspaceServicePort(params: RemoteWorkspaceServicePortRegistration) {
   if (!baseServicesForRemoteSessions) {
@@ -308,13 +300,6 @@ function initializeBusinessRoot(port: MessagePort): void {
   flushPendingRemoteWorkspaceServicePorts();
   const settingService = supportsSettings ? services.settingService : undefined;
 
-  syncAppTelemetryContext({
-    bridge: {
-      syncTelemetryContext: (context) => window.zcode.syncTelemetryContext(context),
-    },
-    createRendererContext: collectTelemetryRendererContext,
-  });
-
   // 初始化稳定的设备 ID，确保所有 hook 在首次渲染前就使用正确的值
   setStreamClientId(desktopPlatform.getDeviceId());
 
@@ -352,20 +337,5 @@ function initializeBusinessRoot(port: MessagePort): void {
 }
 
 window.addEventListener("message", handleServicePortMessage);
-if (windowKind !== "update-status") {
-  renderDatabaseStartup();
-  sendStartupControl({ action: "snapshot" });
-}
-
-if (windowKind === "update-status") {
-  createRoot(document.getElementById("root")!).render(
-    <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>
-      <StartupReadyNotifier />
-      <UpdateStatusWindowRoot
-        platform={desktopPlatform}
-        initialLocale={initialLocale}
-        onRequestClose={() => window.close()}
-      />
-    </AppErrorBoundary>,
-  );
-}
+renderDatabaseStartup();
+sendStartupControl({ action: "snapshot" });

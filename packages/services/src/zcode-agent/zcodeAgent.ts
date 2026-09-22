@@ -17,10 +17,6 @@ import type {
   ModelSelection,
   ZCodeSessionImportHistory,
   ZCodePermissionRequestParams,
-  AgentLaneResourceSample,
-  ZCodeMcpTelemetryEvent,
-  ZCodeMcpResourceSample,
-  ZCodeToolExecResource,
   ZCodeProcessChildProcess,
   ZCodeMcpListResult,
   ZCodePluginsListResult,
@@ -706,17 +702,18 @@ export interface IZCodeAgentService {
   ): Promise<void>;
   onDynamicSessionRuntimePreferencesRequest(): Event<ZCodeAgentSessionRuntimePreferencesRequest>;
   /**
-   * CLI 进程级资源样本，带 services 打的 lane 标签（CLI 自己不知道 lane）。
-   * 使用 dynamic event 避免 RPC 服务在无人订阅时缓冲周期事件；
-   * 该事件不属于 session/conversation continuous 或 replayable 状态。
+   * @deprecated 资源遥测族已移除后的兼容垫片（spec/resource-telemetry-removal.md）。
+   * 旧版桌面端的 Host 在远程连接时无条件订阅这四个动态事件；事件族是双向契约，
+   * 服务端直接删方法会让旧端的事件订阅在 RPC 读循环里抛 "Event not found" 击穿
+   * 远端 server 进程。保留 no-op（恒返回 None）直至确认无旧对端，届时一并移除。
    */
-  onDynamicProcessResourceSample(): Event<AgentLaneResourceSample>;
-  /** MCP 进程生命周期与低频内存事件，仅供可信 Host relay 上报 ARMS。 */
-  onDynamicMcpTelemetry(): Event<ZCodeMcpTelemetryEvent>;
-  /** MCP 进程树资源事实，只供可信 Host 汇总上报。 */
-  onDynamicMcpResourceSamples(): Event<ZCodeMcpResourceSample[]>;
-  /** Bash 完成事实，仅可信 Host 资源旁路订阅。 */
-  onDynamicToolExecResource(): Event<ZCodeToolExecResource>;
+  onDynamicProcessResourceSample(): Event<unknown>;
+  /** @deprecated 兼容垫片，见 onDynamicProcessResourceSample。 */
+  onDynamicToolExecResource(): Event<unknown>;
+  /** @deprecated 兼容垫片，见 onDynamicProcessResourceSample。 */
+  onDynamicMcpResourceSamples(): Event<unknown>;
+  /** @deprecated 兼容垫片，见 onDynamicProcessResourceSample。 */
+  onDynamicMcpTelemetry(): Event<unknown>;
   /**
    * @deprecated 旧协议订阅面（session/subscribe + session/event + state.updated）。
    * task-index syncer 已迁 v4 sessions-index/workspace-config 帧；

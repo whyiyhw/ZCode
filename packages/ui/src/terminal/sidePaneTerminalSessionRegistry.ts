@@ -15,7 +15,6 @@
 
 import type { FitAddon } from "@xterm/addon-fit";
 import type { ITheme, Terminal as XTerm } from "@xterm/xterm";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 /**
  * 一个 side pane terminal 会话的常驻资源。
@@ -53,9 +52,6 @@ export interface SidePaneTerminalSessionEntry {
 
 // 模块级状态：跨 workspace、跨 React 组件树常驻。
 const sessions = new Map<string, SidePaneTerminalSessionEntry>();
-// 内存诊断计数器：常驻 xterm 实例数无上限，先落日志。
-uiMemoryDiagnosticsRegistry.register("xterm", () => ({ sessions: sessions.size }));
-
 // 隐藏暂存容器：存放 detached 的 hostEl，避免被 React 卸载渲染容器时连带销毁 xterm DOM。
 let stashDiv: HTMLDivElement | null = null;
 

@@ -15,7 +15,6 @@ import {
   type TaskListCacheKey,
 } from "@/lib/taskQueryCache.js";
 import { notifyTaskLifecycle } from "@/lib/taskLifecycleEvents.js";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 interface TaskListMembershipState {
   pinned: boolean;
@@ -1002,11 +1001,3 @@ export function removeTaskFromTaskQueryCaches(
   return removed;
 }
 
-// 内存诊断计数器：版本化 queryKey 只增不删，先落日志。
-uiMemoryDiagnosticsRegistry.register("taskQueryCache", () => {
-  const state = useTaskQueryCacheStore.getState();
-  return {
-    queryKeys: Object.keys(state.resultsByQueryKey).length,
-    taskMetas: Object.keys(state.taskMetaByEntityKey).length,
-  };
-});

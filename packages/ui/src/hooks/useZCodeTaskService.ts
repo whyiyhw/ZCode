@@ -2,7 +2,6 @@ import { useServices } from "@/hooks/useServices.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import type { IZCodeTaskService } from "@zcode/services";
 import type { ZCodeTaskSnapshot } from "@zcode/shared";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 type GetTaskSnapshotParams = Parameters<IZCodeTaskService["getTaskSnapshot"]>[0];
 type GetTaskSnapshotResult = Promise<ZCodeTaskSnapshot | null>;
@@ -30,14 +29,6 @@ type PersistedSnapshotCacheEntry = {
 };
 let persistedSnapshotCacheLoaded = false;
 const persistedSnapshotCache = new Map<string, PersistedSnapshotCacheEntry>();
-// 内存诊断计数器：WeakMap 无法枚举，记住最近一个
-// service 的内存缓存（renderer 内实际只有一个 task service 实例）。
-let latestSnapshotCache: Map<string, { etag: string; snapshot: ZCodeTaskSnapshot }> | undefined;
-uiMemoryDiagnosticsRegistry.register("taskSnapshotCache", () => ({
-  entries: latestSnapshotCache?.size ?? 0,
-  persisted: persistedSnapshotCache.size,
-}));
-
 function buildSnapshotDedupeKey(params: GetTaskSnapshotParams): string {
   return [
     params.workspacePath,
@@ -84,12 +75,10 @@ function getOrCreateSnapshotCacheMap(
   }
   const existing = snapshotCacheByService.get(service);
   if (existing) {
-    latestSnapshotCache = existing;
     return existing;
   }
   const created = new Map<string, { etag: string; snapshot: ZCodeTaskSnapshot }>();
   snapshotCacheByService.set(service, created);
-  latestSnapshotCache = created;
   return created;
 }
 

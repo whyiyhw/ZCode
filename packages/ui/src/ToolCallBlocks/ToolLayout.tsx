@@ -11,11 +11,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip.js";
 import { ToolSummaryRow, type ToolSummaryAction } from "@/ToolCallBlocks/ToolSummaryRow.js";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 const toolLayoutOpenState = new Map<string, boolean>();
-// 内存诊断计数器：该表按 toolId 只增不减，先落日志。
-uiMemoryDiagnosticsRegistry.register("toolLayout", () => ({ openState: toolLayoutOpenState.size }));
 const TOOL_CONTENT_COLLAPSE_UNMOUNT_DELAY_MS = 300;
 const TOOL_CONTENT_SHELL_CLASSNAME = "text-popover-foreground outline-none";
 const TOOL_CONTENT_SPACING_CLASSNAME = "pt-2";

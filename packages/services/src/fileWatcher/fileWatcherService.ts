@@ -4,7 +4,6 @@ import { Emitter, Event, type Event as RpcEvent } from "@zcode/rpc";
 import type { FileWatchEvent } from "@zcode/shared";
 import { createServiceLogger, type ServiceLogger } from "#src/logger/serviceLogger.js";
 import type { IFileWatcherService } from "./fileWatcher.js";
-import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
 /** 防抖时间（ms）——批量文件变更（如 git checkout）时避免频繁刷新 */
 const DEBOUNCE_MS = 150;
@@ -37,12 +36,6 @@ export function createFileWatcherService(options?: {
   const log = options?.logger ?? createServiceLogger("file-watcher");
   const watchers = new Map<string, WatcherInstance>();
   let nextId = 0;
-  // 内存诊断计数器：客户端断连不回收 watcher 时
-  // 这里会只增不减。
-  const memoryDiagnostics = registerMemoryDiagnosticsProvider("fileWatcher", () => ({
-    open: watchers.size,
-  }));
-
   function cleanup(id: string): void {
     const w = watchers.get(id);
     if (!w) return;
@@ -125,7 +118,6 @@ export function createFileWatcherService(options?: {
     },
 
     disposeAll(): void {
-      memoryDiagnostics.dispose();
       const ids = Array.from(watchers.keys());
       for (const id of ids) {
         cleanup(id);

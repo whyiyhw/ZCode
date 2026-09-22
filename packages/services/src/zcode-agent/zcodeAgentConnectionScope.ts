@@ -875,32 +875,20 @@ export function createZCodeAgentConnectionScope(
       }
       return base.onDynamicCuaPermissionObservation();
     },
+    // 资源遥测族移除后的兼容垫片（spec/resource-telemetry-removal.md）：旧版桌面端
+    // Host 无条件订阅这四个动态事件，这里必须保留 no-op 实现，否则旧端的事件订阅会在
+    // 本进程的 RPC 读循环里抛 "Event not found" 击穿 server。恒返回 None，不再转发 base。
     onDynamicProcessResourceSample() {
-      assertOpen();
-      // CLI 资源样本只供远端 Desktop Host relay 回传 main；renderer/mobile attachment
-      // 不消费该事件，也不能把它引入 continuous/replayable 消息面。
-      if (role !== "trusted-host-relay") {
-        return RpcEvent.None;
-      }
-      return base.onDynamicProcessResourceSample();
+      return RpcEvent.None;
     },
     onDynamicToolExecResource() {
-      // 完成事实与会话交付无关，禁止进入 continuous/replayable attachment。
-      if (disposed || role !== "trusted-host-relay") return RpcEvent.None;
-      return base.onDynamicToolExecResource();
+      return RpcEvent.None;
     },
     onDynamicMcpResourceSamples() {
-      // 资源事实不属于会话流，桌面 continuous 与手机 replayable attachment 均不能订阅。
-      if (disposed || role !== "trusted-host-relay") return RpcEvent.None;
-      return base.onDynamicMcpResourceSamples();
+      return RpcEvent.None;
     },
     onDynamicMcpTelemetry() {
-      assertOpen();
-      // MCP 遥测与 CLI 资源样本共用可信 Host relay 边界，不进入 renderer/mobile 会话链路。
-      if (role !== "trusted-host-relay") {
-        return RpcEvent.None;
-      }
-      return base.onDynamicMcpTelemetry();
+      return RpcEvent.None;
     },
     async subscribeSessionsIndexV4(params) {
       assertReady();

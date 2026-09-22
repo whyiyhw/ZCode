@@ -1,5 +1,3 @@
-import { ingestToolExecResource } from "./desktopResourceTelemetry.js";
-import { ingestMcpResourceSamples } from "./processResourceMcpTelemetrySource.js";
 /* eslint-disable max-lines -- host process 统一处理 main↔host 生命周期、日志、ZCode Agent，拆分前先保持跨进程消息收口。 */
 import { bindDatabaseStartupRelay } from "./databaseStartupRelay.js";
 import { randomUUID } from "node:crypto";
@@ -18,7 +16,6 @@ import {
   type HostAgentProcessReadyResponse,
   type HostAgentProcessSpawnedResponse,
   type HostCuaOperationStateResponse,
-  type HostMcpTelemetryResponse,
   type HostSessionCreateTelemetryResponse,
   type TaskRealtimeHostDeliveryKind,
   formatZCodeHostProcessName,
@@ -29,7 +26,6 @@ import {
   LAUNCH_MARKS_QUERY_KEY,
   RUNTIME_ZCODE_DEBUG,
   serializeLaunchMarks,
-  type RemoteTarget,
   type WorkspacePurpose,
   ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV,
 } from "@zcode/shared";
@@ -49,10 +45,6 @@ import {
   hostModulePath,
   resolveBundledGlmBinaryPath,
 } from "./desktopRuntimeEnv.js";
-import { ingestHostNetworkObservations } from "./desktopNetworkTelemetry.js";
-import { ingestCliResourceSample } from "./processResourceCliSource.js";
-import { ingestHostSelfResourceSample } from "./processResourceSelfHeapSource.js";
-import { createFeedbackLogArchiveFromExportLogs } from "./exportLogs.js";
 import { buildHostE2ECoverageEnv } from "./e2eCoverage.js";
 
 export interface WindowBootstrapOptions {
@@ -61,7 +53,6 @@ export interface WindowBootstrapOptions {
   initialWorkspacePath?: string;
   initialWorkspacePurpose?: WorkspacePurpose;
   unavailableWorkspacePath?: string;
-  windowKind?: "main" | "update-status";
   locale?: string;
 }
 
@@ -120,7 +111,6 @@ export function loadWindow(
       initialWorkspacePath: bootstrap?.initialWorkspacePath,
       initialWorkspacePurpose: bootstrap?.initialWorkspacePurpose,
       unavailableWorkspacePath: bootstrap?.unavailableWorkspacePath,
-      windowKind: bootstrap?.windowKind,
       locale: bootstrap?.locale,
     }).filter((entry): entry is [string, string] => entry[1] != null),
   );
@@ -154,8 +144,6 @@ export function spawnHostProcess(
   initMessage: HostInitMessage,
   dependencies: {
     hostProcessLocalEnv: Record<string, string>;
-    /** Main 进程已完成服务端灰度裁决；Host 只消费这个快照，不自行请求或分桶。 */
-    desktopContextPromptEnabled?: () => boolean;
     logger: {
       info: (...args: unknown[]) => void;
       warn: (...args: unknown[]) => void;
@@ -177,7 +165,6 @@ export function spawnHostProcess(
     onAgentProcessException?: (event: HostAgentProcessExceptionResponse) => void;
     onAgentProcessReady?: (event: HostAgentProcessReadyResponse) => void;
     onAgentProcessSpawned?: (event: HostAgentProcessSpawnedResponse) => void;
-    onMcpTelemetry?: (event: HostMcpTelemetryResponse) => void;
     onSessionCreateTelemetry?: (event: HostSessionCreateTelemetryResponse) => void;
     onCuaOperationStateChanged?: (
       source: ElectronUtilityProcess,
@@ -247,13 +234,10 @@ export function spawnHostProcess(
       // health-timing out. Env-name mirror of services' LAUNCHER_PID_ENV. Not set on
       // Windows/Linux (CUA is macOS-only; nothing reads it there) to keep the host env pristine.
       ...(process.platform === "darwin" ? { ZCODE_CUA_LAUNCHER_PID: String(process.pid) } : {}),
-      ...(dependencies.desktopContextPromptEnabled
-        ? {
-            [ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV]: dependencies.desktopContextPromptEnabled()
-              ? "1"
-              : "0",
-          }
-        : {}),
+      // 灰度链已移除（spec/client-config-rollout-removal.md）：Desktop Context Prompt 静态默认关闭。
+      // services 层（resolveZCodeAgentPresentationSurface）对 env 缺失按历史装配语义视为"开启"，
+      // 因此必须显式注入 "0" 而不能省略；需要开启时改为 "1" 并重新构建。
+      [ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV]: "0",
     },
   });
 
@@ -297,48 +281,8 @@ export function spawnHostProcess(
       return;
     }
 
-    if (result.data.type === HostResponseTypes.NetworkTelemetryBatch) {
-      ingestHostNetworkObservations(result.data.observations);
-      return;
-    }
-
-    // CLI 自采的 60 秒样本：按 services 打的 lane 归入 cli_chat / cli_aux 角色。
-    if (result.data.type === HostResponseTypes.AgentResourceSample) {
-      ingestCliResourceSample(
-        result.data.sample,
-        result.data.runtimeSurface,
-        result.data.environmentKey,
-      );
-      return;
-    }
-
-    // Host 自采的 60 秒样本：main 只取 heap 作 host 角色事件的 heap 维度。
-    if (result.data.type === HostResponseTypes.HostResourceSample) {
-      ingestHostSelfResourceSample(result.data.sample);
-      return;
-    }
-
     if (result.data.type === HostResponseTypes.ResourceUsageSnapshotResult) {
       resolveHostResourceUsageResult(label, result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.ToolExecResource) {
-      ingestToolExecResource(result.data.sample, result.data.runtimeSurface);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.McpResourceSamples) {
-      ingestMcpResourceSamples(
-        result.data.samples,
-        result.data.runtimeSurface,
-        result.data.environmentKey,
-      );
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.McpTelemetry) {
-      dependencies.onMcpTelemetry?.(result.data);
       return;
     }
 
@@ -382,29 +326,6 @@ export function spawnHostProcess(
     if (result.data.type === HostResponseTypes.CuaOperationState) {
       // Main 只投影 Host 已经判定的 turn 状态，不在这里重复解析 session/tool 业务事件。
       dependencies.onCuaOperationStateChanged?.(child, result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.FeedbackLogArchiveRequest) {
-      const request = result.data;
-      void createFeedbackLogArchiveFromExportLogs(request.sourceDir)
-        .then((archive) => {
-          child.postMessage({
-            type: HostMessageTypes.FeedbackLogArchiveResult,
-            requestId: request.requestId,
-            ok: true,
-            path: archive.path,
-            size: archive.size,
-          });
-        })
-        .catch((error) => {
-          child.postMessage({
-            type: HostMessageTypes.FeedbackLogArchiveResult,
-            requestId: request.requestId,
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
       return;
     }
 

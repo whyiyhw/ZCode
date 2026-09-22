@@ -18,14 +18,9 @@ import { randomUUID } from "node:crypto";
 import {
   MessagePortProtocol,
   ChannelServer,
-  type IDisposable,
   type IChannelServer,
   LoggingChannelServer,
-  NetworkTelemetryChannelServer,
 } from "@zcode/rpc";
-import { registerHostNetworkTelemetry, stopHostNetworkTelemetry } from "./hostNetworkTelemetry.js";
-import { registerHostServiceResourceTelemetry } from "./hostServiceResourceTelemetry.js";
-import { resolveResourceTelemetryEnvironmentKey } from "./hostResourceTelemetryEnvironment.js";
 import { reportHostSessionCreate } from "./hostSessionCreateTelemetry.js";
 import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
@@ -45,7 +40,6 @@ import {
   ICuaPipSessionService,
   createZCodeAgentConnectionScope,
   type ZCodeAgentV4ClientMode,
-  collectServiceMemoryDiagnostics,
 } from "@zcode/services";
 import {
   createLocalServices,
@@ -148,7 +142,6 @@ import {
 import { createWindowHostControllerRuntime } from "./windowHostControllerService.js";
 import { resolveAutomationSubmissionModelSelection } from "./automationModelSelection.js";
 import { createRemoteConnectionProgressContext } from "@zcode/server/remote/remoteConnectionProgressContext.js";
-import { startHostSelfResourceTelemetry } from "./hostSelfResourceTelemetry.js";
 type RemoteBackendHostConnection = RemoteConnection & {
   backend: IRemoteBackend;
 };
@@ -188,19 +181,11 @@ process.title = formatZCodeHostProcessName(process.env["ZCODE_PROCESS_LABEL"]);
 
 type HostLogLevel = "info" | "warn" | "error";
 
-interface PendingFeedbackLogArchiveRequest {
-  resolve: (archive: { path: string; size: number }) => void;
-  reject: (error: Error) => void;
-  onProgress?: (event: { processedBytes: number; totalBytes: number }) => void;
-}
-
 interface PendingLocalMediaPreviewPathAuthorization {
   resolve: (path: string) => void;
   reject: (error: Error) => void;
 }
 
-const pendingFeedbackLogArchiveRequests = new Map<string, PendingFeedbackLogArchiveRequest>();
-let nextFeedbackLogArchiveRequestSeq = 0;
 const pendingLocalMediaPreviewPathAuthorizations = new Map<
   string,
   PendingLocalMediaPreviewPathAuthorization
@@ -305,37 +290,6 @@ function writeHostLog(level: HostLogLevel, ...args: unknown[]): void {
     level === "error" ? rawConsole.error : level === "warn" ? rawConsole.warn : rawConsole.log;
   consoleFn(prefix, ...args);
   reportHostLog(level, [prefix, ...args]);
-}
-
-function createFullFeedbackLogArchiveViaMain(
-  sourceDir: string,
-  options?: {
-    onProgress?: (event: { processedBytes: number; totalBytes: number }) => void;
-  },
-): Promise<{ path: string; size: number }> {
-  const requestId = `feedback-log-archive-${Date.now()}-${nextFeedbackLogArchiveRequestSeq++}`;
-  options?.onProgress?.({ processedBytes: 0, totalBytes: 0 });
-
-  return new Promise((resolve, reject) => {
-    pendingFeedbackLogArchiveRequests.set(requestId, {
-      resolve,
-      reject,
-      onProgress: options?.onProgress,
-    });
-    // 问题反馈以前在 host service 内走 compactLogArchive 的 full fallback，
-    // 收集范围和“导出日志”不一致，缺少 zcode-cli 日志、rollout/debug 以及导出链路脱敏。
-    // 这里把完整日志打包委托给 main process 的导出日志同源逻辑，host 只拿 zip 路径继续上传。
-    try {
-      parentPort.postMessage({
-        type: HostResponseTypes.FeedbackLogArchiveRequest,
-        requestId,
-        sourceDir,
-      });
-    } catch (error) {
-      pendingFeedbackLogArchiveRequests.delete(requestId);
-      reject(error instanceof Error ? error : new Error(String(error)));
-    }
-  });
 }
 
 const logger = {
@@ -1021,16 +975,6 @@ async function dispatchManualAutomationRun(params: {
 // Node warning 不是远端连接失败，改成结构化 warn，避免默认 stderr 被误染成 error。
 process.on("warning", (warning) => logger.warn(`${warning.name}: ${warning.message}`));
 
-registerHostNetworkTelemetry(parentPort);
-// Host 进程自身的 60 秒采样：一次读数两个出口——门控后写本地
-// `[memory]` 行，同一次读数换算成 HostResourceSample 经 parentPort 送 main 作 heap 来源。
-// services 计数器由各 service 工厂自注册。
-const hostSelfResourceTelemetry = startHostSelfResourceTelemetry({
-  logger,
-  collectCounters: collectServiceMemoryDiagnostics,
-  postMessage: parentPort ? (message) => parentPort.postMessage(message) : undefined,
-});
-
 const runtimeProcessLifecycleReporter = {
   onSpawn(event) {
     if (!parentPort) {
@@ -1565,8 +1509,6 @@ let databaseStartup: ReturnType<typeof createHostDatabaseStartup> | undefined;
 const pendingStartupAttachments = new Map<string, () => void>();
 let activeServices: ServiceCollection | null = null;
 let activeHostApiNetworkTransport: HostApiNetworkTransport | null = null;
-/** 本地 host services 的资源遥测订阅；远端连接的订阅由各自的 connection handle 持有。 */
-let activeLocalResourceTelemetry: IDisposable | null = null;
 // 资源管理器采样只在 main 请求时执行一次，Host 不维护任何周期定时器。
 const hostResourceUsageResponder = createHostResourceUsageResponder({
   getAgentService: () => activeServices?.getOptional(IZCodeAgentService),
@@ -1685,16 +1627,6 @@ async function createWindowRemoteConnectionHandle(params: {
   });
 
   let disposed = false;
-  // 远端 workspace 的 CLI 与 MCP 样本走与本地同一条路径：远端 zcode-server → 本地 Host → main。
-  // 订阅寿命等于这份远端 services 的寿命：由 connection handle 持有，registry 释放 entry
-  // （WSL idle 回收、最后一个 logical session 关闭、掉线后的 session 清理）时随 dispose 一起收口。
-  const resourceTelemetry = registerHostServiceResourceTelemetry({
-    services,
-    postMessage: (message) => parentPort?.postMessage(message),
-    runtimeSurface: "remote",
-    environmentKey: resolveResourceTelemetryEnvironmentKey(params.target),
-    onError: (error) => logger.warn("remote resource telemetry subscription failed", error),
-  });
   const remoteMediaPreviewFactory = !remoteMediaRangePreviewEnabled
     ? undefined
     : (scope: Extract<WindowHostAttachmentScope, { kind: "remote" }>) =>
@@ -1728,7 +1660,6 @@ async function createWindowRemoteConnectionHandle(params: {
       }
       disposed = true;
       closeListeners.clear();
-      resourceTelemetry.dispose();
       await disposeServiceResourcesAndWait(services);
       await disposeHostRemoteConnection(connection);
     },
@@ -1830,26 +1761,6 @@ const windowHostControllerRuntime = createWindowHostControllerRuntime({
     };
   },
 });
-
-function wireLocalResourceTelemetry(services: ServiceCollection): void {
-  activeLocalResourceTelemetry?.dispose();
-  activeLocalResourceTelemetry = registerHostServiceResourceTelemetry({
-    services,
-    postMessage: (message) => parentPort?.postMessage(message),
-    runtimeSurface: "local",
-    onError: (error) => logger.warn("local resource telemetry subscription failed", error),
-  });
-}
-
-function disposeLocalResourceTelemetry(): void {
-  try {
-    activeLocalResourceTelemetry?.dispose();
-  } catch {
-    // 资源遥测释放失败不能阻塞 Host 的既有 shutdown barrier。
-  } finally {
-    activeLocalResourceTelemetry = null;
-  }
-}
 
 type ExposedServicePortHandle = {
   server: IChannelServer & { ready(): void };
@@ -1977,7 +1888,7 @@ function exposeServicesOnMessagePort(
   logger.info(`creating ChannelServer (deferInit=${deferInit})`);
   const rawServer = new ChannelServer(protocol, "host", 1000, deferInit);
   const loggedServer = new LoggingChannelServer(rawServer, logRpc);
-  const server = new NetworkTelemetryChannelServer(loggedServer);
+  const server = loggedServer;
   const agentService = services.getOptional(IZCodeAgentService);
   const connectionScope = agentService
     ? createZCodeAgentConnectionScope(agentService, {
@@ -2119,9 +2030,6 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
   disposeHostResourcesInFlight = (async () => {
     logger.info(`disposing host resources, reason=${reason}`);
 
-    stopHostNetworkTelemetry();
-    hostSelfResourceTelemetry.stop();
-    disposeLocalResourceTelemetry();
     disposeAttachedServicePorts();
     windowHostControllerRuntime.dispose();
     for (const key of Array.from(cronRunSubscriptions.keys())) {
@@ -2189,8 +2097,6 @@ function disposeHostResourcesBestEffort(reason: string): void {
   hasDisposedHostResources = true;
 
   logger.info(`disposing host resources, reason=${reason}`);
-  stopHostNetworkTelemetry();
-  disposeLocalResourceTelemetry();
   disposeAttachedServicePorts();
   windowHostControllerRuntime.dispose();
   for (const key of Array.from(cronRunSubscriptions.keys())) {
@@ -2305,21 +2211,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
   }
   if (msg.type === HostMessageTypes.ResourceUsageSnapshotCancel) {
     hostResourceUsageResponder.cancelRequest(msg.requestId);
-    return;
-  }
-
-  if (msg.type === HostMessageTypes.FeedbackLogArchiveResult) {
-    const pending = pendingFeedbackLogArchiveRequests.get(msg.requestId);
-    if (!pending) {
-      return;
-    }
-    pendingFeedbackLogArchiveRequests.delete(msg.requestId);
-    if (msg.ok && msg.path && typeof msg.size === "number") {
-      pending.onProgress?.({ processedBytes: msg.size, totalBytes: msg.size });
-      pending.resolve({ path: msg.path, size: msg.size });
-      return;
-    }
-    pending.reject(new Error(msg.error ?? "反馈日志归档创建失败"));
     return;
   }
 
@@ -2822,7 +2713,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               feedback: {
                 getDeviceMid: () => msg.deviceMid,
                 apiBaseUrl: msg.feedbackApiBase,
-                createFullLogArchive: createFullFeedbackLogArchiveViaMain,
               },
               forwardSessionMessageSendRequested: (request) => {
                 parentPort?.postMessage({
@@ -2862,7 +2752,6 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
           );
           services.register(IZCodeTaskService, reportingZCodeTaskService);
         }
-        wireLocalResourceTelemetry(services);
         hasDisposedHostResources = false;
         disposeHostResourcesInFlight = null;
         const agentWarmupTargets =

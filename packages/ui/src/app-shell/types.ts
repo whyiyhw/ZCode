@@ -6,10 +6,8 @@ import type {
   ZCodeTaskMeta,
   GitChangeSourceId,
   DesktopWindowChromeState,
-  IPlatformService,
   RemoteTarget,
   RemoteWorkspaceSessionEntry,
-  UpdateStatePayload,
   UserInfo,
 } from "@zcode/shared";
 import type { IFeedbackService, IServiceAccessor } from "@zcode/services";
@@ -136,8 +134,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   desktopWindowChromeState: DesktopWindowChromeState | null;
   macWindowControlsLeftPaddingPx: number;
   windowsWindowControlsRightPaddingPx: number;
-  updateReadyVersion: string | null;
-  updateState: UpdateStatePayload | null;
   sidebarContainerRef: RefObject<HTMLElement | null>;
   toggleSidebarShortcutLabel: string;
   newTaskShortcutLabel: string;
@@ -205,7 +201,6 @@ export interface WorkspaceShellLayoutProps extends Omit<AppProps, "baseFeedbackS
   fileChangeFindQuery: string;
   onFileChangeFindMatchCountChange: (count: number) => void;
   appLogoUrl: string;
-  platform: IPlatformService;
   reloadSessionDisabled: boolean;
   reloadSessionPending: boolean;
   handleReloadSession: (options?: {

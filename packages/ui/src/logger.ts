@@ -90,23 +90,3 @@ export const logger = {
   },
 };
 
-/**
- * 进程内存本地诊断日志的唯一 renderer 出口。
- * 它是 renderer 生产日志策略里的“正式监控链路”例外：生产构建仍经桌面桥落盘（最多每 60s 一行、
- * 有变化才写），Web 端无桥时 no-op。业务模块不得借用它绕过生产门控。
- */
-export function logMemoryDiagnostics(line: string): void {
-  if (isRendererLoggingDisabled()) {
-    return;
-  }
-  if (typeof window !== "undefined") {
-    const bridge = (window as DesktopLogBridgeWindow).zcode?.log;
-    if (bridge) {
-      bridge("info", [line]);
-      return;
-    }
-  }
-  if (!isRendererProductionBuild()) {
-    consoleFns.info(formatLogPrefix("ui"), line);
-  }
-}

@@ -8,7 +8,6 @@ export type {
   WorkspaceFileEntry,
   SystemInfo,
   AppSettings,
-  ElectronReleaseChannel,
   IntegratedTerminalShellDialect,
   IntegratedTerminalShellOption,
   IntegratedTerminalShellSelection,
@@ -210,14 +209,11 @@ export type {
   IPlatformService,
   OpenInEditorRemoteTarget,
   OpenInEditorOptions,
-  PostUpdateReleaseNotesPayload,
   RemoteConnectionRuntimeLog,
   RemoteSessionClosedEvent,
   RemoteServiceSession,
   SSHConfigAliasOption,
   TaskNotificationPayload,
-  UpdateCheckResultPayload,
-  UpdateStatePayload,
   WSLDistro,
   ZCodeStdioTapDevState,
 } from "./platform.js";
@@ -291,9 +287,7 @@ export {
   parseSubagentMarkdownSelection,
   formatSubagentMarkdownModel,
 } from "./subagent-markdown-selection.js";
-export * from "./memoryDiagnostics.js";
 export * from "./database-startup.js";
-export * from "./processResourceTelemetry.js";
 export * from "./execution-state.js";
 
 export { bashOutputDisplaySchema } from "./bash-output-display.js";

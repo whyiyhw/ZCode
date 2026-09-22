@@ -1,7 +1,6 @@
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from "shiki";
 import { bundledLanguages, bundledLanguagesInfo, createHighlighter } from "shiki";
 import { logger } from "@/logger.js";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 export interface TokenizedCode {
   tokens: ThemedToken[][];
@@ -59,12 +58,6 @@ const highlighterCache = new Map<
 >();
 const tokensCache = new Map<string, TokenizedCode>();
 const subscribers = new Map<string, Set<(result: TokenizedCode) => void>>();
-// 内存诊断计数器：tokensCache 目前无淘汰，是审计里
-// renderer 最可疑的增长点，先把条数落到日志里。
-uiMemoryDiagnosticsRegistry.register("shiki", () => ({
-  tokensCache: tokensCache.size,
-  highlighters: highlighterCache.size,
-}));
 
 const getResolvedCodeTheme = (theme?: BundledTheme): BundledTheme => {
   if (theme) {

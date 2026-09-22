@@ -12,7 +12,6 @@ import {
 import { ARMS_BROWSER_COLLECTORS, parseArmsViewName } from "../shared/armsRumShared.js";
 import { redactArmsEventBatch } from "./armsEventRedaction.js";
 import { ensureDesktopDeviceMidSync } from "./desktopDeviceMid.js";
-import { ingestArmsApiEventsFromBatch } from "./desktopNetworkTelemetry.js";
 import { desktopRuntimeEnv, runtimeApplicationName } from "./desktopRuntimeEnv.js";
 import { summarizeLongTaskAttribution } from "./longTaskAttributionSummary.js";
 import { logger } from "./logger.js";
@@ -227,10 +226,9 @@ function startArmsRum(): Promise<void> {
           basename(process.execPath),
         );
         payload.events = events;
-        ingestArmsApiEventsFromBatch(events);
         enrichLongTaskAttribution(events);
-        // 隐私收口必须排在 ingest 与归因摘要之后：网络聚合沿用自己的 interface 归一规则，
-        // longTask 摘要需要原始 snapshots；只有最终离开本机的副本才做脱敏。
+        // 隐私收口必须排在归因摘要之后：longTask 摘要需要原始 snapshots；
+        // 只有最终离开本机的副本才做脱敏。
         redactArmsEventBatch(events);
         if (desktopRuntimeEnv === "development") {
           const perfEvents = events.filter(

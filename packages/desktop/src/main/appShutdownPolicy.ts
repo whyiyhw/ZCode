@@ -1,4 +1,6 @@
-export type AppShutdownKind = "normal" | "update-install";
+// 自动更新子系统已移除（spec/auto-update-removal.md）：退出原因只剩 "normal"，
+// "update-install" 分支随之删除；Windows 普通退出保留 Host 进程树兜底余量。
+export type AppShutdownKind = "normal";
 
 interface AppShutdownPolicy {
   forceKillDelayMs: number;
@@ -8,7 +10,6 @@ interface AppShutdownPolicy {
 interface AppShutdownPolicySelection {
   kind: AppShutdownKind;
   policy: AppShutdownPolicy;
-  upgraded: boolean;
 }
 
 const STRICT_SHUTDOWN_POLICY: AppShutdownPolicy = {
@@ -17,8 +18,7 @@ const STRICT_SHUTDOWN_POLICY: AppShutdownPolicy = {
 };
 
 const WINDOWS_NORMAL_SHUTDOWN_POLICY: AppShutdownPolicy = {
-  // 普通退出仍给 Host 内部 3.5 秒进程树兜底留出执行时间，
-  // 但不再承担更新前资源锁扫描所需的额外余量。
+  // 普通退出仍给 Host 内部 3.5 秒进程树兜底留出执行时间。
   forceKillDelayMs: 4_000,
   waitTimeoutMs: 4_500,
 };
@@ -38,15 +38,8 @@ export function selectAppShutdownPolicy(
   requestedKind: AppShutdownKind,
   platform: NodeJS.Platform,
 ): AppShutdownPolicySelection {
-  // 更新安装的优先级只增不减：已创建的普通退出短 timer 不做破坏性重建，更新仍在
-  // 现有屏障后 fail-open 进入资源扫描和安装器，保证“可能残留”不会升级成“无法更新”。
-  const kind =
-    activeKind === "update-install" || requestedKind === "update-install"
-      ? "update-install"
-      : "normal";
   return {
-    kind,
-    policy: resolveAppShutdownPolicy(kind, platform),
-    upgraded: activeKind === "normal" && kind === "update-install",
+    kind: activeKind ?? requestedKind,
+    policy: resolveAppShutdownPolicy(activeKind ?? requestedKind, platform),
   };
 }

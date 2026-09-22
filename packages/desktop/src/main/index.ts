@@ -2,7 +2,7 @@ import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
-import { powerMonitor, powerSaveBlocker } from "electron";
+import { powerSaveBlocker } from "electron";
 import { crashCapturePaths } from "./appCrashCaptureBootstrap.js";
 import { armsInitPromise } from "./appARMSBootstrap.js";
 import {
@@ -12,10 +12,6 @@ import {
 import armsRum from "@arms/rum-electron";
 import { createArmsUserIdentitySync } from "./armsUserIdentity.js";
 import { ensureDesktopDeviceMidSync } from "./desktopDeviceMid.js";
-import {
-  createDesktopContextPromptRollout,
-  createElectronDesktopContextPromptConfigFetcher,
-} from "./desktopContextPromptRollout.js";
 import { buildBrowserViewCloseTabNotification } from "./browserView/browserCloseTabNotification.js";
 import { BrowserGuestManager } from "./browserView/browserGuestManager.js";
 import { createElectronBrowserWebmRecorder } from "./browserView/electronBrowserWebmRecorder.js";
@@ -45,8 +41,8 @@ import {
 } from "electron";
 import type { UtilityProcess as ElectronUtilityProcess } from "electron";
 import { spawn } from "node:child_process";
-import { join, resolve } from "node:path";
-import { homedir, hostname } from "node:os";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import {
   createCredentialService,
   createSettingService,
@@ -57,8 +53,6 @@ import {
   buildRuntimeProcessEnvPatch,
   captureLoginShellEnvSnapshot,
   getConversationWorkspaceDir,
-  getDataBaseDir,
-  getZCodeDataRootDir,
   normalizeRuntimeProcessEnv,
   setDataBaseDir,
 } from "@zcode/services/node";
@@ -74,45 +68,26 @@ import {
   ZCODE_VERSION,
   ZCODE_TELEMETRY_ENABLED,
   ZCODE_ARMS_RUM_ENDPOINT,
-  buildZCodeEndpointUrls,
   resolveZCodeEndpointOrigin,
   shouldEnableE2ETestBridge,
-  type UpdateStatePayload,
-  type TelemetryEventPayload,
   HostMessageTypes,
 } from "@zcode/shared";
 import { logger } from "./logger.js";
 import { markMainLaunchAppReady } from "./desktopLaunchMarks.js";
 import { createCuaPipFocusRouter, resolveCuaPipWindowKey } from "./cuaPipFocusRouter.js";
 import { createDesktopTelemetryFetch } from "./desktopTelemetryFetch.js";
-import {
-  acknowledgePostUpdateReleaseNotes,
-  getAutoUpdaterState,
-  hydratePendingPostUpdateReleaseNotes,
-  initAutoUpdater,
-  onAutoUpdaterStateChanged,
-  refreshAutoUpdaterReleaseChannel,
-  resolveUpdateFeedSourceFromStartupConfig,
-  syncAutoUpdaterStateToWindow,
-  syncPostUpdateReleaseNotesToWindow,
-  syncReadyUpdateToWindow,
-} from "./autoUpdater.js";
 import { BroadcastHub } from "./broadcastHub.js";
 import { TaskRealtimeBus } from "./taskRealtimeBus.js";
-import { createAppLaunchGate } from "./appLaunchGate.js";
-import { createAppLaunchCoordinator } from "./appLaunchCoordinator.js";
-import { createAppTelemetryRuntime } from "./appTelemetryRuntime.js";
 import { createRendererActionTraceBroker } from "./rendererActionTraceBroker.js";
 import { createRendererActionTraceExporter } from "./rendererActionTraceExporter.js";
 import { registerRendererActionTraceIpc } from "./rendererActionTraceIpc.js";
-import { createRendererActionTraceRollout } from "./rendererActionTraceRollout.js";
 import {
   resolveAppShutdownPolicy,
   selectAppShutdownPolicy,
   type AppShutdownKind,
 } from "./appShutdownPolicy.js";
 import { createPrimaryWindowCoordinator } from "./primaryWindowCoordinator.js";
-import { createTempTextAttachment } from "./tempTextAttachment.js";
+
 import { flushMainE2ECoverage } from "./e2eCoverage.js";
 import { resolveStartupWindowBootstrap, type StartupWindowBootstrap } from "./startupWorkspace.js";
 import {
@@ -132,7 +107,6 @@ import { applyAppIcon } from "./desktopWindowChrome.js";
 import { resolveWindowsAppUserModelIdForFlavor } from "../../scripts/desktop-product-identity.mjs";
 import type { DesktopWindowSize } from "./desktopWindowSize.js";
 import { maybeWarnArchitectureMismatch } from "./desktopArchitectureGuard.js";
-import { maybeBlockStartupForForceUpdate } from "./forceUpdateGuard.js";
 import { createWindowsDesktopTray, updateWindowsDesktopTrayMenu } from "./desktopTray.js";
 import { createWindowsCuaOperationIndicator } from "./windowsCuaOperationIndicator.js";
 import {
@@ -165,7 +139,6 @@ import {
   disposeHostProcess,
   disposeHostProcessAndWait,
   listDisposingHostProcesses,
-  loadWindow,
   spawnHostProcess,
 } from "./desktopHostProcess.js";
 import { spawnCronScheduler, type CronSchedulerHandle } from "./desktopCronScheduler.js";
@@ -187,29 +160,17 @@ import {
   isWorkspaceOpenUrl,
 } from "./desktopDeepLinkUrl.js";
 import { createRemoteWorkspaceSessionManager } from "./desktopRemoteSessions.js";
-import {
-  reportRemoteConnectionStateChangedToArms,
-  reportRemoteDisconnectToArms,
-  stopRemoteUsageArmsPeriodicSampling,
-} from "./desktopRemoteUsageArmsTelemetry.js";
 import { resolveCanonicalWslTarget } from "./desktopWslTargetResolver.js";
 import {
-  listRegisteredHostAgentProcessIds,
   setBrowserUseGuestWebContentsIdsProvider,
 } from "./resourceManagerWindow.js";
 import { createDesktopHelpConfigReader } from "./desktopHelpConfig.js";
 import { registerPlatformIpcHandlers } from "./desktopMainIpcPlatform.js";
-import {
-  loadCliMcpFromUserDirectory,
-  migrateLegacyCommonMcp,
-  saveCliMcpToUserDirectory,
-} from "./mcpUserDirectory/index.js";
+
 import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
 import {
   configureDesktopStabilityTelemetry,
-  getStabilityLifecycleScene,
   notifyStabilityAppExit,
-  notifyStabilityLifecycle,
   reportAgentProcessExitToArms,
   reportAgentProcessReadyToArms,
   reportAgentProcessStartToArms,
@@ -219,34 +180,9 @@ import {
   registerStabilityMainWindow,
   scheduleReportPerfAppStartAfterMainViewReady,
 } from "./desktopStabilityTelemetry.js";
-import {
-  configureDesktopResourceTelemetry,
-  registerDesktopResourceTelemetry,
-  resolveResourceUsageScene,
-  stopDesktopResourceTelemetry,
-} from "./desktopResourceTelemetry.js";
-import { registerRendererHeapSampleIpc } from "./processResourceRendererHeapSource.js";
-import {
-  registerDesktopZCodeDataSizeTelemetry,
-  stopDesktopZCodeDataSizeTelemetry,
-} from "./desktopZCodeDataSizeTelemetry.js";
-import { configureDesktopMcpTelemetry, reportMcpTelemetryToArms } from "./desktopMcpTelemetry.js";
-import {
-  configureDesktopNetworkTelemetry,
-  registerDesktopNetworkTelemetry,
-  stopDesktopNetworkTelemetry,
-} from "./desktopNetworkTelemetry.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
 import { mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
-import {
-  findWindowsProcessesReferencingResourceMarkers,
-  probeWindowsPackagedResourceWritable,
-  resolveWindowsPackagedResourceLockMarkers,
-  runWindowsUpdateProcessCleanup,
-  snapshotWindowsPackagedResources,
-  WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS,
-} from "./windowsInstallResourceLocks.js";
-import { mainMemoryDiagnosticsRegistry } from "./mainMemoryDiagnostics.js";
+import { snapshotWindowsPackagedResources } from "./windowsInstallResourceLocks.js";
 
 registerLocalMediaPreviewScheme(protocol);
 const localMediaPreviewPathRegistry = createLocalMediaPreviewPathRegistry();
@@ -532,21 +468,9 @@ const preloadPath = join(import.meta.dirname, "../preload/index.cjs");
 const settingsFile = join(homedir(), ".zcode", "v2", "setting.json");
 let activeAppShutdownPolicy = resolveAppShutdownPolicy("normal", process.platform);
 let activeAppShutdownKind: AppShutdownKind | null = null;
-const WINDOWS_AGENT_FORCE_KILL_TIMEOUT_MS = 2_000;
 
 const broadcastHub = new BroadcastHub();
 const taskRealtimeBus = new TaskRealtimeBus({ logger });
-// 内存诊断计数器：desktopResourceTelemetry 每 60s collect
-// 一次写主日志。will-download 监听数用于观察关窗后 defaultSession 是否残留监听。
-mainMemoryDiagnosticsRegistry.register("taskBus", () => taskRealtimeBus.collectMemoryDiagnostics());
-mainMemoryDiagnosticsRegistry.register("broadcast", () => broadcastHub.collectMemoryDiagnostics());
-mainMemoryDiagnosticsRegistry.register("guest", () =>
-  browserGuestManager.collectMemoryDiagnostics(),
-);
-mainMemoryDiagnosticsRegistry.register("app", () => ({
-  windows: BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed()).length,
-  willDownloadListeners: session.defaultSession.listenerCount("will-download"),
-}));
 const hostProcessLocalEnv = loadHostProcessEnvFromLocalFiles();
 interface RuntimeProcessEnvPreparation {
   patchPromise: Promise<Record<string, string>>;
@@ -662,15 +586,7 @@ const disposingHostProcessTimers = new WeakMap<
   ElectronUtilityProcess,
   ReturnType<typeof setTimeout>
 >();
-let updateStatusWindow: BrowserWindow | null = null;
-const UPDATE_STATUS_WINDOW_WIDTH = 512;
-const UPDATE_STATUS_WINDOW_COMPACT_HEIGHT = 205;
-const UPDATE_STATUS_WINDOW_PROGRESS_HEIGHT = 224;
-const UPDATE_STATUS_WINDOW_READY_HEIGHT = UPDATE_STATUS_WINDOW_PROGRESS_HEIGHT - 54;
-const UPDATE_STATUS_WINDOW_TRAFFIC_LIGHT_POSITION = { x: 10, y: 10 } as const;
 const mainSettingService = createSettingService();
-const appLaunchGate = createAppLaunchGate();
-const appLaunchCoordinator = createAppLaunchCoordinator(appLaunchGate);
 const appTelemetryCredentialService = createCredentialService();
 async function resolveCurrentZCodeEndpointOrigin() {
   return resolveZCodeEndpointOrigin({
@@ -679,52 +595,6 @@ async function resolveCurrentZCodeEndpointOrigin() {
     overrideOrigin: (await mainSettingService.get()).zcodeEndpointOrigin,
   });
 }
-let desktopContextPromptRollout: ReturnType<typeof createDesktopContextPromptRollout> | undefined;
-function resolveDesktopContextPromptEnabledForHost(): boolean {
-  const rollout = desktopContextPromptRollout;
-  if (!rollout) {
-    return false;
-  }
-  // Host 创建时顺便触发过期刷新，但只读取当前快照；网络请求不能阻塞 Local/Remote Host。
-  void rollout.refresh();
-  return rollout.getSnapshot().enabled;
-}
-
-// 首个 Host 创建前的有界灰度裁决门。Host/Agent 的 presentation surface 在进程启动时
-// 冻结（services/node.ts 顶层 const + CLI --surface），而灰度请求是旁路、不阻塞 Host。若首个
-// Host fork 早于请求 resolve，成功结果（enabled:true）对已冻结的 Host/Agent 无可达生效路径。
-// 这里给"成功结果"一条有界的生效路径：首 Host fork 前 await 一次裁决（≤2s），失败/超时仍按当前
-// 快照继续（desktopContextPrompt fail-open）。first-only 永久
-// latch——后续 Host fork await 已 resolve 的 promise（近乎 0ms），且各 resolve*ForHost()
-// 同步读取已被刷新的 live 快照。
-const DESKTOP_FIRST_HOST_SPAWN_DECISION_TIMEOUT_MS = 2_000;
-let firstHostSpawnDecisionPromise: Promise<void> | null = null;
-function awaitFirstHostSpawnDecision(): Promise<void> {
-  if (firstHostSpawnDecisionPromise) {
-    return firstHostSpawnDecisionPromise;
-  }
-  firstHostSpawnDecisionPromise = (async () => {
-    const rollout = desktopContextPromptRollout;
-    if (!rollout) {
-      return;
-    }
-    try {
-      const decision = await rollout.awaitFirstDecision(
-        DESKTOP_FIRST_HOST_SPAWN_DECISION_TIMEOUT_MS,
-      );
-      logger.info("[desktop-context-prompt] first host spawn decision resolved", {
-        enabled: decision.enabled,
-        configVersion: decision.configVersion,
-      });
-    } catch (error) {
-      // awaitFirstDecision 永不 reject（refresh 内部已 catch + timeout 回退快照），此处仅兜底。
-      logger.warn("[desktop-context-prompt] first host spawn decision failed, fail-open", {
-        error,
-      });
-    }
-  })();
-  return firstHostSpawnDecisionPromise;
-}
 const appTelemetryCore = createTelemetryCore({
   loadUserId: createTelemetryUserIdLoader(appTelemetryCredentialService),
   loadAuthorization: createTelemetryAuthorizationLoader(appTelemetryCredentialService),
@@ -732,45 +602,16 @@ const appTelemetryCore = createTelemetryCore({
   resolveZCodeEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
   fetchImpl: createDesktopTelemetryFetch(net),
 });
-const appTelemetryRuntime = createAppTelemetryRuntime({
-  telemetryCore: appTelemetryCore,
-  appLaunchCoordinator,
-});
-
-function reportRemoteUsageEventForRenderer(rendererId: number, event: TelemetryEventPayload): void {
-  const context =
-    appTelemetryRuntime.getRendererContext(rendererId) ??
-    appTelemetryRuntime.getLatestRendererContext();
-  if (!context) {
-    logger.warn("[remote-usage-telemetry] renderer context unavailable", {
-      elementName: event.elementName,
-      rendererId,
-    });
-    return;
-  }
-  // 最终失败由 TelemetryCore 统一记录一条脱敏告警；这里仅隔离远程连接主链路。
-  void appTelemetryCore.reportEvent({ context, ...event }).catch(() => {});
-}
-
-function syncAppTelemetryInteractiveState(): void {
-  appTelemetryRuntime.setInteractive(
-    getApplicationWindowsExcludingCuaIndicator().some(
-      (win) => !win.isDestroyed() && win.isVisible() && win.isFocused(),
-    ),
-  );
-  // 登出/切号发生在 host 子进程，主进程无即时信号；窗口聚焦时兜底刷新 ARMS user.name
-  void armsUserIdentitySync.refresh();
-}
 
 app.on("browser-window-focus", (_event, win) => {
-  syncAppTelemetryInteractiveState();
+  // 登出/切号发生在 host 子进程，主进程无即时信号；窗口聚焦时兜底刷新 ARMS user.name
+  void armsUserIdentitySync.refresh();
   rebuildMenu();
   // 设置/更新等无 Host 的 ZCode 窗口也算前台：router 会先把旧 workspace Host 清成 null，
   // 再把无 Host 的新窗口事实静默丢弃，避免旧会话 PiP 继续显示。
   cuaPipFocusRouter.focusWindow(resolveCuaPipWindowKey(win));
 });
 app.on("browser-window-blur", (_event, win) => {
-  syncAppTelemetryInteractiveState();
   cuaPipFocusRouter.blurWindow(resolveCuaPipWindowKey(win));
 });
 app.on("browser-window-created", (_event, win) => {
@@ -784,32 +625,17 @@ const remoteSessionManager = createRemoteWorkspaceSessionManager({
   resolveRemoteAssetDirs: () =>
     resolveRemoteAssetDirs({ locale: currentApplicationLocale }, hostProcessLocalEnv),
   resolveWslTarget: resolveCanonicalWslTarget,
-  reportRemoteConnectionStateChanged: reportRemoteConnectionStateChangedToArms,
-  reportRemoteDisconnect: reportRemoteDisconnectToArms,
 });
 
 const deviceMid = ensureDesktopDeviceMidSync();
-// 帮助配置是公开读取，不能复用下面附带账号鉴权的灰度响应缓存。
+// 帮助配置是公开读取，不能复用附带账号鉴权的配置响应缓存。
 const readHelpConfig = createDesktopHelpConfigReader({
   appVersion: ZCODE_VERSION || app.getVersion(),
   deviceMid,
   resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
 });
-// 同一个 /api/v1/client/configs fetcher 供两个灰度 rollout 共用（请求参数与鉴权完全一致，
-// 各自独立缓存/去重，服务端按 data.configs.<key> 区分功能）。
-const electronClientConfigsFetcher = createElectronDesktopContextPromptConfigFetcher({
-  appVersion: ZCODE_VERSION || app.getVersion(),
-  deviceMid,
-  resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
-});
-desktopContextPromptRollout = createDesktopContextPromptRollout({
-  fetchConfig: electronClientConfigsFetcher,
-  logger,
-});
-const rendererActionTraceRollout = createRendererActionTraceRollout({
-  fetchConfig: electronClientConfigsFetcher,
-  logger,
-});
+// 灰度链已移除（spec/client-config-rollout-removal.md）：/api/v1/client/configs 不再被
+// desktop main 周期性/事件驱动拉取，仅剩 helpConfig 的用户触发按需读取。
 const localTtftExporter = createLocalTtftExporter({
   env: { ...hostProcessLocalEnv, ...process.env },
   version: ZCODE_VERSION || app.getVersion(),
@@ -857,29 +683,12 @@ let startupOpenWorkspaceRequest: ExplicitStartupWorkspaceRequest | null =
       ? { path: startupDeepLinkWorkspacePath, source: "deep-link" }
       : null;
 
-let forceUpdateMainWindowCreationBlocked = false;
-
 function resolveExternalWorkspaceConfirmationCopy() {
   const effectiveLocale =
     currentApplicationLocale === DEFAULT_LOCALE && app.isReady()
       ? resolveSystemApplicationLocale()
       : currentApplicationLocale;
   return resolveExternalWorkspaceOpenDialogCopy(effectiveLocale);
-}
-
-function focusForceUpdateGateWindow() {
-  const gateWindow = getApplicationWindowsExcludingCuaIndicator()[0];
-  if (!gateWindow) {
-    return;
-  }
-
-  if (gateWindow.isMinimized()) {
-    gateWindow.restore();
-  }
-  if (!gateWindow.isVisible()) {
-    gateWindow.show();
-  }
-  gateWindow.focus();
 }
 
 const primaryWindowCoordinator = createPrimaryWindowCoordinator({
@@ -907,16 +716,6 @@ const primaryWindowCoordinator = createPrimaryWindowCoordinator({
   },
   createWindow: (startupBootstrap) => {
     createWindowInstance(startupBootstrap);
-  },
-  canCreateWindow: (reason) => {
-    if (!forceUpdateMainWindowCreationBlocked) {
-      return true;
-    }
-
-    // 强制升级命中后，Dock/托盘/activate/deep link 不能绕过 app-ready gate 创建旧版主界面。
-    logger.warn(`[force-update] 已阻止主窗口创建入口：${reason}`);
-    focusForceUpdateGateWindow();
-    return false;
   },
   logger,
 });
@@ -952,20 +751,11 @@ function syncImmediateAppSettings(patch: Partial<AppSettings>) {
     reconcileKeepAwakeBlocker();
   }
 
-  if (typeof patch.receivePreviewUpdates === "boolean") {
-    // receivePreviewUpdates 由 renderer host 写入 setting.json。
-    // main 进程的自动更新器不会订阅 host 设置变化，必须借 syncAppSettings 这条即时通道刷新 manifest channel。
-    refreshAutoUpdaterReleaseChannel(
-      patch.receivePreviewUpdates,
-      "settings receivePreviewUpdates changed",
-    );
-  }
-
   if (patch.shortcutBindings !== undefined) {
     // 快捷键改绑：
     // 落盘已完成（useSettings.update 先 await settingService.update 再走本通道），
     // 这里重建应用菜单 accelerator，并通知所有窗口刷新设置快照 —— 其他窗口的
-    // useAppKeyboard 生效表与设置页跟随更新。先例：setAutoDownloadAndInstallUpdates 的全窗口广播。
+    // useAppKeyboard 生效表与设置页跟随更新。
     rebuildMenu();
     for (const win of getApplicationWindowsExcludingCuaIndicator()) {
       if (!win.isDestroyed()) {
@@ -975,38 +765,10 @@ function syncImmediateAppSettings(patch: Partial<AppSettings>) {
   }
 }
 
-async function getAutoUpdatePreferences() {
-  const settings = await mainSettingService.get();
-  return {
-    autoDownloadAndInstallUpdates: settings.autoDownloadAndInstallUpdates ?? false,
-  };
-}
-
-async function setAutoDownloadAndInstallUpdates(enabled: boolean) {
-  await mainSettingService.update({
-    autoDownloadAndInstallUpdates: enabled,
-  });
-  syncImmediateAppSettings({
-    autoDownloadAndInstallUpdates: enabled,
-  });
-  for (const win of getApplicationWindowsExcludingCuaIndicator()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(PlatformChannels.SettingsChanged);
-    }
-  }
-}
-
 async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"): Promise<void> {
   const selection = selectAppShutdownPolicy(activeAppShutdownKind, kind, process.platform);
   activeAppShutdownKind = selection.kind;
   activeAppShutdownPolicy = selection.policy;
-  if (selection.upgraded && (hasPreparedAppQuit || appQuitPreparationInFlight)) {
-    // 更新请求可能晚于普通退出屏障。已创建的 4s timer 无法靠修改全局策略延长；
-    // 明确保留既有预算，并允许更新继续进入 fail-open 资源扫描和安装器。
-    logger.warn(
-      `[app-quit] update install joined an existing normal shutdown barrier (${reason}); existing timers keep their original budget`,
-    );
-  }
   if (hasPreparedAppQuit) {
     return;
   }
@@ -1018,16 +780,10 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
   markForceQuit(reason);
   windowsCuaOperationIndicator.dispose();
   browserScreenshotSurfaceCoordinator.dispose();
-  // Bug 根因：资源样本改为 5 分钟窗口后，退出仍直接 stop 会清空未满窗口的数据。
-  // 退出时只排空已存在的角色 / Agent 内存窗口，不启动新采样、目录扫描或外部探针。
-  stopDesktopResourceTelemetry({ flushPendingWindows: true });
-  stopDesktopZCodeDataSizeTelemetry();
-  stopDesktopNetworkTelemetry();
-  stopRemoteUsageArmsPeriodicSampling();
   disposeRendererActionTraceIpc?.();
   disposeRendererActionTraceIpc = undefined;
   notifyStabilityAppExit(
-    getStabilityLifecycleScene() === "update_install" ? "update_install" : "app_quit",
+    "app_quit",
     logger,
     { exitCode: 0, exitKind: "normal" },
   );
@@ -1125,106 +881,6 @@ function getRunningAgentSessionCount() {
   return [...hostRunningTaskCountMap.values()].reduce((total, count) => total + count, 0);
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, Math.max(ms, 0));
-    timer.unref?.();
-  });
-}
-
-async function execWithTimeout(
-  file: string,
-  args: string[],
-  timeoutMs: number,
-  spawnOptions: { windowsHide?: boolean; encoding?: BufferEncoding } = {},
-): Promise<{
-  timedOut: boolean;
-  code?: number | null;
-  signal?: NodeJS.Signals | null;
-  error?: string;
-}> {
-  const { execFile } = await import("node:child_process");
-  return new Promise((resolve) => {
-    let settled = false;
-    let timedOut = false;
-    const child = execFile(file, args, {
-      windowsHide: spawnOptions.windowsHide,
-      encoding: spawnOptions.encoding,
-    });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(child.pid!, "SIGKILL");
-      } catch {
-        // 进程可能已自行退出，忽略
-      }
-    }, timeoutMs);
-    child.on("close", (code, signal) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve({ timedOut, code, signal });
-    });
-    child.on("error", (error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve({ timedOut, error: error.message });
-    });
-  });
-}
-
-async function forceTerminateWindowsAgentProcesses(pids: number[]): Promise<
-  Array<{
-    pid: number;
-    timedOut: boolean;
-    code?: number | null;
-    signal?: NodeJS.Signals | null;
-    error?: string;
-  }>
-> {
-  const uniquePids = [...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0))];
-  return Promise.all(
-    uniquePids.map((pid) =>
-      execWithTimeout(
-        "taskkill",
-        ["/PID", String(pid), "/T", "/F"],
-        WINDOWS_AGENT_FORCE_KILL_TIMEOUT_MS,
-        {
-          windowsHide: true,
-        },
-      ).then((result) => ({ pid, ...result })),
-    ),
-  );
-}
-
-function logWindowsPackagedResourceSnapshot(stage: string) {
-  logger.info(
-    `[auto-update] Windows packaged resources snapshot (${stage}): ${JSON.stringify(
-      snapshotWindowsPackagedResources(process.resourcesPath),
-    )}`,
-  );
-}
-
-function logWindowsPackagedResourceWritableProbe(stage: string) {
-  const probes = probeWindowsPackagedResourceWritable(process.resourcesPath);
-  const failed = probes.filter((probe) => probe.exists && !probe.writable);
-  logger.info(
-    `[auto-update] Windows packaged resources writable probe (${stage}): ${JSON.stringify(probes)}`,
-  );
-  if (failed.length > 0) {
-    logger.warn(
-      `[auto-update] Windows packaged resource dirs are not writable (${stage}): ${JSON.stringify(
-        failed,
-      )}`,
-    );
-  }
-}
-
 function logWindowsBundledRuntimeIntegrityDiagnostic() {
   if (process.platform !== "win32" || !app.isPackaged) {
     return;
@@ -1247,60 +903,6 @@ function logWindowsBundledRuntimeIntegrityDiagnostic() {
       snapshotWindowsPackagedResources(process.resourcesPath),
     )}`,
   );
-}
-
-async function prepareWindowsProcessesForUpdateInstall() {
-  const trackedAgentCount = listRegisteredHostAgentProcessIds().length;
-
-  logger.info(`[auto-update] preparing Windows update install: trackedAgent=${trackedAgentCount}`);
-  logWindowsPackagedResourceSnapshot("before-dispose");
-
-  const resourceLockMarkers = resolveWindowsPackagedResourceLockMarkers(process.resourcesPath);
-  // prepareAppQuit 已经用同一屏障回收每窗口唯一 Host，并在 7.5 秒强杀、
-  // 9 秒收口；Windows 专项阶段不能再追加一轮等待，也不能用退出前记录的 Host/Agent PID
-  // 强杀，因为 PID 可能已经复用。这里只清理实时扫描仍引用随包资源的 runtime 进程，
-  // 当前 main/renderer 的最终退出交给 updater 与 NSIS。
-  const cleanup = await runWindowsUpdateProcessCleanup({
-    resourceLockMarkers,
-    lockReleaseGraceMs: WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS,
-    scan: findWindowsProcessesReferencingResourceMarkers,
-    terminate: forceTerminateWindowsAgentProcesses,
-    delay,
-  });
-
-  logger.info(
-    `[auto-update] Windows resource lock scan: matches=${cleanup.initialLockProcesses.length} trackedAgent=${trackedAgentCount} details=${JSON.stringify(
-      cleanup.initialLockProcesses,
-    )}`,
-  );
-  for (const error of cleanup.errors) {
-    logger.warn(`[auto-update] Windows process cleanup degraded: ${error}`);
-  }
-
-  if (cleanup.terminationPids.length === 0) {
-    logWindowsPackagedResourceWritableProbe("no-lock-processes");
-    return;
-  }
-
-  // 少量 Windows 用户更新后安装目录里的 bundled agent 文件会缺失。
-  // 根因通常是 NSIS 覆盖 resources/glm 等目录时，旧 agent/helper 进程或杀软触发的残留进程仍持有句柄；
-  // 只杀 host 上报过的 agent pid 会漏掉未登记或已经脱离登记的后代。这里在更新前按命令行再扫描一次安装资源路径，
-  // 对仍引用随包资源的进程树做强制清理，降低半更新导致环境损坏的概率。
-  logger.info(
-    `[auto-update] Windows taskkill results: ${JSON.stringify(cleanup.terminationResults)}`,
-  );
-  logger.info(
-    `[auto-update] Windows resource lock release grace elapsed: ${WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS}ms`,
-  );
-
-  if (cleanup.remainingLockProcesses.length > 0) {
-    logger.warn(
-      `[auto-update] Windows resource lock processes still alive after taskkill: ${JSON.stringify(
-        cleanup.remainingLockProcesses,
-      )}`,
-    );
-  }
-  logWindowsPackagedResourceWritableProbe("after-taskkill");
 }
 
 function shouldConfirmAppQuit() {
@@ -1456,217 +1058,7 @@ function getApplicationWindowsExcludingCuaIndicator(): BrowserWindow[] {
 }
 
 function getMainApplicationWindows(): BrowserWindow[] {
-  return getApplicationWindowsExcludingCuaIndicator().filter((win) => win !== updateStatusWindow);
-}
-
-function isUpdateStatusWindowCloseLocked(state: UpdateStatePayload) {
-  return state.kind === "download-progress" || state.kind === "update-downloaded";
-}
-
-function syncUpdateStatusWindowClosePolicy(win: BrowserWindow) {
-  if (win.isDestroyed()) {
-    return;
-  }
-  const closeLocked = isUpdateStatusWindowCloseLocked(getAutoUpdaterState());
-  win.setClosable(!closeLocked || forceQuitRef.current);
-  win.setMinimizable(true);
-}
-
-function syncUpdateStatusWindowChrome(win: BrowserWindow) {
-  if (win.isDestroyed() || process.platform !== "darwin") {
-    return;
-  }
-  // 独立更新窗口的红绿灯位置不能只依赖 BrowserWindow 构造参数。
-  // macOS 在窗口 show / resize 后可能继续沿用 hidden titlebar 的默认坐标，
-  // 因此每次同步布局时都显式写入更靠上的按钮位置。
-  win.setWindowButtonPosition(UPDATE_STATUS_WINDOW_TRAFFIC_LIGHT_POSITION);
-}
-
-function resolveUpdateStatusWindowHeight(state: UpdateStatePayload) {
-  if (state.kind === "download-progress") {
-    return UPDATE_STATUS_WINDOW_PROGRESS_HEIGHT;
-  }
-  if (state.kind === "update-downloaded") {
-    return UPDATE_STATUS_WINDOW_READY_HEIGHT;
-  }
-  return UPDATE_STATUS_WINDOW_COMPACT_HEIGHT;
-}
-
-function shouldUseUpdateStatusWindowContentSize(): boolean {
-  return process.platform === "linux";
-}
-
-function syncUpdateStatusWindowLayout(win: BrowserWindow) {
-  if (win.isDestroyed()) {
-    return;
-  }
-  const state = getAutoUpdaterState();
-  const height = resolveUpdateStatusWindowHeight(state);
-  const bounds = shouldUseUpdateStatusWindowContentSize()
-    ? win.getContentBounds()
-    : win.getBounds();
-  if (!shouldUseUpdateStatusWindowContentSize()) {
-    win.setMinimumSize(UPDATE_STATUS_WINDOW_WIDTH, height);
-    win.setMaximumSize(UPDATE_STATUS_WINDOW_WIDTH, height);
-  }
-  if (bounds.width !== UPDATE_STATUS_WINDOW_WIDTH || bounds.height !== height) {
-    // 独立更新窗口复用页内 Dialog 的 240px 高度后，普通状态只有两行内容，
-    // footer 会吃掉剩余网格行形成大块空白；按状态收紧窗口高度，让内容贴合实际密度。
-    // 取消下载会从 download-progress 回到 update-available；这里同步 min/max 再 setSize，
-    // 避免 macOS 在非 resizable BrowserWindow 上沿用下载态高度，导致弹窗没有收回。
-    if (shouldUseUpdateStatusWindowContentSize()) {
-      // Linux 的系统标题栏会占用 BrowserWindow 外框高度。
-      // 如果继续用 setSize 锁外框，WebContents 实际高度会少一截，底部按钮被裁掉。
-      win.setContentSize(UPDATE_STATUS_WINDOW_WIDTH, height);
-    } else {
-      win.setSize(UPDATE_STATUS_WINDOW_WIDTH, height);
-    }
-  }
-  syncUpdateStatusWindowChrome(win);
-}
-
-function openUpdateStatusWindow() {
-  if (updateStatusWindow && !updateStatusWindow.isDestroyed()) {
-    if (updateStatusWindow.isMinimized()) {
-      updateStatusWindow.restore();
-    }
-    updateStatusWindow.show();
-    updateStatusWindow.focus();
-    syncAutoUpdaterStateToWindow(updateStatusWindow);
-    syncReadyUpdateToWindow(updateStatusWindow);
-    syncPostUpdateReleaseNotesToWindow(updateStatusWindow);
-    syncUpdateStatusWindowClosePolicy(updateStatusWindow);
-    syncUpdateStatusWindowLayout(updateStatusWindow);
-    return;
-  }
-
-  const parentWindow =
-    getMainApplicationWindows().find((candidate) => candidate.isFocused()) ??
-    getMainApplicationWindows()[0] ??
-    undefined;
-  const win = new BrowserWindow({
-    width: UPDATE_STATUS_WINDOW_WIDTH,
-    height: resolveUpdateStatusWindowHeight(getAutoUpdaterState()),
-    useContentSize: shouldUseUpdateStatusWindowContentSize(),
-    ...(shouldUseUpdateStatusWindowContentSize()
-      ? {}
-      : {
-          minWidth: UPDATE_STATUS_WINDOW_WIDTH,
-          minHeight: UPDATE_STATUS_WINDOW_READY_HEIGHT,
-          maxWidth: UPDATE_STATUS_WINDOW_WIDTH,
-          maxHeight: UPDATE_STATUS_WINDOW_PROGRESS_HEIGHT,
-        }),
-    resizable: false,
-    minimizable: true,
-    maximizable: false,
-    fullscreenable: false,
-    show: false,
-    // 更新状态已经从页内 Dialog 改成独立 BrowserWindow。
-    // 独立窗口应保留系统窗口控件，不能沿用页内弹窗时期的无边框透明窗口配置。
-    frame: true,
-    ...(process.platform === "darwin"
-      ? {
-          titleBarStyle: "hidden" as const,
-          trafficLightPosition: UPDATE_STATUS_WINDOW_TRAFFIC_LIGHT_POSITION,
-        }
-      : process.platform === "win32"
-        ? {
-            titleBarStyle: "hidden" as const,
-            titleBarOverlay: true,
-          }
-        : {}),
-    transparent: false,
-    backgroundColor: "#ffffff",
-    title: "",
-    icon: iconPath,
-    parent: parentWindow,
-    modal: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false,
-      webviewTag: false,
-      additionalArguments: [`--device-id=${deviceMid}`],
-    },
-  });
-  // 更新窗口要保留系统窗口控件，但不能允许缩放或全屏。
-  // 构造参数之外再显式锁定一次，避免不同平台对标题栏控件能力的默认处理不一致。
-  win.setResizable(false);
-  win.setMinimizable(true);
-  win.setMaximizable(false);
-  win.setFullScreenable(false);
-  if (process.platform === "darwin") {
-    syncUpdateStatusWindowChrome(win);
-  }
-  syncUpdateStatusWindowClosePolicy(win);
-  syncUpdateStatusWindowLayout(win);
-
-  updateStatusWindow = win;
-  const disposeAutoUpdaterStateListener = onAutoUpdaterStateChanged(() => {
-    syncUpdateStatusWindowClosePolicy(win);
-    syncUpdateStatusWindowLayout(win);
-  });
-  const showUpdateStatusWindow = () => {
-    if (win.isDestroyed()) {
-      return;
-    }
-    if (!win.isVisible()) {
-      win.center();
-      syncUpdateStatusWindowChrome(win);
-      win.show();
-      syncUpdateStatusWindowChrome(win);
-    }
-    win.moveTop();
-    win.focus();
-    win.setAlwaysOnTop(true, "floating");
-    setTimeout(() => {
-      if (!win.isDestroyed()) {
-        win.setAlwaysOnTop(false);
-      }
-    }, 250);
-    logger.info(
-      `[auto-update] update status window shown visible=${win.isVisible()} focused=${win.isFocused()} bounds=${JSON.stringify(win.getBounds())}`,
-    );
-  };
-  win.webContents.on("dom-ready", () => {
-    logger.info("[auto-update] update status window dom-ready");
-    syncAutoUpdaterStateToWindow(win);
-    syncReadyUpdateToWindow(win);
-    syncPostUpdateReleaseNotesToWindow(win);
-    // 更新窗口在开发态或部分 macOS 渲染路径下不一定稳定触发 ready-to-show。
-    // 加载完成后也尝试显示，避免窗口已加载却保持隐藏，让更新入口看起来无响应。
-    setTimeout(showUpdateStatusWindow, 0);
-  });
-  win.once("ready-to-show", () => {
-    showUpdateStatusWindow();
-  });
-  win.on("close", (event) => {
-    if (forceQuitRef.current || !isUpdateStatusWindowCloseLocked(getAutoUpdaterState())) {
-      return;
-    }
-    // 下载开始后更新窗口承担安装状态反馈，用户仍可最小化，但不能误关闭窗口。
-    // close 事件兜底拦截 native close / 快捷键路径，setClosable(false) 只负责系统控件状态。
-    event.preventDefault();
-    if (win.isMinimized()) {
-      win.restore();
-    }
-    win.show();
-    win.focus();
-  });
-  win.on("closed", () => {
-    disposeAutoUpdaterStateListener();
-    if (updateStatusWindow === win) {
-      updateStatusWindow = null;
-    }
-  });
-
-  loadWindow(win, "index", {
-    restoreSession: false,
-    supportsSettings: false,
-    windowKind: "update-status",
-    locale: currentApplicationLocale,
-  });
+  return getApplicationWindowsExcludingCuaIndicator();
 }
 
 function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
@@ -1695,7 +1087,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
       }),
     windowHostProcessMap,
     onHostProcessReady: (windowKey) => cuaPipFocusRouter.refreshWindow(windowKey),
-    awaitFirstHostSpawnDecision,
     spawnHostProcess: (win, label, initMessage) =>
       spawnHostProcess(
         win,
@@ -1708,7 +1099,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
         },
         {
           hostProcessLocalEnv,
-          desktopContextPromptEnabled: resolveDesktopContextPromptEnabledForHost,
           logger,
           broadcastHub,
           taskRealtimeBus,
@@ -1723,8 +1113,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           onAgentProcessException: (event) => reportAgentProcessExceptionToArms(event, logger),
           onAgentProcessReady: (event) => reportAgentProcessReadyToArms(event, logger),
           onAgentProcessSpawned: (event) => reportAgentProcessStartToArms(event, logger),
-          onMcpTelemetry: (message) =>
-            reportMcpTelemetryToArms(message.event, message.runtimeSurface),
           onSessionCreateTelemetry: (message) => {
             void appTelemetryCore.reportEvent(message.event).catch(() => {});
           },
@@ -1756,9 +1144,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           ? activeAppShutdownPolicy.forceKillDelayMs
           : forceKillDelayMs,
       ),
-    syncAutoUpdaterStateToWindow,
-    syncReadyUpdateToWindow,
-    syncPostUpdateReleaseNotesToWindow,
     disposeRemoteWorkspaceSessionsForWindow:
       remoteSessionManager.disposeRemoteWorkspaceSessionsForWindow,
     reattachRemoteWorkspaceSessionsForWindow:
@@ -1794,11 +1179,6 @@ registerDeepLinkProtocol(logger, { iconPath: linuxDesktopIntegrationIconPath });
 app.on("open-url", (event, url) => {
   event.preventDefault();
   const workspacePath = extractOpenWorkspacePathFromDeepLinkUrl(url);
-  if (workspacePath && forceUpdateMainWindowCreationBlocked) {
-    logger.warn("[force-update] 已忽略强制升级期间的 open-url workspace 请求");
-    focusForceUpdateGateWindow();
-    return;
-  }
   if (workspacePath && getApplicationWindowsExcludingCuaIndicator().length === 0) {
     // macOS 冷启动 Finder Service 会先触发 open-url，再创建首窗。
     // 把目标目录按 deep link 来源记录，首窗 bootstrap 前仍要走确认 gate。
@@ -1822,8 +1202,6 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
     handleSecondInstanceWorkspaceRequest({
       additionalData,
       argv,
-      focusForceUpdateGateWindow,
-      forceUpdateBlocked: forceUpdateMainWindowCreationBlocked,
       handleDeepLink: (url, options) => handleDeepLink(url, logger, options),
       handleOpenWorkspacePath: (path, options) =>
         handleOpenWorkspacePath(path, logger, {
@@ -1858,8 +1236,6 @@ app.whenReady().then(async () => {
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,
   });
-  // Electron 的 net.request 只能在 app ready 后使用；灰度请求仍是旁路预热，不阻塞首个 Host。
-  void desktopContextPromptRollout?.refresh();
   installBrowserRestoreBootstrapProtocol(
     session.fromPartition(EMBEDDED_BROWSER_PARTITION).protocol,
   );
@@ -1936,30 +1312,7 @@ app.whenReady().then(async () => {
     logger.warn("[desktop-network] Chromium network policy bootstrap failed:", error);
   }
 
-  await hydratePendingPostUpdateReleaseNotes(mainSettingService);
   logWindowsBundledRuntimeIntegrityDiagnostic();
-
-  // 启动自动更新检查（后台执行，不阻塞主界面）
-  // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
-  // 不向 Preview 渠道提供更新。
-  void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
-    onBeforeQuitAndInstall: async () => {
-      notifyStabilityLifecycle("update_install");
-      await prepareAppQuit("auto-update quitAndInstall", "update-install");
-      if (process.platform === "win32") {
-        await prepareWindowsProcessesForUpdateInstall();
-      }
-    },
-    settingService: mainSettingService,
-    locale: currentApplicationLocale,
-    deviceMid,
-    resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
-    updateFeedSource: resolveUpdateFeedSourceFromStartupConfig({
-      argv: process.argv,
-      env: process.env,
-    }),
-  });
 
   if (process.platform === "darwin" || process.platform === "win32") {
     app.clearRecentDocuments();
@@ -2066,8 +1419,6 @@ app.whenReady().then(async () => {
     resolveSystemLocale: resolveSystemApplicationLocale,
     currentApplicationLocale: () => currentApplicationLocale,
     executeDesktopCommand: executeDesktopCommandForApp,
-    acknowledgePostUpdateReleaseNotes: (version) =>
-      acknowledgePostUpdateReleaseNotes(version, mainSettingService),
     syncActiveTaskSession: (windowId, sessionId) =>
       cuaPipFocusRouter.updateActiveSession(windowId, sessionId),
     syncTaskRealtimeWorkspaceKeys: (windowId, workspaceKeys) => {
@@ -2076,10 +1427,6 @@ app.whenReady().then(async () => {
         taskRealtimeBus.updateHostWorkspaceKeys(hostId, workspaceKeys);
       }
     },
-    getUpdateState: getAutoUpdaterState,
-    openUpdateStatusWindow,
-    getAutoUpdatePreferences,
-    setAutoDownloadAndInstallUpdates,
     getDesktopSessionActivity: () => ({
       runningAgentSessionCount: getRunningAgentSessionCount(),
     }),
@@ -2089,7 +1436,6 @@ app.whenReady().then(async () => {
   });
 
   disposeRendererActionTraceIpc = registerRendererActionTraceIpc({
-    rollout: rendererActionTraceRollout,
     broker: rendererActionTraceBroker,
     env: process.env,
     logger,
@@ -2097,12 +1443,10 @@ app.whenReady().then(async () => {
 
   registerRemoteIpcHandlers({
     logger,
-    appTelemetryRuntime,
     onOAuthCallbackHandledSideEffect: () => {
       void armsUserIdentitySync.refresh();
     },
     appTelemetryCore,
-    reportRemoteUsageEvent: reportRemoteUsageEventForRenderer,
     armsCustomContext: {
       deviceMid,
       platform: process.platform,
@@ -2111,7 +1455,6 @@ app.whenReady().then(async () => {
     },
     finalArmsCustomEventE2EEnabled: shouldEnableE2ETestBridge(process.env),
     createRemoteWorkspaceSession: remoteSessionManager.createRemoteWorkspaceSession,
-    getRemoteConnectionStats: remoteSessionManager.getRemoteConnectionStats,
     disposeRemoteWorkspaceSession: remoteSessionManager.disposeRemoteWorkspaceSession,
     cancelPendingRemoteWorkspaceSessionsForWindow:
       remoteSessionManager.cancelPendingRemoteWorkspaceSessionsForWindow,
@@ -2137,73 +1480,8 @@ app.whenReady().then(async () => {
       appVersion: ZCODE_VERSION,
       armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
     });
-    configureDesktopResourceTelemetry({
-      deviceMid,
-      platform: process.platform,
-      appVersion: ZCODE_VERSION,
-      armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-    });
-    configureDesktopNetworkTelemetry({
-      deviceMid,
-      platform: process.platform,
-      appVersion: ZCODE_VERSION,
-      armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-    });
   }
-  configureDesktopMcpTelemetry({
-    deviceMid,
-    appVersion: ZCODE_VERSION,
-    armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-  });
   registerDesktopStabilityMonitors(logger, crashCapturePaths);
-  registerDesktopResourceTelemetry(logger);
-  // 主窗口 renderer 的 60 秒 heap 样本入口；随 App 生命周期常驻，只注册一次。
-  registerRendererHeapSampleIpc();
-  const defaultDataBaseDir = process.env.HOME?.trim() || homedir();
-  registerDesktopZCodeDataSizeTelemetry({
-    context: {
-      appVersion: ZCODE_VERSION,
-      armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-      dataRootKind:
-        resolve(getDataBaseDir()) === resolve(defaultDataBaseDir) ? "default" : "custom",
-      deviceMid,
-      platform: process.platform,
-    },
-    getSystemIdleTimeSeconds: () => powerMonitor.getSystemIdleTime(),
-    isAppBackground: () => resolveResourceUsageScene() === "background",
-    isZCodeBusy: () => getRunningAgentSessionCount() > 0,
-    logger,
-    rootPath: getZCodeDataRootDir(),
-    stateFile: join(app.getPath("userData"), "zcode-data-size-telemetry.json"),
-  });
-  registerDesktopNetworkTelemetry(logger);
-
-  // 本地未打包 dev 构建（app.isPackaged === false）必须跳过远端强制升级 gate。
-  // 原因：force-update gate 只看 ZCODE_ENV === "production"，但 dev 构建（如 dev:desktop:cua
-  // 连真实后端测 computer use）虽指向 production 后端，版本号却滞后于线上 release（feature
-  // 分支不 bump 版本），会被 release minimalVersion 误判为"需强制升级"而启动秒退。force-update
-  // 是面向打包发布客户端的安全门，对未打包 dev 运行时无意义。打包版 app.isPackaged === true，
-  // gate 照常生效，对真实用户零影响。
-  const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
-  const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
-      ? await maybeBlockStartupForForceUpdate({
-          locale: currentApplicationLocale,
-          logger,
-          endpointOrigin: await resolveCurrentZCodeEndpointOrigin(),
-          onBlocked: () => {
-            forceUpdateMainWindowCreationBlocked = true;
-          },
-        })
-      : { blocked: false };
-  if (ZCODE_PRODUCT_FLAVOR !== "production") {
-    logger.info("[force-update] Preview 跳过远端强制升级检查");
-  } else if (skipForceUpdateForLocalDevRuntime) {
-    logger.info("[force-update] 本地 dev 构建（未打包）跳过远端强制升级检查");
-  }
-  if (forceUpdateGuardResult.blocked) {
-    return;
-  }
 
   logger.info("[startup] 创建主窗口");
   await primaryWindowCoordinator.ensurePrimaryWindow("app-ready");

@@ -17,11 +17,6 @@ export {
   type AccountRequestAuthResolver,
 } from "./model-provider/accountRequestAuthService.js";
 export { IProviderProvisioningTargetService } from "./model-provider/providerProvisioning.js";
-export {
-  collectServiceMemoryDiagnostics,
-  memoryDiagnosticsRegistry,
-  registerMemoryDiagnosticsProvider,
-} from "./memoryDiagnostics.js";
 
 // Accessor
 export type { IServiceAccessor } from "./accessor.js";

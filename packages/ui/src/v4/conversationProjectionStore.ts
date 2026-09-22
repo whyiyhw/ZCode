@@ -20,7 +20,6 @@ import {
 import { logger } from "@/logger.js";
 import type { ConversationTurnNavigatorHydrationResult } from "@/v4/conversationTurnNavigatorHelpers.js";
 import type { ConversationTransport } from "@/v4/transport.js";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 /**
  * runtime 换代打断 subscribe 后的退避节奏。
@@ -264,16 +263,6 @@ function mergeOlderRows(
  * 外部 store（useSyncExternalStore 兼容：subscribe + getState 返回稳定引用）。
  * 生命周期由 SessionDataLayer 管（引用计数 + keep-warm），组件不直接 new。
  */
-// 内存诊断计数器：统计存活 store 数与其 rows.window 行数之和，
-// 用于观察窗口数据的内存增长。构造时加入、close() 时移除。
-const liveProjectionStores = new Set<ConversationProjectionStore>();
-uiMemoryDiagnosticsRegistry.register("projection", () => {
-  let rows = 0;
-  for (const store of liveProjectionStores) {
-    rows += store.countProjectionRows();
-  }
-  return { stores: liveProjectionStores.size, rows };
-});
 
 export class ConversationProjectionStore {
   private state: ConversationStoreState = INITIAL_STATE;
@@ -331,7 +320,6 @@ export class ConversationProjectionStore {
     readonly topic: string,
     private readonly transport: ConversationTransport,
   ) {
-    liveProjectionStores.add(this);
     this.offAssemblyFault = transport.onAssemblyFault((fault) => {
       if (fault.topic === this.topic) {
         this.handleAssemblyFault(fault.subscriptionId, fault.deliveryKind);
@@ -1303,7 +1291,6 @@ export class ConversationProjectionStore {
   /** 退订并终结本 store（仅 SessionDataLayer 调用）。 */
   async close(): Promise<void> {
     if (this.closed) return;
-    liveProjectionStores.delete(this);
     const closeStartedAt = monotonicNow();
     logger.lifecycle.info("v4 conversation store close started", {
       event: "v4.conversation.store.close.started",

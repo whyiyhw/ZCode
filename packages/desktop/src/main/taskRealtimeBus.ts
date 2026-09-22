@@ -350,15 +350,6 @@ export class TaskRealtimeBus {
     return { leaseRequestId: request.leaseRequestId, acquired: true, ownerHostId: hostId };
   }
 
-  /** 内存诊断计数器；只读 size。 */
-  collectMemoryDiagnostics(): Record<string, number> {
-    return {
-      streamBatches: this.streamBatches.size,
-      leases: this.leases.size,
-      sessionRoutes: this.sessionRoutes.size,
-    };
-  }
-
   private releaseLease(hostId: string, target: TaskRunLeaseTarget): void {
     const key = this.getLeaseKey(target.workspaceKey, target.taskId);
     const existing = this.leases.get(key);

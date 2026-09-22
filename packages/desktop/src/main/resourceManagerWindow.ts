@@ -16,7 +16,6 @@ import {
 } from "@zcode/shared";
 import { logger } from "./logger.js";
 import { normalizeElectronCpuToMachinePercent } from "./electronCpuNormalization.js";
-import type { ChromiumProcessRolePids } from "./processResourceRoleClassifier.js";
 import { buildAuxiliaryRendererName } from "./resourceManagerProcessNames.js";
 import {
   forgetHostResourceUsage,
@@ -161,15 +160,22 @@ export function unregisterSchedulerProcess(child: ElectronUtilityProcess): void 
 function collectUtilityProcessPids(children: Iterable<ElectronUtilityProcess>): Set<number> {
   const pids = new Set<number>();
   for (const child of children) {
-    if (child.pid != null && child.pid > 0) {
-      pids.add(child.pid);
-    }
+    if (child.pid != null && child.pid > 0) pids.add(child.pid);
   }
   return pids;
 }
 
+/** 角色归属的 pid 快照：renderer 区分主窗口与 `<webview>` guest，host/scheduler 由 spawn 点登记。 */
+export interface ChromiumProcessRolePids {
+  mainPid: number;
+  mainWindowRendererPids: ReadonlySet<number>;
+  guestRendererPids: ReadonlySet<number>;
+  hostPids: ReadonlySet<number>;
+  schedulerPids: ReadonlySet<number>;
+}
+
 /**
- * 当前各进程角色的 pid 快照，供资源遥测按 process_role 拆分使用
+ * 当前各进程角色的 pid 快照，供资源管理器窗口按角色归类使用
  *
  * getAppMetrics 不直接给 renderer / host / scheduler 的角色，需结合
  * BrowserWindow / webContents / utilityProcess 注册表才能可靠归类。

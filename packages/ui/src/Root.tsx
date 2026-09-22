@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Root 当前集中编排启动和 workspace shell wiring，先保持入口收口避免跨层状态拆散。 */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LucideProvider, RefreshCw } from "lucide-react";
 import {
   APP_RUNTIME_PREFERENCES_CHANGED_BROADCAST_CHANNEL,
@@ -37,7 +37,7 @@ import { StoreProvider, useZCodeStore } from "@/store/StoreProvider.js";
 import { setMcpStorePlatform } from "@/store/mcpStore.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { TabStoreProvider, useTabStore, useTabStoreApi } from "@/store/TabStoreProvider.js";
-import { isSettingsTab, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
+import { isSettingsTab, isWorkspaceTab } from "@/store/tabStore.js";
 import { logger } from "@/logger.js";
 import { RootShell } from "@/root/RootShell.js";
 import { RootWorkspaceContent } from "@/root/RootWorkspaceContent.js";
@@ -57,7 +57,7 @@ import { useRootWorkspaceActions } from "@/root/useRootWorkspaceActions.js";
 import { registerBaseWorkspaceServices } from "@/store/remoteWorkspaceSessionStore.js";
 import type { RootProps } from "@/root/types.js";
 import { DiffsWorkerPoolProvider } from "@/root/DiffsWorkerPoolProvider.js";
-import { useGlobalTaskList } from "@/hooks/useGlobalTaskList.js";
+
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
 import { useRemoteConnectionLogs } from "@/hooks/useRemoteConnectionLogs.js";
 import {
@@ -239,7 +239,6 @@ function RootInner({
   const [isBootstrappingInitialWorkspace, setIsBootstrappingInitialWorkspace] = useState(
     Boolean(initialWorkspaceAbsPath),
   );
-  const acknowledgingReleaseNotesVersionRef = useRef<string | null>(null);
   const previousRemoteConnectionInProgressRef = useRef(false);
   const didRequestFallbackWorkspaceRef = useRef(false);
   const rootInnerMountedRef = useRef(true);
@@ -691,44 +690,6 @@ function RootInner({
     markOAuthSuccess,
     onReauthenticationRequired: handleReauthenticationRequired,
   });
-
-  useEffect(
-    () =>
-      platform.onPostUpdateReleaseNotes((payload) => {
-        logger.info("[Root] 收到更新说明，改为静默确认", {
-          version: payload.version,
-          title: payload.title,
-        });
-        if (acknowledgingReleaseNotesVersionRef.current === payload.version) {
-          return;
-        }
-
-        // 自动更新每次命中待展示 release notes 都会走到这里，
-        // 之前 Root 会立刻把 payload 送进对话框状态，导致用户每次更新都被强制弹窗打断。
-        // 这次需求只移除弹窗本身，因此这里改成收到后直接静默 ack，
-        // 既不影响“更新已下载”按钮/菜单/安装链路，也避免 pending 状态残留到下次启动后再次触发。
-        acknowledgingReleaseNotesVersionRef.current = payload.version;
-        void platform
-          .acknowledgePostUpdateReleaseNotes(payload.version)
-          .then(() => {
-            logger.info("[Root] 更新说明已静默确认", {
-              version: payload.version,
-            });
-          })
-          .catch((error) => {
-            logger.error("[Root] 更新说明静默确认失败", {
-              version: payload.version,
-              error,
-            });
-          })
-          .finally(() => {
-            if (acknowledgingReleaseNotesVersionRef.current === payload.version) {
-              acknowledgingReleaseNotesVersionRef.current = null;
-            }
-          });
-      }),
-    [platform],
-  );
 
   const canEnterNativeThemeSyncSurface = Boolean(
     !isStartupRenderBlocked &&

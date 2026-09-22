@@ -11,7 +11,6 @@ import {
   type TerminalFontFamilySource,
   type TerminalThemeProfile,
 } from "./terminalProfile.js";
-import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
 const require = createRequire(import.meta.url);
 type NodePtyModule = typeof import("node-pty");
@@ -325,12 +324,6 @@ export function createTerminalService(dependencies: {
 }): ITerminalService {
   const terminals = new Map<string, TerminalInstance>();
   let nextId = 0;
-  // 内存诊断计数器：客户端断连不回收 pty 时
-  // 这里会只增不减。
-  const memoryDiagnostics = registerMemoryDiagnosticsProvider("terminal", () => ({
-    open: terminals.size,
-  }));
-
   function getTerminal(id: string): TerminalInstance {
     const t = terminals.get(id);
     if (!t) throw new Error(`Terminal not found: ${id}`);
@@ -433,7 +426,6 @@ export function createTerminalService(dependencies: {
     },
 
     disposeAll(): void {
-      memoryDiagnostics.dispose();
       // app 关闭时 host process 以前只会结束自身，terminal 里的子 shell 没有逐个显式 kill。
       // 这里补一个本地清理入口，让 host 在退出链路里能同步回收所有仍存活的终端进程。
       for (const id of Array.from(terminals.keys())) {

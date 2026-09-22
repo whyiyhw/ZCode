@@ -58,7 +58,7 @@ export function createDynamicWorkflowClientConfig(
 /**
  * 纯函数：把远端 envelope 的 `configs.dynamicWorkflow` 与本地覆盖环境变量折叠成一个快照。
  * 优先级：覆盖 > 远端合法值 > 缺省。远端成功但**未下发**该 key 也视为 disabled——
- * 服务端撤掉 key 等于关闭，不能沿用旧快照（与 desktopContextPromptRollout 同一裁决）。
+ * 服务端撤掉 key 等于关闭，不能沿用旧快照（历史上与 desktop 灰度 rollout 同一裁决语义，该 rollout 已移除）。
  */
 export function resolveDynamicWorkflowClientConfig(input: {
   remote: unknown;

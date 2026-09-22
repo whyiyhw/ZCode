@@ -1,12 +1,12 @@
-import { BrowserWindow, ipcMain } from "electron";
-import { PlatformChannels, type RendererActionTraceConfigV1 } from "@zcode/shared";
+import { ipcMain } from "electron";
+import {
+  DISABLED_RENDERER_ACTION_TRACE_CONFIG,
+  PlatformChannels,
+  type RendererActionTraceConfigV1,
+} from "@zcode/shared";
 import type { RendererActionTraceBroker } from "./rendererActionTraceBroker.js";
-import type { RendererActionTraceRollout } from "./rendererActionTraceRollout.js";
-
-const RENDERER_ACTION_TRACE_REFRESH_INTERVAL_MS = 60_000;
 
 export function registerRendererActionTraceIpc(options: {
-  rollout: RendererActionTraceRollout;
   broker: RendererActionTraceBroker;
   env?: Record<string, string | undefined>;
   logger: {
@@ -57,22 +57,14 @@ export function registerRendererActionTraceIpc(options: {
     rendererInstances.set(senderId, binding);
     return binding;
   };
-  let lastConfig = resolveRuntimeConfig(options.rollout.getSnapshot(), options.env ?? process.env);
+  // 灰度链已移除（spec/client-config-rollout-removal.md）：配置静态禁用，
+  // 仅保留 ZCODE_RENDERER_ACTION_TRACE_ENABLED / ZCODE_LOCAL_TTFT_ENABLED 环境变量逃生口。
+  const staticConfig = resolveRuntimeConfig(
+    DISABLED_RENDERER_ACTION_TRACE_CONFIG,
+    options.env ?? process.env,
+  );
 
-  const refresh = async (): Promise<RendererActionTraceConfigV1> => {
-    const next = resolveRuntimeConfig(await options.rollout.refresh(), options.env ?? process.env);
-    if (JSON.stringify(next) !== JSON.stringify(lastConfig)) {
-      lastConfig = next;
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) {
-          win.webContents.send(PlatformChannels.RendererActionTraceConfigChanged, next);
-        }
-      }
-    }
-    return next;
-  };
-
-  ipcMain.handle(PlatformChannels.GetRendererActionTraceConfig, refresh);
+  ipcMain.handle(PlatformChannels.GetRendererActionTraceConfig, () => staticConfig);
   ipcMain.on(PlatformChannels.ReportRendererActionTraceBatch, (event, batch: unknown) => {
     if (typeof batch !== "object" || batch === null) return;
     const rendererInstanceId = (batch as { rendererInstanceId?: unknown }).rendererInstanceId;
@@ -96,15 +88,7 @@ export function registerRendererActionTraceIpc(options: {
     options.broker.enqueue(batch);
   });
 
-  const refreshTimer = setInterval(() => {
-    void refresh().catch((error) => {
-      options.logger.debug("[renderer-action-trace] refresh failed", { error });
-    });
-  }, RENDERER_ACTION_TRACE_REFRESH_INTERVAL_MS);
-  refreshTimer.unref();
-
   return () => {
-    clearInterval(refreshTimer);
     ipcMain.removeHandler(PlatformChannels.GetRendererActionTraceConfig);
     ipcMain.removeAllListeners(PlatformChannels.ReportRendererActionTraceBatch);
     for (const binding of rendererInstances.values()) binding.dispose();

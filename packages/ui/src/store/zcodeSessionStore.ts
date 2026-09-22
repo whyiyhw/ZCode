@@ -11,7 +11,6 @@ import { getWorkspaceState } from "./zcodeSessionStoreSelectors.js";
 import { createNavigationSlice } from "./zcodeSessionStoreNavigation.js";
 import { createTaskSlice } from "./zcodeSessionStoreTaskSlice.js";
 import { createWorkspaceSlice } from "./zcodeSessionStoreWorkspaceSlice.js";
-import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 export const useZCodeSessionStore = create<ZCodeSessionStoreState>()((set, get) => ({
   workspaces: {},
@@ -47,7 +46,3 @@ export type {
   WorkspaceNavEntry,
 } from "@/lib/taskNavigationHistory.js";
 
-// 内存诊断计数器：workspace 桶全仓无删除路径，先落日志。
-uiMemoryDiagnosticsRegistry.register("sessionStore", () => ({
-  workspaces: Object.keys(useZCodeSessionStore.getState().workspaces).length,
-}));

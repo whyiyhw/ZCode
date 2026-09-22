@@ -4224,11 +4224,6 @@ export class BrowserGuestManager {
     return tab.pendingCdpCommands === 0;
   }
 
-  /** 内存诊断计数器；只读 size。 */
-  collectMemoryDiagnostics(): Record<string, number> {
-    return { tabs: this.tabs.size, closedTabIds: this.closedTabIds.size };
-  }
-
   private detachGuest(tab: ManagedTab): void {
     const guest = tab.guest;
     const guestDestroyed = guest ? safeBool(() => guest.isDestroyed(), true) : true;

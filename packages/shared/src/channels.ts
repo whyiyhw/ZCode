@@ -15,13 +15,11 @@ import type {
   ConfigureFinalArmsCustomEventE2ERequest,
   FinalArmsCustomEventE2EEntry,
   RendererTelemetryEventPayload,
-  TelemetryRendererContext,
 } from "./telemetry.js";
 import type {
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
 } from "./rendererActionTrace.js";
-import type { RendererHeapSample } from "./validation.js";
 import type {
   CancelPendingRemoteConnectionRequest,
   BindRemoteWorkspaceSessionContextRequest,
@@ -47,13 +45,10 @@ import type {
   SaveFileResult,
   PrintPageToPdfResult,
   OpenInEditorOptions,
-  PostUpdateReleaseNotesPayload,
   RemoteSessionClosedEvent,
   SSHConfigAliasOption,
   TaskNotificationPayload,
   WSLDistro,
-  UpdateCheckResultPayload,
-  UpdateStatePayload,
   DesktopZoomState,
   DesktopWindowChromeState,
   WindowControlsOverlayMetrics,
@@ -309,8 +304,6 @@ export const PlatformChannels = {
   OAuthCallbackHandled: "zcode:oauth-callback-handled",
   /** Renderer → Main：renderer 已就绪，可接收缓存的 deep link */
   RendererReady: "zcode:renderer-ready",
-  /** Renderer → Main：同步当前 renderer 的 telemetry 上下文 */
-  SyncTelemetryContext: "zcode:sync-telemetry-context",
   /** Renderer → Main：通过统一 telemetry 层上报业务事件 */
   ReportTelemetryEvent: "zcode:report-telemetry-event",
   /** Renderer → Main：上报 ARMS 自定义事件 */
@@ -321,8 +314,6 @@ export const PlatformChannels = {
   RendererActionTraceConfigChanged: "zcode:renderer-action-trace-config-changed",
   /** Renderer → Main：发送已结束的 ui_action batch。 */
   ReportRendererActionTraceBatch: "zcode:report-renderer-action-trace-batch",
-  /** Renderer → Main：主窗口 renderer 每 60 秒的 heap 读数，单向 send，不需要回执。 */
-  ReportRendererHeapSample: "zcode:report-renderer-heap-sample",
   ReportLocalTtftBatch: "zcode:report-local-ttft-batch",
   /** E2E preload → Main：读取 sendCustom 最终参数的内存 ring。 */
   ReadFinalArmsCustomEventsE2E: "zcode:e2e:read-final-arms-custom-events",
@@ -365,24 +356,6 @@ export const PlatformChannels = {
   ImportChromeBrowserData: "zcode:import-chrome-browser-data",
   /** Renderer → Main：清理内置浏览器缓存或全部站点数据。 */
   ClearEmbeddedBrowserData: "zcode:clear-embedded-browser-data",
-  /** Main → Renderer：通知有新版本已下载完毕，可以重启安装 */
-  UpdateReady: "zcode:update-ready",
-  /** Main → Renderer：用户手动点击"检查更新"后的结果反馈（toast 用） */
-  UpdateCheckResult: "zcode:update-check-result",
-  /** Main → Renderer：自动更新持续状态变化（菜单 UI 用） */
-  UpdateStateChanged: "zcode:update-state-changed",
-  /** Renderer → Main：主动获取当前自动更新状态（菜单打开时补偿事件丢失） */
-  GetUpdateState: "zcode:get-update-state",
-  /** Renderer → Main：开始下载当前已发现的自动更新 */
-  DownloadUpdate: "zcode:download-update",
-  /** Renderer → Main：取消当前正在下载的自动更新 */
-  CancelUpdateDownload: "zcode:cancel-update-download",
-  /** Renderer → Main：打开独立自动更新窗口 */
-  OpenUpdateStatusWindow: "zcode:open-update-status-window",
-  /** Renderer → Main：读取自动更新偏好 */
-  GetAutoUpdatePreferences: "zcode:get-auto-update-preferences",
-  /** Renderer → Main：写入“自动下载并安装更新”偏好 */
-  SetAutoDownloadAndInstallUpdates: "zcode:set-auto-download-and-install-updates",
   /** Renderer → Main：查询桌面端正在运行的会话数量 */
   GetDesktopSessionActivity: "zcode:get-desktop-session-activity",
   /** Renderer → Main：读取当前窗口页面缩放档位 */
@@ -397,14 +370,6 @@ export const PlatformChannels = {
   ApplicationLocaleChanged: "zcode:application-locale-changed",
   /** Renderer → Main：读取宿主系统语言 */
   GetSystemLocale: "zcode:get-system-locale",
-  /** Main → Renderer：更新安装后的版本说明 */
-  PostUpdateReleaseNotes: "zcode:post-update-release-notes",
-  /** Renderer → Main：确认版本说明已读 */
-  AcknowledgePostUpdateReleaseNotes: "zcode:ack-post-update-release-notes",
-  /** Renderer → Main：跳过当前已发现的自动更新版本 */
-  SkipUpdateVersion: "zcode:skip-update-version",
-  /** Renderer → Main：用户确认重启安装更新 */
-  QuitAndInstallUpdate: "zcode:quit-and-install-update",
   /** Renderer → Main：获取系统中已安装的编辑器/终端列表（含图标） */
   GetInstalledEditors: "zcode:get-installed-editors",
   /** Renderer → Main：按 bundle id 获取系统应用图标 */
@@ -536,8 +501,6 @@ export const HostMessageTypes = {
   SessionMessageDeliver: "session-message-deliver",
   /** main → host：把 session message 投递结果回写到源 session */
   SessionMessageDeliveryResult: "session-message-delivery-result",
-  /** main → host：反馈日志归档创建结果 */
-  FeedbackLogArchiveResult: "feedback-log-archive-result",
   /** main → host：定时任务到点派发；会话内 cron 复用 targetTaskId，历史未绑定任务才建 session */
   CronRun: "cron-run",
   /** main → host：闲时任务派发；首跑 createTask 新建 session，续跑带 conversationId/sessionId resume */
@@ -577,14 +540,6 @@ export const HostResponseTypes = {
   /** host 内的 agent 子进程启动失败 */
   AgentProcessError: "agent-process-error",
   AgentProcessException: "agent-process-exception",
-  /** host → main：CLI 进程内自采样的 CPU / RSS */
-  AgentResourceSample: "agent-resource-sample",
-  /** host → main：Host 进程自身每 60 秒自采的 CPU / RSS / heap（资源遥测 host 角色的 heap 来源） */
-  HostResourceSample: "host-resource-sample",
-  /** host → main：CLI 内 MCP 进程生命周期与内存遥测 */
-  McpTelemetry: "mcp-telemetry",
-  McpResourceSamples: "mcp-resource-samples",
-  ToolExecResource: "tool-exec-resource",
   /** 自动化 Host 首次输入 accepted 后报告新建 Session。 */
   SessionCreateTelemetry: "session-create-telemetry",
   /** host → main：资源管理器采样结果（按 requestId 关联） */
@@ -623,8 +578,6 @@ export const HostResponseTypes = {
   SessionRouteAnnounce: "session-route-announce",
   /** host → main：目标 host 完成本地 session message 投递 */
   SessionMessageDeliverResult: "session-message-deliver-result",
-  /** host → main：请求 main 复用导出日志逻辑创建反馈日志归档 */
-  FeedbackLogArchiveRequest: "feedback-log-archive-request",
   /** host → main：定时任务派发结果（成功回填 taskId/sessionId，失败带 transient/permanent） */
   CronRunResult: "cron-run-result",
   /** host → main：闲时任务派发结果（成功回填 conversationId/sessionId，失败带 transient/permanent） */
@@ -637,8 +590,6 @@ export const HostResponseTypes = {
   BrowserExecuteRequest: "browser-execute-request",
   /** host → main：请求授权 Agent 已精确校验的本地视频路径 */
   LocalMediaPreviewPathAuthorizeRequest: "local-media-preview-path-authorize-request",
-  /** host → main：RPC 网络遥测批次（channel.command 成功率/耗时） */
-  NetworkTelemetryBatch: "network-telemetry-batch",
   /** host → main：本地 Provisioning Source 成功持久化。 */
   ProviderProvisioningSourceChanged: "provider-provisioning-source-changed",
   /** host → main：一次 Remote Environment 同步执行完毕。 */
@@ -899,10 +850,6 @@ export interface PlatformChannelMap {
     request: void;
     response: void;
   };
-  [PlatformChannels.SyncTelemetryContext]: {
-    request: TelemetryRendererContext;
-    response: void;
-  };
   [PlatformChannels.ReportTelemetryEvent]: {
     request: RendererTelemetryEventPayload;
     response: void;
@@ -921,11 +868,6 @@ export interface PlatformChannelMap {
   };
   [PlatformChannels.ReportRendererActionTraceBatch]: {
     request: RendererActionTraceBatchV1;
-    response: void;
-  };
-  // 单向 send（不是 invoke）：60 秒一条的旁路遥测样本，renderer 不等 main 回执。
-  [PlatformChannels.ReportRendererHeapSample]: {
-    request: RendererHeapSample;
     response: void;
   };
   [PlatformChannels.ReadFinalArmsCustomEventsE2E]: {
@@ -1036,44 +978,6 @@ export interface PlatformChannelMap {
       value?: boolean;
     };
   };
-  [PlatformChannels.UpdateReady]: {
-    request: string;
-    response: void;
-  };
-  [PlatformChannels.UpdateCheckResult]: {
-    request: UpdateCheckResultPayload;
-    response: void;
-  };
-  [PlatformChannels.UpdateStateChanged]: {
-    request: UpdateStatePayload;
-    response: void;
-  };
-  [PlatformChannels.GetUpdateState]: {
-    request: void;
-    response: UpdateStatePayload;
-  };
-  [PlatformChannels.DownloadUpdate]: {
-    request: void;
-    response: void;
-  };
-  [PlatformChannels.CancelUpdateDownload]: {
-    request: void;
-    response: void;
-  };
-  [PlatformChannels.OpenUpdateStatusWindow]: {
-    request: void;
-    response: void;
-  };
-  [PlatformChannels.GetAutoUpdatePreferences]: {
-    request: void;
-    response: {
-      autoDownloadAndInstallUpdates: boolean;
-    };
-  };
-  [PlatformChannels.SetAutoDownloadAndInstallUpdates]: {
-    request: boolean;
-    response: void;
-  };
   [PlatformChannels.SettingsChanged]: {
     request: void;
     response: void;
@@ -1098,22 +1002,6 @@ export interface PlatformChannelMap {
   };
   [PlatformChannels.DesktopZoomLevelChanged]: {
     request: DesktopZoomState;
-    response: void;
-  };
-  [PlatformChannels.PostUpdateReleaseNotes]: {
-    request: PostUpdateReleaseNotesPayload;
-    response: void;
-  };
-  [PlatformChannels.AcknowledgePostUpdateReleaseNotes]: {
-    request: string;
-    response: void;
-  };
-  [PlatformChannels.SkipUpdateVersion]: {
-    request: string;
-    response: void;
-  };
-  [PlatformChannels.QuitAndInstallUpdate]: {
-    request: void;
     response: void;
   };
   [PlatformChannels.GetInstalledEditors]: {

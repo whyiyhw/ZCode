@@ -144,6 +144,51 @@ function readTrimmedEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+// ── 社区版本机暴露面加固（PRIVACY-AUDIT.md D1-D3）──
+// 目标：阻断恶意网页跨站连接本机 /ws 与 /api（可读会话、执行终端、经
+// /api/rpc-host-capability 自取 ticket 提权 trusted host），以及 DNS rebinding 读取静态资源。
+
+const LOOPBACK_BIND_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+function resolveBindHost(host: string | undefined): string {
+  // 绑定层兜底（PRIVACY-AUDIT.md D3，对齐 zcode-server-cli server-core 的
+  // `options.host ?? "127.0.0.1"`）：缺省 host 不能透传给 @hono/node-server——其底层
+  // server.listen(port, undefined) 绑 ::（所有接口）而非回环。若只在分类层把缺省当回环，
+  // 默认部署会被跳过 token fail-closed、实际却暴露在局域网，非浏览器客户端伪造
+  // Host: localhost 即可同时绕过 Host/Origin 校验。在绑定层收敛后，回环分类与真实监听面恒一致。
+  return host?.trim() || "127.0.0.1";
+}
+
+function isLoopbackBindHost(host: string): boolean {
+  return LOOPBACK_BIND_HOSTS.has(host.trim().toLowerCase());
+}
+
+function hostnameOfHostHeader(header: string | undefined): string | undefined {
+  const value = header?.trim().toLowerCase();
+  if (!value) {
+    return undefined;
+  }
+  const bracketed = value.match(/^\[(.+)\](?::\d+)?$/);
+  if (bracketed) {
+    return bracketed[1];
+  }
+  const portSeparator = value.lastIndexOf(":");
+  return portSeparator === -1 ? value : value.slice(0, portSeparator);
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function readAllowedExtraOrigins(): Set<string> {
+  return new Set(
+    (readTrimmedEnv("ZCODE_SERVER_ALLOWED_ORIGINS") ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  );
+}
+
 function resolveServerId(options: HttpServerOptions): string {
   return (
     options.serverId?.trim() || readTrimmedEnv("ZCODE_SERVER_ID") || hostname() || "zcode-server"
@@ -176,7 +221,6 @@ function createServerInfo(options: HttpServerOptions): ServerRemoteInfo {
     capabilities: {
       desktopContinuous: true,
       websocketRpc: true,
-      processResourceTelemetry: true,
     },
   };
 }
@@ -302,6 +346,51 @@ export function createHttpServer(
   const hostCapabilities = createHostCapabilityStore();
 
   const authToken = options.authToken?.trim();
+  const bindHost = resolveBindHost(options.host);
+  // 社区版隐私基线（PRIVACY-AUDIT.md D3）：非回环监听必须配置 token，fail-closed，
+  // 与 zcode-server-cli server-core 的规则一致；否则局域网任意主机可无鉴权访问全部 services。
+  // bindHost 已经在绑定层收敛（缺省 127.0.0.1），这里的分类与 serve 的真实监听面同源。
+  if (!isLoopbackBindHost(bindHost) && !authToken) {
+    throw new Error(
+      `Non-loopback host ${bindHost} requires ZCODE_SERVER_AUTH_TOKEN before the server can listen`,
+    );
+  }
+
+  const loopbackBound = isLoopbackBindHost(bindHost);
+  const allowedExtraOrigins = readAllowedExtraOrigins();
+  // 社区版隐私基线（PRIVACY-AUDIT.md D1/D2）：浏览器跨站请求（no-cors POST 与 WebSocket
+  // upgrade 均携带 Origin）只允许来自本机页面或同源页面；回环部署同时校验 Host 头阻断
+  // DNS rebinding。非浏览器客户端（CLI/桌面/服务端代理）不携带 Origin，不受影响；
+  // 特殊来源（如沙箱 iframe 的 Origin: null）可通过 ZCODE_SERVER_ALLOWED_ORIGINS 显式放行。
+  app.use("*", async (c, next) => {
+    if (loopbackBound) {
+      const hostHeaderHostname = hostnameOfHostHeader(c.req.header("host"));
+      if (hostHeaderHostname && !isLoopbackHostname(hostHeaderHostname)) {
+        return c.json({ error: "Forbidden host" }, 403);
+      }
+    }
+    const origin = c.req.header("origin");
+    if (origin) {
+      let originHostname: string | undefined;
+      try {
+        originHostname = new URL(origin).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+      } catch {
+        originHostname = undefined;
+      }
+      const requestHostHostname = hostnameOfHostHeader(c.req.header("host"));
+      const allowed =
+        allowedExtraOrigins.has(origin) ||
+        (originHostname !== undefined && isLoopbackHostname(originHostname)) ||
+        (originHostname !== undefined &&
+          requestHostHostname !== undefined &&
+          originHostname === requestHostHostname);
+      if (!allowed) {
+        return c.json({ error: "Forbidden origin" }, 403);
+      }
+    }
+    await next();
+  });
+
   if (authToken) {
     app.use("*", async (c, next) => {
       const pathname = new URL(c.req.url).pathname;
@@ -413,11 +502,10 @@ export function createHttpServer(
     });
   }
 
-  const server = serve({ fetch: app.fetch, hostname: options.host, port }, () => {
+  const server = serve({ fetch: app.fetch, hostname: bindHost, port }, () => {
     const address = server.address();
     const listenPort = typeof address === "object" && address ? address.port : port;
-    const listenHost = options.host?.trim() || "localhost";
-    log(`http://${listenHost}:${listenPort}`);
+    log(`http://${bindHost}:${listenPort}`);
   });
 
   injectWebSocket(server);
