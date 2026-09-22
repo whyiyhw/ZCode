@@ -135,5 +135,6 @@
 - **防重放语义保留**：possibly_sent 状态的动作请求绝不自动重试，以 CUA_NOT_READY 信封交给模型侧决策。
 - macOS 侧（.app 安装/LaunchServices/TCC/PiP）按契约实现，**未在真机验证**，清单见 spec 迁移边界。
 - 插件 wrapper（skill/docs/client 脚本）取自官方 MIT 文件（`apps/zcode-cli/packages/zcode-cua-plugin/`），保留 Z.ai 署名。
+- **首次运行自动激活（Windows）**：安装后无需手动脚本——宿主在 Helper 运行时缺失时自动从**本机已有的官方安装**（`ZCODE_CUA_HELPER_SOURCE` / 注册表卸载项 / 标准路径三级发现）搬运运行时到 `~/.zcode/cua-helper-runtime`，sha256 实测校验后生效；纯本机复制、无网络、不构成分发，`ZCODE_CUA_HELPER_AUTO_STAGE=0` 可关闭。无官方安装的机器给出指引并保持不可用（fail-closed）。
 
 一句话总结：**上游开源给了我们"能看"的条件，社区版把它变成"可证"的现实——默认不采、指纹最小、本地受控、分发包可验，且每一项主张都有可复现的 grep 与命令作为证据。**

@@ -33,8 +33,10 @@
 ## 运行时契约
 
 - **Windows product**：`resources/tools/cua-helper/runtime-manifest.json`（schemaVersion 1、packageName `@zcode/zcode-cua`、platform win32、arch 等于本机、electronVersion 精确等于宿主、entry/addon 相对路径与 sha256）。当前官方 0.6.3 钉 electron 41.0.3（= 本 fork 版本）。
+- **Windows 用户暂存（auto-stage 落位）**：`<dataRoot>/.zcode/cua-helper-runtime`（如 `~/.zcode/cua-helper-runtime`；Preview 隔离根下各自一份）。解析优先级：`ZCODE_CUA_DEV_ROOT`（显式）→ 用户暂存 → 打包资源；用户暂存缺失或契约不符时静默落回打包路由。
+- **auto-stage（首次运行自动初始化）**：Windows 宿主在运行时解析抛 `WindowsCuaDevRuntimeResolutionError` 时，自动从**本机官方安装**搬运运行时到用户暂存目录并重试一次解析。约束：纯本机复制、无网络；源发现顺序 = `ZCODE_CUA_HELPER_SOURCE` 覆盖 → 注册表卸载项（InstallLocation，缺失时解析 DisplayIcon/UninstallString 的目录）→ 标准安装路径；搬运前后均做 manifest + sha256 实测校验并补写生产者契约；进程内单次守卫 + 失败 5 分钟冷却；`ZCODE_CUA_HELPER_AUTO_STAGE ∈ {0,false,off}` 关闭。实现：`packages/zcode-cua/runtime-staging.js`（`findWindowsCuaHelperSource` / `verifyCuaHelperRuntime` / `stageCuaHelperRuntime`），`scripts/prepare-cua-helper.mjs` 复用同一实现。找不到官方安装 → warn 指引（装官方版 / 设 env / 手动 prepare），保持 fail-closed。
 - **Windows dev**：`ZCODE_CUA_DEV_ROOT` 指向目录的 `package.json` 满足生产者契约（name 恰为 `@zcode/zcode-cua`、`zcodeCuaRuntime` 恰含 `{schema:1, windows:{entry, nativeAddon}}`、路径 canonical 相对且互异、禁 symlink/逃逸）。暂存脚本负责在副本上补写该契约。
-- **macOS**：已安装 Helper `~/.zcode/computer-use/<variant>/ZCode Computer Use.app`（installer 自 `resources/cua-helper/` 复制并校验 lipo arch + codesign + TeamID `8A5X4JJ39T`）；dev 需 `ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL` 走 `ZCODE_CUA_BUNDLED_HELPER_APP_PATH`。
+- **macOS**：已安装 Helper `~/.zcode/computer-use/<variant>/ZCode Computer Use.app`（installer 自 `resources/cua-helper/` 复制并校验 lipo arch + codesign + TeamID `8A5X4JJ39T`）；dev 需 `ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL` 走 `ZCODE_CUA_BUNDLED_HELPER_APP_PATH`。macOS 的 auto-stage（从本机官方 .app 安装搬运）**未接线**，待真机实现。
 - 暂存脚本是运行时进入本仓库构建的唯一通道；版本记录落 `.cua-helper-staging.json`，重跑幂等。
 
 ## 不变量
@@ -64,9 +66,10 @@
 
 ## 验收场景
 
-1. （本机已验，2026-09-22）单测：NDJSON 帧解析/序列化 round-trip、请求行校验（非法 id/method/params）、fake Helper（服务端原语起 pipe）与客户端 14 方法映射、错误码还原——`node --test packages/zcode-cua/test/` 14/14。
+1. （本机已验，2026-09-22）单测：NDJSON 帧解析/序列化 round-trip、请求行校验（非法 id/method/params）、fake Helper（服务端原语起 pipe）与客户端 14 方法映射、错误码还原——`node --test packages/zcode-cua/test/` 14/14；runtime-staging（校验拒收/契约补写/幂等/源发现/开关）4/4。
    1a. （本机已验，2026-09-22）互操作冒烟：按宿主 fork 方式拉起暂存的官方 Helper（`ELECTRON_RUN_AS_NODE` + `ZCODE_CUA_HELPER_ADDON` + `--socket/--parent-pid`），本包客户端完成 `broker_info` 健康握手（`ZCodeComputerUseIPC-1`/ndjson/pid 匹配），`list_applications`/`supports_accessibility`/`input_permission_status`/`screen_capture_status`/`controller_status` 返回真实数据；执行器 `get_app_state` 拿到真实 state_id/219 元素树，元素派发直达 Helper（`not_settable` 真实业务错误还原）；`list_windows` 在非桌面 shell 上下文返回真实 `permission_denied` 诊断（UIPI 提示），待桌面 dev E2E 复验。
    1b. （本机已验，2026-09-22）构建链：desktop host bundle（tsup noExternal 内联）含新客户端（chunk 内 clientApiVersion/管道前缀）；`build-desktop-agent-cli` + `prepare-agent-node-bundle` 产出含真实执行器的 node-repl-host bundle，三官方插件（browser-use/node-repl-host/zcode-cua-plugin）均暂存进 bundled-agents。
+   1c. （本机已验，2026-09-22）auto-stage E2E：空数据根模拟新装机 → `findWindowsCuaHelperSource`（注册表无 InstallLocation 时解析 DisplayIcon/UninstallString 目录，无 env 亦可发现 `D:\soft\zcode`）→ `stageCuaHelperRuntime` 搬运至 `<dataRoot>/.zcode/cua-helper-runtime`（契约补写 + sha 实测）→ 从用户暂存目录以产品 fork 形态拉起真实 Helper，健康握手 pid 匹配、`list_applications` 返回真实清单。
 2. （本机可验，待用户桌面复验）dev E2E：`node scripts/prepare-cua-helper.mjs` 暂存后 dev.mjs 自动设 `ZCODE_CUA_DEV_ROOT`，`pnpm dev:desktop` 会话内 node_repl 调 `list_windows` 返回真实窗口列表；`stop_computer_control` 可中断。
 3. （本机可验，待执行）本地打包：`ZCODE_CUA_BUNDLE_HELPER=1 pnpm bundle:desktop` 产物含 `resources/tools/cua-helper` 且 manifest 校验通过；不设 env 时产物不含该目录。
 4. （待真机）macOS：.app 安装/签名校验/LaunchServices 拉起/TCC 权限面板/PiP 会话。

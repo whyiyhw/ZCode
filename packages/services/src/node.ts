@@ -9,7 +9,7 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
+import { getAppConfigDir as resolveAppConfigDir, getZCodeDataRootDir } from "./paths.js";
 import {
   buildLocalMediaPreviewUrl,
   isProviderProvisioningAccountCredentialKey,
@@ -492,6 +492,12 @@ import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHe
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
 import { DEV_HELPER_APP_NAME, HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import { resolveBrokerSocketPath } from "@zcode/zcode-cua/broker/socketPath";
+import {
+  findWindowsCuaHelperSource,
+  isAutoStageEnabled,
+  stageCuaHelperRuntime,
+  USER_STAGED_RUNTIME_DIR_NAME,
+} from "@zcode/zcode-cua/runtime-staging";
 import {
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   resolveSafeEndpointHostname,
@@ -1019,17 +1025,88 @@ export function createDefaultCuaProductHelper(
       });
     host = macPermissionHost;
   } else {
+    // auto-stage：运行时解析失败（新装机尚未搬运/暂存损坏）时，从本机官方安装把
+    // Helper 运行时复制到用户数据根下的 cua-helper-runtime 并重试一次解析。
+    // 纯本机复制、无网络；进程内单次守卫 + 失败冷却，可用
+    // ZCODE_CUA_HELPER_AUTO_STAGE=0 关闭。合规与语义见
+    // packages/zcode-cua/spec/computer-use-restore.md「运行时契约」。
+    const userStagedRoot = join(getZCodeDataRootDir(), USER_STAGED_RUNTIME_DIR_NAME);
+    let autoStageInFlight: Promise<boolean> | undefined;
+    let autoStageFailedAt = 0;
+    const AUTO_STAGE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+    const attemptAutoStage = (): Promise<boolean> => {
+      autoStageInFlight ??= (async () => {
+        if (!isAutoStageEnabled(env)) return false;
+        if (Date.now() - autoStageFailedAt < AUTO_STAGE_FAILURE_COOLDOWN_MS) return false;
+        try {
+          const sourceRoot = await findWindowsCuaHelperSource(env);
+          if (!sourceRoot) {
+            logger.warn(
+              undefined,
+              "Computer Use Helper auto-stage skipped: no local official install found. Install the official ZCode once, set ZCODE_CUA_HELPER_SOURCE, or run scripts/prepare-cua-helper.mjs.",
+            );
+            autoStageFailedAt = Date.now();
+            return false;
+          }
+          const { staged, manifest } = await stageCuaHelperRuntime({
+            sourceRoot,
+            targetRoot: userStagedRoot,
+            arch: options.arch ?? process.arch,
+            electronVersion: options.electronVersion ?? process.versions.electron,
+          });
+          logger.info(
+            undefined,
+            staged
+              ? `Computer Use Helper runtime auto-staged ${manifest.packageVersion} from ${sourceRoot} to ${userStagedRoot}.`
+              : `Computer Use Helper runtime already staged (${manifest.packageVersion}).`,
+          );
+          return true;
+        } catch (error) {
+          autoStageFailedAt = Date.now();
+          logger.warn(
+            undefined,
+            "Computer Use Helper auto-stage failed; keeping fail-closed behavior.",
+            {
+              error: error instanceof Error ? error.message : String(error),
+              code: (error as { code?: unknown }).code ?? null,
+            },
+          );
+          return false;
+        } finally {
+          autoStageInFlight = undefined;
+        }
+      })();
+      return autoStageInFlight;
+    };
     host = createWindowsCuaHelperHost({
       resolveRuntime:
         options.resolveWindowsRuntime ??
-        (() =>
-          resolveWindowsCuaRuntime({
-            platform,
-            env,
-            resourcesPath: options.resourcesPath,
-            arch: options.arch,
-            electronVersion: options.electronVersion,
-          })),
+        (async () => {
+          try {
+            return await resolveWindowsCuaRuntime({
+              platform,
+              env,
+              resourcesPath: options.resourcesPath,
+              arch: options.arch,
+              electronVersion: options.electronVersion,
+              userStagedRoot,
+            });
+          } catch (error) {
+            if (error instanceof WindowsCuaDevRuntimeResolutionError) {
+              if (await attemptAutoStage()) {
+                return await resolveWindowsCuaRuntime({
+                  platform,
+                  env,
+                  resourcesPath: options.resourcesPath,
+                  arch: options.arch,
+                  electronVersion: options.electronVersion,
+                  userStagedRoot,
+                });
+              }
+            }
+            throw error;
+          }
+        }),
       createHost:
         options.createWindowsHost ??
         ((runtime) =>

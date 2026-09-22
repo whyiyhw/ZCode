@@ -31,6 +31,8 @@ interface WindowsCuaRuntimeResolveOptions {
   resourcesPath?: string;
   arch?: NodeJS.Architecture;
   electronVersion?: string;
+  /** auto-stage 落位的用户暂存目录（生产者契约同 dev root，优先级在 dev env 之后、打包资源之前）。 */
+  userStagedRoot?: string;
   fileSystem?: WindowsCuaRuntimeFileSystem;
   hashBytes?: (bytes: string | Uint8Array) => Promise<string>;
 }
@@ -73,6 +75,8 @@ const defaultHashBytes = async (bytes: string | Uint8Array): Promise<string> =>
 /**
  * Windows 产品运行时解析边界：
  * - 显式开发目录具有最高优先级，配置错误时 fail closed，不能悄悄改用安装资源；
+ * - 其次用户暂存目录（auto-stage 落位处，生产者契约同 dev；目录不存在或损坏时
+ *   静默落回产品路由——暂存损坏由 auto-stage 侧修复，不在这里制造第二种报错）；
  * - 产品模式只读取 resources/tools/cua-helper，不搜索源码目录或 node_modules。
  */
 export async function resolveWindowsCuaRuntime(
@@ -88,6 +92,17 @@ export async function resolveWindowsCuaRuntime(
   const configuredRoot = (options.env ?? process.env)[DEV_ROOT_ENV]?.trim();
   if (configuredRoot) {
     return resolveDevelopmentRuntime(configuredRoot, options.fileSystem ?? defaultFileSystem);
+  }
+
+  const userStagedRoot = options.userStagedRoot?.trim();
+  if (userStagedRoot) {
+    try {
+      return await resolveDevelopmentRuntime(userStagedRoot, options.fileSystem ?? defaultFileSystem);
+    } catch {
+      // 尚未自动搬运（目录不存在）或已暂存副本损坏：一律落回产品路由给出最终
+      // 结论——本地开关出包可能自带运行时；两者皆缺时由产品路由的
+      // invalid-runtime-manifest 报错，auto-stage 包装层负责搬运修复。
+    }
   }
 
   return resolvePackagedRuntime(options, options.fileSystem ?? defaultFileSystem);
