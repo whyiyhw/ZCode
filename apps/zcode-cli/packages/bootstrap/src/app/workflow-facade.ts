@@ -302,7 +302,6 @@ function createWorkflowChildRuntime(
       executionPort:
         deps.appOptions.executionPort ??
         createNodeExecutionAdapter({
-          onToolExecResource: deps.appOptions.onToolExecResource,
           network: {
             httpProxy: deps.configResult.config.network.httpProxy,
             noProxy: deps.configResult.config.network.noProxy,

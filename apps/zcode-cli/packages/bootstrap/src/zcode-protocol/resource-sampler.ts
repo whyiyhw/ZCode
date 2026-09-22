@@ -1,67 +1,48 @@
 import type { Logger } from "@zcode/contracts";
-import {
-  createMemorySampleWriteGate,
-  memoryUsageToSampleFields,
-  zcodeProtocolNotifications,
-  type MemorySample,
-  type ZCodeProtocolNotification,
-} from "@zcode/shared";
-import {
-  createZCodeProcessResourceSampler,
-  type ZCodeProcessResourceSampler,
-} from "../process-resource-sampler.js";
 import type { ZCodeProtocolAgentServer } from "./server.js";
+
+/**
+ * app-server 的 60 秒维护节拍。
+ *
+ * 历史上该节拍由资源采样定时器兼任（同一次 tick 顺带做驻留回收与 event store 修剪）；
+ * 资源遥测族移除后（spec/resource-telemetry-removal.md）节拍保留、采样与上报删除——
+ * session 驻留池回收与瞬态事件淘汰仍依赖这条 60s 心跳，删除节拍会造成多会话内存回归。
+ */
+const PROTOCOL_MAINTENANCE_INTERVAL_MS = 60_000;
+
+export interface ProtocolMaintenanceBeat {
+  stop(): void;
+}
 
 export function startProtocolResourceSampler(
   server: ZCodeProtocolAgentServer,
-  send: (message: ZCodeProtocolNotification) => void,
   logger: Logger,
-): ZCodeProcessResourceSampler | undefined {
+): ProtocolMaintenanceBeat | undefined {
   try {
-    // 本地内存诊断日志：复用同一 60s 节拍，
-    // 变化/心跳门控后才写一行，避免与消息流同频刷盘。
-    const memoryDiagnosticsGate = createMemorySampleWriteGate();
-    const sampler = createZCodeProcessResourceSampler({
-      onSample: (sample, memoryUsage) => {
-        send({
-          method: zcodeProtocolNotifications.processResourceSample,
-          params: sample,
-        });
-        // resident session TTL / 水位收敛借用资源采样节拍（60s）作兜底，不新增定时器；
-        // sampler 对 onSample 已有异常兜底，单次 rebalance 失败不影响遥测上报。
+    const timer = setInterval(() => {
+      try {
         server.rebalanceResidentSessions();
-        try {
-          // 同一节拍先做瞬态事件时间兜底淘汰，再采样，日志里的 eventRows 反映淘汰后的驻留量。
-          server.pruneSessionEventStores();
-          server.pruneDetachedChildPublishers();
-        } catch {
-          // 兜底淘汰失败不影响资源上报与诊断日志。
-        }
-        try {
-          const memorySample: MemorySample = {
-            role: "agent_node",
-            ...memoryUsageToSampleFields(memoryUsage),
-            counters: server.collectMemoryDiagnostics(),
-          };
-          const reason = memoryDiagnosticsGate.evaluate(memorySample, Date.now());
-          if (reason) {
-            const { role: _role, counters, ...memoryFields } = memorySample;
-            logger.info("Process memory sample", {
-              event: "zcode_protocol.process.memory_sample",
-              reason,
-              ...memoryFields,
-              counters,
-            });
-          }
-        } catch {
-          // 诊断日志失败只丢当前样本，不影响资源上报与 rebalance。
-        }
-      },
+      } catch {
+        // 单次 rebalance 失败不影响后续节拍。
+      }
+      try {
+        server.pruneSessionEventStores();
+        server.pruneDetachedChildPublishers();
+      } catch {
+        // 兜底淘汰失败只丢当前节拍。
+      }
+    }, PROTOCOL_MAINTENANCE_INTERVAL_MS);
+    timer.unref?.();
+    logger.debug("protocol maintenance beat started", {
+      intervalMs: PROTOCOL_MAINTENANCE_INTERVAL_MS,
     });
-    sampler.start();
-    return sampler;
+    return {
+      stop() {
+        clearInterval(timer);
+      },
+    };
   } catch {
-    // 资源遥测是 best effort，初始化失败不能改变 Agent 启动结果。
+    // 节拍是 best effort，初始化失败不能改变 Agent 启动结果。
     return undefined;
   }
 }

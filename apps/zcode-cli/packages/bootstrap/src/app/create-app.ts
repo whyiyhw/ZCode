@@ -392,7 +392,6 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     const executionPort =
       options.executionPort ??
       createNodeExecutionAdapter({
-        onToolExecResource: options.onToolExecResource,
         network: {
           httpProxy: configResult.config.network.httpProxy,
           noProxy: configResult.config.network.noProxy,

@@ -1,4 +1,4 @@
-import type { ZCodeToolExecResource, BackgroundBashOutputResult } from "@zcode/shared";
+import type { BackgroundBashOutputResult } from "@zcode/shared";
 import type { AiSdkModelAdapter } from "@zcode/adapters/model";
 import type {
   AgentRuntime,
@@ -154,7 +154,6 @@ export interface ZCodeAppOptions {
   pluginStorageRoot?: string;
   executionPort?: ExecutionPort;
   /** 资源遥测旁路；由协议宿主注入，主任务和 workflow 的执行适配器共用。 */
-  onToolExecResource?: (sample: ZCodeToolExecResource) => void;
   /** browser-use 控制端口；注入后 node_repl 的 agent.browsers.* 可用。缺省则不可用。 */
   browserControlPort?: BrowserControlPort;
   /** 可由协议宿主注入的进程级 node_repl Browser broker；缺省时 app 自建并拥有。 */

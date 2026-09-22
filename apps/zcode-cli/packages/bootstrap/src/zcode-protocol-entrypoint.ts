@@ -7,11 +7,6 @@ import {
   type McpConnectionPool,
   type McpTelemetryTracker,
 } from "@zcode/adapters/mcp";
-import {
-  zcodeProtocolNotifications,
-  type ZCodeMcpResourceSample,
-  type ZCodeMcpTelemetryEvent,
-} from "@zcode/shared";
 import type { SqliteSessionStore } from "@zcode/adapters/storage";
 import { traceContextToLogContext, createRootTraceContext } from "@zcode/contracts";
 import type { McpPort, ModelSelection } from "@zcode/contracts";
@@ -44,9 +39,11 @@ import {
 import { ZCodeProtocolAgentServer } from "./zcode-protocol/server.js";
 import { ZCodeProtocolNdjsonConnection } from "./zcode-protocol/transport.js";
 import { cleanupProtocolRuntime } from "./zcode-protocol/runtime-cleanup.js";
-import { startProtocolResourceSampler } from "./zcode-protocol/resource-sampler.js";
+import {
+  startProtocolResourceSampler,
+  type ProtocolMaintenanceBeat,
+} from "./zcode-protocol/resource-sampler.js";
 import { acquireProtocolStartupResource } from "./zcode-protocol/startup-resource.js";
-import type { ZCodeProcessResourceSampler } from "./process-resource-sampler.js";
 import { prepareZCodeTelemetryEnv, shutdownZCodeTelemetry } from "./telemetry-bootstrap.js";
 
 function applyProtocolPresentationSurface(
@@ -127,9 +124,7 @@ export async function runZCodeProtocolAgent(
   let mcpConnectionPool: McpConnectionPool | undefined;
   let mcpPort: McpPort | undefined;
   let mcpTelemetryTracker: McpTelemetryTracker | undefined;
-  let mcpResourceSink: ((samples: ZCodeMcpResourceSample[]) => void) | undefined;
-  let mcpTelemetrySink: ((event: ZCodeMcpTelemetryEvent) => void) | undefined;
-  let processResourceSampler: ZCodeProcessResourceSampler | undefined;
+  let processResourceSampler: ProtocolMaintenanceBeat | undefined;
   let providerRegistryRuntime:
     | Awaited<ReturnType<typeof startProcessProviderRegistryRuntime>>
     | undefined;
@@ -183,11 +178,7 @@ export async function runZCodeProtocolAgent(
     mcpTelemetryTracker =
       configResult.config.features.mcp === false
         ? undefined
-        : createMcpTelemetryTracker({
-            idSalt: traceContext.traceId,
-            onEvent: (event) => mcpTelemetrySink?.(event),
-            onResourceSamples: (samples) => mcpResourceSink?.(samples),
-          });
+        : createMcpTelemetryTracker({ idSalt: traceContext.traceId });
     // 官方 MCP 身份头端口：连接池构造早于 server，故用惰性 holder 回填。
     // server 就绪前该端口返回 official_auth_unavailable；HTTP tools/call 会匿名交给服务端
     // 返回结构化权限错误，stdio 则把 reason 下发给插件。连接与工具发现都不受影响。
@@ -278,8 +269,6 @@ export async function runZCodeProtocolAgent(
               }
             : {}),
           sourceTitle: "electron",
-          onToolExecResource: (params) =>
-            connection.send({ method: zcodeProtocolNotifications.toolExecResource, params }),
         }),
       cwd: options.cwd,
       env: options.env,
@@ -318,26 +307,8 @@ export async function runZCodeProtocolAgent(
       takePostResponseBatch: (requestId) => server.takePostResponseBatch(requestId),
     });
     server.setNotificationSink((notification) => connection.send(notification));
-    mcpResourceSink = (samples) =>
-      connection.send({
-        method: zcodeProtocolNotifications.mcpResourceSamples,
-        params: samples,
-      });
-    mcpTelemetrySink = (event) => {
-      // 五分钟资源通知取代旧内存通知；tracker 内部孤儿事实仍保留原判据。
-      if (event.kind === "memory") return;
-      connection.send({
-        method: zcodeProtocolNotifications.mcpTelemetry,
-        params: event,
-      });
-    };
     connection.start();
-    mcpTelemetryTracker?.start();
-    processResourceSampler = startProtocolResourceSampler(
-      server,
-      (message) => connection.send(message),
-      logger,
-    );
+    processResourceSampler = startProtocolResourceSampler(server, logger);
     startupTimer.complete("ZCode Protocol agent startup completed", {
       event: "zcode_protocol.startup.completed",
       stage: "total",
@@ -360,7 +331,6 @@ export async function runZCodeProtocolAgent(
       deadlineAt: options.lifecycle?.deadlineAt,
       server: serverForCleanup,
       processResourceSampler,
-      mcpTelemetryTracker,
       nodeReplBrowserBroker,
       mcpPort,
       mcpConnectionPool,

@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
 import { applyBashSourcesToExecutionRequest } from "./bash-startup-script.js";
-import { createBashResourceTelemetry } from "./bash-resource-telemetry.js";
 import { createCwdCapturePlan } from "./cwd-capture.js";
 import {
   applyResolvedShellCommand,
@@ -35,28 +34,12 @@ import type { ExecutionRequest, ExecutionRunOptions } from "@zcode/contracts";
 
 export class NodeExecutionAdapterProcess extends NodeExecutionAdapterResults {
   protected trackBashResources(
-    child: ChildProcess,
-    isBash: boolean,
-    stopState: () => { timedOut: boolean; killed: boolean },
-  ): (state: ExitState) => void {
-    if (!isBash || !this.options.onToolExecResource) return () => {};
-    const telemetry = createBashResourceTelemetry({
-      platform: this.platform,
-      processGroupId: child.pid,
-      onComplete: this.options.onToolExecResource,
-    });
-    return (state) => {
-      const stop = stopState();
-      telemetry.finish(
-        stop.timedOut
-          ? "timeout"
-          : stop.killed || state.signal
-            ? "killed"
-            : state.error
-              ? "error"
-              : "completed",
-      );
-    };
+    _child: ChildProcess,
+    _isBash: boolean,
+    _stopState: () => { timedOut: boolean; killed: boolean },
+  ): (_state: ExitState) => void {
+    // Bash 慢命令资源采样已随资源遥测族移除（spec/resource-telemetry-removal.md）。
+    return () => {};
   }
 
   protected async prepareChildSpawn(request: ExecutionRequest): Promise<PreparedChildSpawn> {
