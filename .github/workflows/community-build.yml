@@ -87,6 +87,11 @@ jobs:
             ~/AppData/Local/electron/Cache
           key: electron-${{ runner.os }}-${{ hashFiles('packages/desktop/package.json') }}
       - run: pnpm install --frozen-lockfile
+      # linux 目标含 rpm/pacman（fpm 打包）：ubuntu runner 缺 bsdtar（pacman 的
+      # .MTREE 生成）与 rpmbuild（rpm），缺件时 electron-builder 在 fpm 阶段挂掉。
+      - name: 安装 linux 打包工具（rpm/pacman 目标）
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm
       # mock-cdn 远程资产仅 SSH/WSL 远程工作区需要，社区桌面包跳过下载。
       - run: pnpm --filter @zcode/desktop build
         env:

@@ -708,6 +708,13 @@ async function main() {
     osBuilderFlagMap[os],
     archBuilderFlagMap[arch],
   ];
+  // config 里的 generic publish 是 electron-builder 必需的占位（社区版无更新源），
+  // 但 git tag 检出会触发隐式 publishing：构建完成后向占位 url（localhost）上传
+  // 产物并失败。社区版的发布由 CI 的 release job（gh release）负责，这里默认
+  // --publish never；需要走 electron-builder 自身发布链路时仍可用 EP_PUBLISH 覆盖。
+  if (!process.env.EP_PUBLISH) {
+    buildArgs.push("--publish", "never");
+  }
 
   console.log(`[bundle] target=${os}/${arch}`);
   console.log(`[bundle] skipPrepare=${skipPrepare} skipBuild=${skipBuild}`);
