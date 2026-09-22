@@ -138,6 +138,11 @@ async function buildOutputs(skipBuild) {
     return;
   }
 
+  // 根 packages/shared 没有 build 脚本（exports 直接指向 src/index.ts），其 dist
+  // 历史上由 tsc -b（typecheck）顺带产出。SEA 打包按 dist/index.js 校验 workspace
+  // 运行时包，干净机器（CI build-cli-dist）没有本地 typecheck 残留，曾在这一步
+  // 报 "Missing @zcode/shared dist files"——这里显式构建，不再依赖调用方环境。
+  run("pnpm", ["exec", "tsc", "-b", "packages/shared"]);
   run("pnpm", ["--filter", "@zcode/cli...", "build"]);
   await rm(resolve(root, "packages", "server", "dist"), {
     force: true,
