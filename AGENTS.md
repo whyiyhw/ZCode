@@ -1,6 +1,7 @@
 ## 核心原则
 
 - 新增或修改行为前，先更新对应 spec；目录不存在时按需创建。先明确产品规则、状态所有者、接口和验收场景，再实现代码。
+- 行为或口径变更必须同步文档与断言（三层收尾机制，2026-09-22 起强制）：回合收尾跑 `.agents/skills/check-doc-sync`（即 `node scripts/check-doc-sync.mjs`）；新增 `ZCODE_*` 环境开关须登记入文档，隐私口径头（`X-Client-Timezone`/`X-Os-Version`/`X-Device-Mid`）改动须同步 `scripts/community/assert-privacy.mjs`；行为代码变更须有 `.md` 伴随（纯重构用 `DOCSYNC_ALLOW_NO_DOCS="<原因>"` 豁免，仅此一项）。pre-push 门禁强制执行；Stop hook（`.zcode/hooks/`，机器本地、gitignore）回合末提醒，换机器按 `.zcode/config.json` 结构重建。
 - 以当前检出的源码、`package.json` 和架构策略为准。说明中只保留当前仓库提供的功能、命令和文件；删除功能时同步清理指令和技能中的引用。
 - 定位问题时，未明确要求修改代码就先调查原因。结合源码、日志和运行时证据，区分已确认原因与待验证假设。
 - 保留与任务无关的本地改动，不自行恢复已移除的模块或内部依赖。
@@ -19,6 +20,7 @@
 | 桌面开发         | `pnpm dev:desktop`                        |
 | Web 开发         | `pnpm dev:web`                            |
 | 提交前检查       | `pnpm verify:pre-push`（Lint 与架构检查） |
+| 文档口径同步检查 | `node scripts/check-doc-sync.mjs`（pre-push 自动执行，加 `--push` 覆盖未推送提交） |
 | 架构检查         | `pnpm architecture:check --changed`       |
 | 模块阅读包       | `pnpm architecture:context <module-id>`   |
 | 未使用依赖与导出 | `pnpm knip`                               |

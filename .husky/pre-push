@@ -1,0 +1,5 @@
+# 推送边界硬门禁：lint + 架构检查 + 文档/口径同步。
+# 三层收尾机制的第 3 层（另两层：.agents/skills/check-doc-sync 收尾检查、.zcode Stop hook 提醒）。
+# check-doc-sync 的 --push 额外覆盖 @{u}...HEAD 已提交未推送范围。
+pnpm run verify:pre-push || exit 1
+node scripts/check-doc-sync.mjs --push
