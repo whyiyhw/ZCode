@@ -18,9 +18,8 @@ const useBootstrapWithRemoteBuild = process.env.ZCODE_BOOTSTRAP_WITH_REMOTE === 
 const pnpmRunEnv = {
   ...process.env,
   ZCODE_ENV: await resolveBuiltinProviderBuildEnvironment({ root: repoRoot }),
-  // pnpm 11 的 verify-deps-before-run 会在 apps/zcode-cli 子 workspace
-  // 执行每个 run 前触发 pnpm install；子 workspace 运行时依赖根仓库 @zcode/shared，
-  // 自动 install 无法解析根 workspace 包，导致 dev:desktop:test 和 E2E onPrepare 失败。
+  // pnpm 的 verify-deps-before-run 会在 CLI 包执行每个 run 前触发 pnpm install；
+  // 自动 install 在受限环境（无锁文件写权限/容器）会干扰构建链路，统一关闭。
   PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
 };
 // 桌面 Agent 构建有普通 pnpm 和 bootstrap:with-remote 直跑 tsc 两条路径。
@@ -143,10 +142,10 @@ if (useBootstrapWithRemoteBuild) {
 }
 
 if (!useTurboBuild) {
-  // Linux 容器 demo 里没有仓库级 turbo 根，`turbo --cwd apps/zcode-cli`
-  // 会把 apps/zcode-cli 当根目录，并拒绝 turbo.json 中指向 ../../packages/shared 的 inputs。
-  // 同时 agent 子 workspace 不包含根 packages/shared，但 agent 包依赖 @zcode/shared。
-  // 因此默认改用仓库根 workspace 的明确 pnpm 包顺序构建，避免 WDIO 前置构建卡在子 workspace 解析。
+  // 默认路径保持显式 pnpm 包顺序构建：不依赖 turbo 的 workspace 发现与缓存目录，
+  // Linux 容器/WDOI 前置等受限环境也能跑。CLI 子 workspace 已合并进根 workspace
+  // （历史背景：嵌套 workspace 时代 turbo --cwd apps/zcode-cli 会拒绝指向
+  // ../../packages/shared 的 inputs，且子 workspace 无法解析根 @zcode/shared）。
   for (const filter of defaultBuildFilters) {
     runCommand("pnpm", ["--filter", filter, "build"], {
       env: pnpmRunEnv,
@@ -163,14 +162,14 @@ if (!useTurboBuild) {
   process.exit(0);
 }
 
+// CLI 嵌套 workspace 已合并进仓库根 workspace（turbo.json 同步上移到根）：
+// turbo 直接在仓库根解析 workspace 与任务定义，--filter 圈定 @zcode/cli 即可，
+// 不再需要 --skip-infer --cwd apps/zcode-cli 的子 workspace 锚定。
 runCommand(
   "pnpm",
   [
     "exec",
     "turbo",
-    "--skip-infer",
-    "--cwd",
-    "apps/zcode-cli",
     "run",
     "build:desktop-agent",
     "--filter=@zcode/cli",
