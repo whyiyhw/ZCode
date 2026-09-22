@@ -1,0 +1,180 @@
+# ZCode 社区版构建流水线
+#
+# 职责：
+#   1. check：typecheck / lint / CLI 类型检查（快，PR 与手动触发都跑）；
+#   2. build-desktop：三平台桌面安装包（社区版已整体移除更新子系统与灰度链，产物无任何更新/灰度网络行为），出包后强制隐私断言，
+#      断言失败即挂构建（断言集与 PRIVACY-AUDIT.md §9.5 口径一致）；
+#   3. build-cli-dist：CLI/Web 发行树（latest.json + releases/<ver>/tar.gz + install.sh）；
+#   4. publish-pages：可选，把发行树推到 gh-pages 供 install.sh 使用（需在仓库设置里
+#      启用 Pages 并选择 gh-pages 分支，一次即可）；
+#   5. release：打 v* tag 时把桌面安装包挂到 GitHub Release。
+#
+# 隐私基线：所有作业在 job 级显式清空遥测端点环境变量（PRIVACY-AUDIT.md E2），
+# 保证任何环境继承都不会把上报端点烘焙进产物。
+
+name: community-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish-pages:
+        description: "把 CLI/Web 发行树发布到 gh-pages"
+        type: boolean
+        default: false
+      dist-base-url:
+        description: "发行树根地址（写入 latest.json 与 install.sh）"
+        type: string
+        default: "https://whyiyhw.github.io/ZCode/zcode-dist/"
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: community-build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0 # 以 mise.toml 为准
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm --dir apps/zcode-cli typecheck
+
+  build-desktop:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runs-on: windows-latest, zos: win, zarch: x64 }
+          - { runs-on: ubuntu-latest, zos: linux, zarch: x64 }
+          - { runs-on: macos-latest, zos: mac, zarch: arm64 }
+    runs-on: ${{ matrix.runs-on }}
+    env:
+      # 社区版隐私基线（PRIVACY-AUDIT.md E2）：显式清空遥测端点，防止环境继承烘焙进产物。
+      ZCODE_TELEMETRY_ENABLED: ""
+      ZCODE_TELEMETRY_REPORT_ENDPOINT: ""
+      ZCODE_ARMS_RUM_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_HEADERS: ""
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+      - name: 缓存 Electron 二进制
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/AppData/Local/electron/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('packages/desktop/package.json') }}
+      - run: pnpm install --frozen-lockfile
+      # mock-cdn 远程资产仅 SSH/WSL 远程工作区需要，社区桌面包跳过下载。
+      - run: pnpm --filter @zcode/desktop build
+        env:
+          ZCODE_SKIP_REMOTE_ASSETS: "1"
+      # Preview 身份：仅用于产物命名与数据目录隔离（与正式版并存安装）；社区版已删除 autoUpdater/forceUpdateGuard 全链路。
+      - run: pnpm --filter @zcode/desktop run bundle -- --os ${{ matrix.zos }} --arch ${{ matrix.zarch }} --skip-prepare --skip-build
+        env:
+          ZCODE_PREVIEW_IDENTITY: "1"
+          ZCODE_DESKTOP_DIST_DIR: dist-community
+      - name: 隐私断言（失败即挂构建）
+        run: node scripts/community/assert-privacy.mjs --root packages/desktop/dist-community
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.zos }}-${{ matrix.zarch }}
+          path: packages/desktop/dist-community/*
+          if-no-files-found: error
+
+  build-cli-dist:
+    needs: check
+    runs-on: ubuntu-latest
+    env:
+      DIST_BASE_URL: ${{ inputs.dist-base-url || 'https://whyiyhw.github.io/ZCode/zcode-dist/' }}
+      ZCODE_TELEMETRY_ENABLED: ""
+      ZCODE_TELEMETRY_REPORT_ENDPOINT: ""
+      ZCODE_ARMS_RUM_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ""
+      OTEL_EXPORTER_OTLP_HEADERS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:zcode -- --base-url "$DIST_BASE_URL"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-dist
+          path: dist/zcode/
+          if-no-files-found: error
+
+  publish-pages:
+    if: ${{ inputs.publish-pages == true }}
+    needs: build-cli-dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-dist
+          path: zcode-dist
+      - name: 推送发行树到 gh-pages
+        run: |
+          REPO="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          rm -rf pages && mkdir pages
+          cp -r zcode-dist/* pages/
+          cd pages
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "zcode-dist ${GITHUB_SHA}"
+          git push --force "$REPO" gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: 发布 GitHub Release
+        run: |
+          shopt -s nullglob
+          files=(artifacts/*.exe artifacts/*.exe.blockmap artifacts/*.dmg artifacts/*.dmg.blockmap artifacts/*.AppImage artifacts/*.zip artifacts/*.yml artifacts/*.txt artifacts/*.json artifacts/*.sh)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "没有可发布的产物文件" >&2
+            exit 1
+          fi
+          gh release create "${GITHUB_REF_NAME}" "${files[@]}" \
+            --title "ZCode Community ${GITHUB_REF_NAME}" \
+            --notes "社区版构建（隐私断言已在 CI 通过；说明见 COMMUNITY-EDITION.md，证据见 PRIVACY-AUDIT.md）。未签名：macOS 首次打开需 xattr -rd com.apple.quarantine <App>。" \
+            || gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
