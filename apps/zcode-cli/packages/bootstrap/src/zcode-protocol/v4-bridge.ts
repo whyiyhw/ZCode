@@ -47,7 +47,6 @@ import { PersistentCommandIndex } from "../zcode-protocol-v4/persistent-command-
 import { queueItemIdForCommand } from "../zcode-protocol-v4/command-inbox.js";
 import { resolveStableForkTargetFromTranscript } from "../zcode-protocol-v4/stable-fork-target.js";
 import { shouldAutoDrainV4QueueHead } from "../zcode-protocol-v4/queue-auto-drain.js";
-import { persistAssistantFeedback } from "../zcode-protocol-v4/assistant-feedback-persistence.js";
 import {
   TASK_LIST_SESSION_TYPES,
   isTaskListSessionType,
@@ -907,28 +906,6 @@ export function createConversationV4Gateway(
         .map((part) => part.text)
         .join("");
       return text.length > 0 ? text : null;
-    },
-    setAssistantFeedback: async (sessionId, input) => {
-      const record = context.sessions.get(sessionId);
-      const sessionStore = context.deps.sessionStore;
-      if (!record || !sessionStore) throw new Error("proto.sessionNotFound");
-      // 原因：反馈必须先落 transcript，CLI 重启后才能从 cold hydration 恢复；
-      // eventStore/投影随后推进，失败重试仍可从同一持久事实幂等补齐。
-      await persistAssistantFeedback({
-        sessionStore,
-        eventStore: record.eventStore,
-        sessionId,
-        messageId: input.messageId,
-        entityId: input.entityId,
-        feedback: input.feedback,
-        traceId: String(record.traceContext.traceId),
-        onPersistedEvent: (persisted) => context.v4Gateway?.ingest(sessionId, persisted),
-        onLiveProjectionError: (error) =>
-          context.logger?.warn("v4 assistant feedback live projection failed", {
-            error: error instanceof Error ? error.message : String(error),
-            sessionId,
-          }),
-      });
     },
     // ── 过渡钩子──────────────────────────────
     ensureModelReady: (record) =>

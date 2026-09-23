@@ -27,7 +27,7 @@ import type { BrowserViewportSize } from "./browser-use/command-metadata.js";
 
 export interface TaskNotificationPayload {
   taskId: string;
-  status: "completed" | "failed" | "permission_request" | "elicitation_request" | "feedback_update";
+  status: "completed" | "failed" | "permission_request" | "elicitation_request";
   requestId?: string;
   title: string;
   body: string;

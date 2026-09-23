@@ -18,7 +18,8 @@ export const CORE_USER_ACTION_FEATURES = {
     "keep_and_send",
   ],
   "conversation.history.branch": ["retry", "edit", "fork", "rewind_files"],
-  "conversation.history.feedback": ["like", "dislike", "clear_feedback", "copy"],
+  // 赞/踩已删除；featureId 沿用历史命名，仅剩 copy 动作（本地 action-trace 调试面）。
+  "conversation.history.feedback": ["copy"],
   "conversation.blocking.user_input": ["select_option", "submit_text", "cancel"],
   "conversation.blocking.hook": ["review", "dismiss"],
   "conversation.navigation": ["load_older", "jump_bottom", "open_turn"],

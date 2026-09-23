@@ -13,7 +13,6 @@ import {
 } from "./product-projection-bash-progress.js";
 import type {
   CompactLifecyclePayload,
-  AssistantFeedbackUpdatedPayload,
   DynamicWorkflowRunProgressPayload,
   HookRunLifecyclePayload,
   ModelCompletePayload,
@@ -328,7 +327,6 @@ export type ConversationRowTargetAction =
   | "applyFileRewind"
   | "fileChanges"
   | "fileRewindPreview"
-  | "setAssistantFeedback";
 
 export type ConversationRowTargetResolution =
   | {
@@ -778,17 +776,6 @@ export class ProductProjection {
       }
       return { ok: true, action, row, messageId };
     }
-    if (action === "setAssistantFeedback") {
-      const messageId = this.messageIdByRowId.get(row.rowId);
-      if (row.kind !== "assistantText" || !messageId) {
-        return {
-          ok: false,
-          status: "rejected",
-          reasonCode: "guard.actionUnavailable",
-        };
-      }
-      return { ok: true, action, row, messageId };
-    }
     if (row.kind !== "turnHeader") {
       return {
         ok: false,
@@ -978,17 +965,14 @@ export class ProductProjection {
       event.type === SessionEventType.TurnStarted
         ? undefined
         : (this.productTurnIdByRuntimeTurnId.get(runtimeTurnId) ?? runtimeTurnId);
-    const reduced =
-      event.type === SessionEventType.AssistantFeedbackUpdated
-        ? this.onAssistantFeedbackUpdated(event)
-        : (() => {
+    const reduced = (() => {
             const fact = normalizeConversationEvent(event, {
               productTurnId,
               openAssistantSegments: this.openAssistantSegments(),
             });
             this.normalizationDiagnostics.push(...fact.diagnostics);
             return this.reduce(fact);
-          })();
+    })();
     const subagentDeltas = this.shouldMaterializeSubagentProjection(reduced)
       ? this.materializeSubagentProjection(reduced)
       : [];
@@ -2515,7 +2499,6 @@ export class ProductProjection {
       const {
         actions: _actions,
         assistantResponseId: _assistantResponseId,
-        feedback: _feedback,
         ...continuedBase
       } = continuationRow;
       const row: AssistantTextRow = {
@@ -2563,22 +2546,6 @@ export class ProductProjection {
     this.streamingTextRowId = null;
     if (row?.kind !== "assistantText") return [];
     return [{ op: "row.upserted", row: { ...row, state } }];
-  }
-
-  private onAssistantFeedbackUpdated(event: SessionEvent): ConversationDelta[] {
-    const payload = event.payload as AssistantFeedbackUpdatedPayload;
-    const row = this.snapshot.rows.window.find(
-      (candidate): candidate is AssistantTextRow =>
-        candidate.kind === "assistantText" && candidate.entityId === payload.entityId,
-    );
-    if (!row) return [];
-    if (payload.feedback === null) {
-      if (row.feedback === undefined) return [];
-      const { feedback: _removedFeedback, ...withoutFeedback } = row;
-      return [{ op: "row.upserted", row: withoutFeedback }];
-    }
-    if (row.feedback === payload.feedback) return [];
-    return [{ op: "row.upserted", row: { ...row, feedback: payload.feedback } }];
   }
 
   private openReasoningRow(

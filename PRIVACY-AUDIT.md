@@ -268,3 +268,13 @@
 - **本地 TTFT 全链删除**（超出 §十五初稿范围）：shared `localTtft.ts` schema、协议信封 `ttft` 字段与 ACK `ttftExcluded`、`v4/telemetry/local-ttft` 通知、CLI `LocalTtftRecorder`/compaction/clock 三件、v4-gateway 全部接线（receive/admitted/event/帧附加/queryCommands 时钟探测）、UI observer/transport 校准、desktop exporter、services `onDynamicLocalTtftFacts` 事件面、contracts `local-turn-preparation` 追踪与 core `beginLocalTurnPreparation` 接线。`ZCODE_LOCAL_TTFT_ENABLED` 逃生口随之消失。
 - **依赖与产物**：`@arms/rum-electron` 依赖 + `patches/@arms__rum-electron@0.0.3.patch` + `@babel/runtime`（其 peer）移除；THIRD-PARTY-NOTICES 与 npm-overrides 的三条 @arms 条目手工等价清理（本机 `pnpm -r ls` 撞 EMFILE 无法本地再生成，CI 首跑会复核）；保留的 `@opentelemetry/*` 均为 action-trace 调试链在用。
 - **desktop 遗留核验**：crash 本地取证回落（`remoteCrashReporterEnabled=false`）、`rendererActionTraceIpc` 的 localTtftEnabled 标志、`desktopRuntimeEnv` 的 OTLP 定向转发与 shared runtimeEnv 采集区（`readZCodeAgentTelemetryEnv` 等）均已摘除；env 清洗仍会从 tool env 剥离 OTEL 键（防泄漏兜底，保留）。
+
+### §十五补记二：assistant 赞/踩删除（2026-09-24）
+
+「赞/踩」交互与其背后机制整体下线（此前 §十三~§十五 已删反馈中心/社群/分享/遥测，本项为消息级反馈残留）：
+
+- **UI**：`ConversationAssistantTextActions` 的赞/踩按钮、乐观更新与回滚逻辑、`onFeedbackChange` 五层 prop 链（RowView/TurnRow/TurnGroup/Timeline/SessionPane）、`AssistantFeedbackHandler`/`readAssistantFeedback` 导出。
+- **协议**：`setAssistantFeedback` 命令 schema 与两个命令集合注册、assistantText row 的 `feedback` 字段（additive optional，旧 snapshot 解析时按未知键剥除）、任务通知 status 枚举中无生产方的 `feedback_update` 残留、`TID_V4_FEEDBACK_LIKE/DISLIKE` test-id。
+- **CLI**：`assistant-feedback-persistence.ts`、`commands/handlers/assistant-feedback.ts`、v4-bridge 持久化分支、gateway target 裁决、product-projection 的 row-target 动作/事件投影分支、transcript 冷恢复的 `metadata.assistantFeedback` 事件合成（旧会话中已持久化的反馈 metadata 从此惰性忽略）、contracts `AssistantFeedbackUpdated` 事件与 payload。
+- **services**：`setAssistantMessageFeedback` 接口方法与 adapter 实现、`ZCodeAssistantMessageFeedback` 类型与持久化消息 `feedback` 字段、merge 透传。
+- **保留**：权限拒绝自由文本（`chat.permission.feedback.*`、`MAX_PERMISSION_FEEDBACK_CHARS`）、workflow 编译反馈（`chat.toolCall.workflow.feedback.*`）、action-trace 的 `conversation.history.feedback` featureId（仅剩 copy 动作，本地调试面）。

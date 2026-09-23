@@ -1063,7 +1063,6 @@ export type ZCodePersistedMessagePart =
   | { type: "content"; content: string }
   | { type: "thought"; content: string }
   | { type: "tool-call"; toolIndex: number };
-export type ZCodeAssistantMessageFeedback = "like" | "dislike";
 export type ZCodeAssistantCheckpointState = "partial";
 export type ZCodeAssistantCheckpointReason = "tool_completed" | "part_boundary" | "periodic";
 export interface ZCodePersistedMessage {
@@ -1084,8 +1083,6 @@ export interface ZCodePersistedMessage {
   durationMs?: number;
   /** assistant 是否以用户主动停止或异常中断结束；用于抑制 latest 回复区的提升。 */
   interrupted?: boolean;
-  /** 用户对 assistant 回复的本地反馈；仅用于 ZCode 展示/统计，不注入 Agent 上下文。 */
-  feedback?: ZCodeAssistantMessageFeedback;
   attachments?: ZCodePromptAttachment[];
   tools?: ZCodePersistedToolCall[];
   thought?: string;

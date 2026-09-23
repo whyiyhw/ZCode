@@ -1230,14 +1230,6 @@ function synthesizeAssistantParts(
         break;
     }
   }
-  const assistantFeedback = message.info.metadata?.assistantFeedback;
-  if (assistantFeedback === "like" || assistantFeedback === "dislike") {
-    push(
-      SessionEventType.AssistantFeedbackUpdated,
-      { entityId: String(message.info.id), feedback: assistantFeedback },
-      turnId,
-    );
-  }
   return { resultType, toolCallCount };
 }
 

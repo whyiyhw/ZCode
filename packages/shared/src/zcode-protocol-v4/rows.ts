@@ -161,7 +161,6 @@ export const assistantTextRowSchema = z.object({
   text: z.string(),
   state: z.enum(["streaming", "complete", "interrupted", "failed"]),
   model: z.string().optional(),
-  feedback: z.enum(["like", "dislike"]).optional(),
 });
 export type AssistantTextRow = z.infer<typeof assistantTextRowSchema>;
 

@@ -33,7 +33,6 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { ConversationTurnGroup } from "@/v4/ConversationTurnGroup.js";
 import { ConversationPendingGuideList } from "@/v4/ConversationPendingGuideList.js";
-import type { AssistantFeedbackHandler } from "@/v4/ConversationRowView.js";
 import { ConversationTurnNavigator } from "@/v4/ConversationTurnNavigator.js";
 import type { ConversationRowRenderContext } from "@/v4/conversationRowContext.js";
 import { splitConversationTimelineLiveTail } from "@/v4/conversationTimelineLiveTail.js";
@@ -264,7 +263,6 @@ interface ConversationTimelineProps {
   rowContext: ConversationRowRenderContext;
   onFork?: (target: ConversationRowTarget) => void;
   onRetry?: (target: ConversationRowTarget) => void;
-  onFeedbackChange?: AssistantFeedbackHandler;
   onEdit?: (
     target: ConversationRowTarget,
     newText: string,
@@ -341,7 +339,6 @@ function ConversationTimelineImpl({
   rowContext,
   onFork,
   onRetry,
-  onFeedbackChange,
   onEdit,
   canLoadOlder = false,
   loadingOlder = false,
@@ -1770,7 +1767,6 @@ function ConversationTimelineImpl({
                         context={rowContext}
                         onFork={onFork}
                         onRetry={onRetry}
-                        onFeedbackChange={onFeedbackChange}
                         onEdit={onEdit}
                       />
                     </div>
@@ -1799,7 +1795,6 @@ function ConversationTimelineImpl({
                     context={rowContext}
                     onFork={onFork}
                     onRetry={onRetry}
-                    onFeedbackChange={onFeedbackChange}
                     onEdit={onEdit}
                   />
                 </div>

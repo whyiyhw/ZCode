@@ -15,12 +15,10 @@ import type {
   ZCodeTaskMode,
   ZCodeConfigOption,
   ZCodeError,
-  ZCodeAssistantMessageFeedback,
   ZCodePromptAttachment,
   ZCodeProvider,
   ZCodeWorkspaceEvent,
   TraceId,
-  ZCodeSessionFile,
   ZCodeAgentMcpServer,
   ZCodeTaskSnapshot,
   ZCodeTaskSnapshotBody,
@@ -530,15 +528,6 @@ export interface IZCodeTaskService {
 
   /** 读取绑定 Session 的原模型选择；不从候选菜单反推，不做有效解析或写入。 */
   getTaskModelSelection(params: { taskId: string }): Promise<ModelSelection | null>;
-
-  /** 持久化用户对 assistant 回复的本地反馈；不会注入 provider 上下文。 */
-  setAssistantMessageFeedback(params: {
-    taskId: string;
-    workspacePath: string;
-    workspaceIdentity?: string;
-    turnIndex: number;
-    feedback: ZCodeAssistantMessageFeedback | null;
-  }): Promise<ZCodeSessionFile>;
 
   /** 扫描可导入的 Claude 原生 session；可选按 workspace 过滤。 */
   scanImportableClaudeSessions(params: {

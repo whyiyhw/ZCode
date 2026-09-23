@@ -85,7 +85,6 @@ function mergeAssistantPair(
     durationMs,
     characterCount,
     interrupted: next.interrupted ?? first.interrupted,
-    feedback: next.feedback ?? first.feedback,
     mergedMessageIds: mergedMessageIds.length > 0 ? mergedMessageIds : undefined,
     goalIteration: next.goalIteration ?? first.goalIteration,
     attachments: next.attachments ?? first.attachments,

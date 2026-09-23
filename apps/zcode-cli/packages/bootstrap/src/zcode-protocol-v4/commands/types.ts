@@ -178,15 +178,6 @@ export interface V4CommandCoreHost {
    * 找不到（无 parent / 无 store）→ null → handler 只截断不重发。
    */
   resolveTurnUserPrompt?(sessionId: string, assistantMessageId: string): Promise<string | null>;
-  /** assistant 反馈先持久化 transcript metadata，再发布同一 entity 的投影事件。 */
-  setAssistantFeedback?(
-    sessionId: string,
-    input: {
-      entityId: string;
-      messageId: string;
-      feedback: "like" | "dislike" | null;
-    },
-  ): Promise<void>;
   /**
    * 交互应答登记表（v4 原生基础设施，非过渡钩子）：interaction-broker 发起
    * 反向请求（permission/AskUserQuestion）时注册 deferred，resolveInteraction 命令

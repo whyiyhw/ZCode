@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- turn group 需要在同一处维护普通 assistant 与后台结果的严格行序，拆分会重复 actions/preview/tail 协议。 */
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
-import { Fragment, memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import {
   TID_CHAT_ASSISTANT_HISTORY_CONTENT,
@@ -67,9 +67,7 @@ import { ConversationWorkflowCompletion } from "@/v4/ConversationWorkflowComplet
 import { resolveWorkflowTurnDigests } from "@/v4/workflowTurnDigests.js";
 import { resolveWorkflowTurnCompletion } from "@/v4/workflowTurnCompletion.js";
 import { ConversationAssistantTextActions } from "@/v4/ConversationRowView.js";
-import { readAssistantFeedback } from "@/v4/ConversationRowView.js";
 import type {
-  AssistantFeedbackHandler,
   EditWorkspaceRewindAvailability,
 } from "@/v4/ConversationRowView.js";
 import {
@@ -94,7 +92,6 @@ interface ConversationTurnGroupProps {
   context: ConversationRowRenderContext;
   onFork?: (target: ConversationRowTarget) => void;
   onRetry?: (target: ConversationRowTarget) => void;
-  onFeedbackChange?: AssistantFeedbackHandler;
   onEdit?: (
     target: ConversationRowTarget,
     newText: string,
@@ -1079,7 +1076,6 @@ function ConversationTurnGroupImpl({
   context,
   onFork,
   onRetry,
-  onFeedbackChange,
   onEdit,
 }: ConversationTurnGroupProps) {
   const isOfficeMode = useIsOfficeMode();
@@ -1317,11 +1313,8 @@ function ConversationTurnGroupImpl({
               entityId={latestAssistantTextRow.entityId}
               text={assistantCopyText}
               createdAt={latestAssistantTextRow.createdAt}
-              feedback={readAssistantFeedback(latestAssistantTextRow)}
-              sessionId={context.sessionId}
               onFork={canForkLatestAssistant ? onFork : undefined}
               onRetry={canRetryLatestAssistant ? onRetry : undefined}
-              onFeedbackChange={onFeedbackChange}
               hookInvocations={unit.hookInvocations}
               turnId={unit.turnId}
               className="opacity-0 transition-opacity group-hover/assistant-turn:opacity-100 focus-within:opacity-100"

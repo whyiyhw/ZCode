@@ -110,7 +110,6 @@ export const SessionEventType = {
   TurnError: "turn_error",
   UserMessage: "user_message",
   AssistantMessage: "assistant_message",
-  AssistantFeedbackUpdated: "assistant_feedback_updated",
   SystemMessage: "system_message",
   ModelRequest: "model_request",
   ModelSelected: "model_selected",
@@ -618,11 +617,6 @@ export interface UserMessagePayload {
 export interface AssistantMessagePayload {
   content: string;
   toolCalls?: ToolCallPayload[];
-}
-
-export interface AssistantFeedbackUpdatedPayload {
-  entityId: string;
-  feedback: "like" | "dislike" | null;
 }
 
 export interface SystemMessagePayload {

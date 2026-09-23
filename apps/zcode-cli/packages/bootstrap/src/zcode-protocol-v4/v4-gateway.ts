@@ -158,7 +158,6 @@ function rowTargetActionForCommand(
     case "editUserQuery":
     case "retryTurn":
     case "applyFileRewind":
-    case "setAssistantFeedback":
       return type;
     default:
       return null;

@@ -10,7 +10,6 @@ import { queueHandlers } from "./queue.js";
 import { sessionFlowHandlers } from "./session-flow.js";
 import { sessionMgmtHandlers } from "./session-mgmt.js";
 import { selectionSideSessionHandlers } from "./selection-side-session.js";
-import { assistantFeedbackHandlers } from "./assistant-feedback.js";
 
 export const NATIVE_HANDLERS = {
   ...sessionFlowHandlers,
@@ -22,5 +21,4 @@ export const NATIVE_HANDLERS = {
   ...interactionBackgroundHandlers,
   ...forkEditRetryHandlers,
   ...fileRewindHandlers,
-  ...assistantFeedbackHandlers,
 } as const;

@@ -44,7 +44,6 @@ import {
   zcodeTaskNetworkDebugStatusFromPayload,
   shouldMaterializeZCodeStreamingToolInputPreview,
   type ZCodeApiRetryStatus,
-  type ZCodeAssistantMessageFeedback,
   type ZCodeBackgroundTaskNotificationInfo,
   type ZCodeBackgroundTaskControlItem,
   type ZCodeBackgroundTurnAttribution,
@@ -62,7 +61,6 @@ import {
   type ZCodePersistedToolCall,
   type ZCodePromptAttachment,
   type ZCodeProvider,
-  type ZCodeSessionFile,
   type ZCodeTaskGoal,
   type ZCodeTaskGoalStats,
   type ZCodeTaskMode,
@@ -2611,18 +2609,6 @@ export function createZCodeTaskServiceAdapter(
       return snapshot.settings.model.current ?? null;
     },
 
-    async setAssistantMessageFeedback(params): Promise<ZCodeSessionFile> {
-      const snapshot = await service.getTaskSnapshot(params);
-      if (!snapshot) {
-        unsupported("setAssistantMessageFeedback");
-      }
-      const assistantMessages = snapshot.messages.filter((message) => message.role === "assistant");
-      const targetMessage = assistantMessages[params.turnIndex];
-      if (targetMessage) {
-        targetMessage.feedback = params.feedback as ZCodeAssistantMessageFeedback | undefined;
-      }
-      return snapshot;
-    },
 
     async scanImportableClaudeSessions(params: {
       workspacePath?: string;

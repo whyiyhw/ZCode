@@ -6,7 +6,6 @@
 // 旧消息拼装运行时（zcodeChatMessages.ts）删除后，这里是该类型面的唯一事实源。
 import type {
   ZCodeAssistantMessagePart,
-  ZCodeAssistantMessageFeedback,
   ZCodePromptAttachment,
   ZCodeTimelineMeta,
   ZCodeTaskSnapshotBodyRef,
@@ -70,8 +69,6 @@ export interface TaskChatMessage {
   durationMs?: number;
   /** assistant 是否以主动停止/中断结束；用于 UI 抑制 latest 区误判为“自然完成”。 */
   interrupted?: boolean;
-  /** 用户对 assistant 回复的本地反馈；只做展示/持久化，不进入后续模型上下文。 */
-  feedback?: ZCodeAssistantMessageFeedback;
   attachments?: ZCodePromptAttachment[];
   toolCalls?: TaskChatToolCall[];
   thought?: string;
