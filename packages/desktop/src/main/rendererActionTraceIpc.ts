@@ -58,7 +58,7 @@ export function registerRendererActionTraceIpc(options: {
     return binding;
   };
   // 灰度链已移除（spec/client-config-rollout-removal.md）：配置静态禁用，
-  // 仅保留 ZCODE_RENDERER_ACTION_TRACE_ENABLED / ZCODE_LOCAL_TTFT_ENABLED 环境变量逃生口。
+  // 仅保留 ZCODE_RENDERER_ACTION_TRACE_ENABLED 环境变量逃生口；localTtft 链路已随遥测栈删除。
   const staticConfig = resolveRuntimeConfig(
     DISABLED_RENDERER_ACTION_TRACE_CONFIG,
     options.env ?? process.env,
@@ -100,7 +100,6 @@ function resolveRuntimeConfig(
   config: RendererActionTraceConfigV1,
   env: Record<string, string | undefined>,
 ): RendererActionTraceConfigV1 {
-  if (isTruthy(env.ZCODE_LOCAL_TTFT_ENABLED)) config = { ...config, localTtftEnabled: true };
   if (!isTruthy(env.ZCODE_RENDERER_ACTION_TRACE_ENABLED)) return config;
   return {
     ...config,

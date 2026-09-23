@@ -533,6 +533,8 @@ export const zcodeSessionImportMessageSchema = z
   .strict();
 export type ZCodeSessionImportMessage = z.infer<typeof zcodeSessionImportMessageSchema>;
 
+// 会话分享功能已于 2026-09-23 整体下线；"sharedContext" 分支仅为解析历史导入会话文件保留，
+// 不再有新的生产方。
 export const zcodeSessionImportHistorySchema = z.discriminatedUnion("source", [
   z
     .object({
@@ -3513,7 +3515,4 @@ export const zcodeStoragePreparationFrameSchema = z.discriminatedUnion("method",
 export const zcodeStoragePathReadySchema = z
   .object({ method: z.literal("startup/storagePathReady"), reuse: z.boolean().optional() })
   .strict();
-export * from "../localTtft.js";
 
-// 桌面本地 TTFT 的严格事实合同；检查点不能替代实际内容帧。
-export { localTtftFactsSchema } from "../localTtft.js";

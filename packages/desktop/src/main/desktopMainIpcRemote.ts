@@ -1,8 +1,6 @@
-/* eslint-disable max-lines -- 远程连接、OAuth 回调、遥测和通知 IPC 共用窗口级上下文，集中注册避免跨文件状态漂移。 */
+/* eslint-disable max-lines -- 远程连接、OAuth 回调和通知 IPC 共用窗口级上下文，集中注册避免跨文件状态漂移。 */
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import armsRum from "@arms/rum-electron";
 import {
-  armsCustomEventPayloadSchema,
   formatZodError,
   normalizeUnknownError,
   InternalChannels,
@@ -10,8 +8,6 @@ import {
   resolveZaiBusinessBaseUrl,
   PlatformChannels,
   remoteTargetSchema,
-  rendererTelemetryEventPayloadSchema,
-  type ArmsRumEnv,
   type RemoteTarget,
 } from "@zcode/shared";
 import { dispatchTaskNotification } from "./desktopNotifications.js";
@@ -21,10 +17,6 @@ import {
   parseOAuthStateRegistration,
   registerOAuthState,
 } from "./desktopOAuthDeepLink.js";
-import {
-  dispatchFinalArmsCustomEvent,
-  enableSharedFinalArmsCustomEventE2EController,
-} from "./desktopArmsCustomEvent.js";
 import { openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
 
 function isAllowedExternalOpenUrl(value: string): boolean {
@@ -138,19 +130,6 @@ export function registerRemoteIpcHandlers(options: {
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
   };
-  /** OAuth 回调处理完成后的额外副作用（如刷新 ARMS user.id） */
-  onOAuthCallbackHandledSideEffect?: () => void;
-  appTelemetryCore: {
-    reportEvent(payload: unknown): Promise<void>;
-  };
-  armsCustomContext: {
-    deviceMid: string;
-    platform: NodeJS.Platform;
-    appVersion: string;
-    armsEnv: ArmsRumEnv;
-  };
-  /** 仅由 VITE_ZCODE_E2E_STORE_BRIDGE + test runner 双门禁打开。 */
-  finalArmsCustomEventE2EEnabled?: boolean;
   createRemoteWorkspaceSession: (
     win: BrowserWindow,
     target: RemoteTarget,
@@ -181,10 +160,6 @@ export function registerRemoteIpcHandlers(options: {
   listAvailableDockerContainers: () => Promise<unknown[]>;
   listSSHConfigAliases: () => Promise<unknown[]>;
 }) {
-  const finalArmsCustomEventE2E = options.finalArmsCustomEventE2EEnabled
-    ? enableSharedFinalArmsCustomEventE2EController()
-    : null;
-
   ipcMain.on(InternalChannels.ScopedServicePortReady, (event, rawPayload: unknown) => {
     if (!rawPayload || typeof rawPayload !== "object") return;
     const payload = rawPayload as { sessionId?: unknown; attachmentId?: unknown };
@@ -194,22 +169,6 @@ export function registerRemoteIpcHandlers(options: {
     if (!sessionId || !attachmentId) return;
     options.confirmRendererAttachmentReady(event.sender.id, { sessionId, attachmentId });
   });
-  if (finalArmsCustomEventE2E) {
-    ipcMain.handle(PlatformChannels.ReadFinalArmsCustomEventsE2E, () =>
-      finalArmsCustomEventE2E.read(),
-    );
-    ipcMain.handle(PlatformChannels.ClearFinalArmsCustomEventsE2E, () => {
-      finalArmsCustomEventE2E.clear();
-    });
-    ipcMain.handle(
-      PlatformChannels.ConfigureFinalArmsCustomEventsE2E,
-      (_event, request: unknown) => {
-        finalArmsCustomEventE2E.configure(
-          request as Parameters<typeof finalArmsCustomEventE2E.configure>[0],
-        );
-      },
-    );
-  }
 
   ipcMain.on(PlatformChannels.OAuthRegisterState, (event, payload: unknown) => {
     const registration = parseOAuthStateRegistration(payload);
@@ -265,54 +224,6 @@ export function registerRemoteIpcHandlers(options: {
 
   ipcMain.on(PlatformChannels.RendererReady, (event) => {
     deliverPendingDeepLink(event.sender);
-  });
-
-  ipcMain.handle(PlatformChannels.ReportTelemetryEvent, async (_event, payload: unknown) => {
-    const result = rendererTelemetryEventPayloadSchema.safeParse(payload);
-    if (!result.success) {
-      options.logger.warn(
-        "[report-telemetry-event] invalid payload:",
-        formatZodError(result.error),
-      );
-      return;
-    }
-
-    await options.appTelemetryCore.reportEvent(result.data);
-  });
-
-  ipcMain.handle(PlatformChannels.ReportArmsCustomEvent, async (event, payload: unknown) => {
-    const result = armsCustomEventPayloadSchema.safeParse(payload);
-    if (!result.success) {
-      options.logger.warn(
-        "[report-arms-custom-event] invalid payload:",
-        formatZodError(result.error),
-      );
-      return;
-    }
-
-    try {
-      dispatchFinalArmsCustomEvent({
-        payload: result.data,
-        context: {
-          ...options.armsCustomContext,
-          rendererId: event.sender.id,
-        },
-        e2eController: finalArmsCustomEventE2E,
-        // FinalArmsCustomEventPayload 是 SDK RumCustomEvent 的收窄子集；SDK 额外要求
-        // BaseObject 索引签名，但这里不会动态追加未声明字段。
-        sendCustom: (payload) =>
-          armsRum.sendCustom(payload as Parameters<typeof armsRum.sendCustom>[0]),
-      });
-    } catch (error) {
-      options.logger.warn(
-        "[report-arms-custom-event] sendCustom failed:",
-        normalizeUnknownError(error).message,
-      );
-    }
-  });
-
-  ipcMain.on(PlatformChannels.OAuthCallbackHandled, () => {
-    options.onOAuthCallbackHandledSideEffect?.();
   });
 
   ipcMain.on(PlatformChannels.ShowTaskNotification, (event, payload: unknown) => {

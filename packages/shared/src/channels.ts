@@ -11,12 +11,6 @@ import type { OAuthStateRegistration } from "./oauth.js";
 import type { AppSettings, Locale } from "./protocol.js";
 import type { StorageCleanRequest, StorageCleanResult, StorageUsageSnapshot } from "./storage.js";
 import type {
-  ArmsCustomEventPayload,
-  ConfigureFinalArmsCustomEventE2ERequest,
-  FinalArmsCustomEventE2EEntry,
-  RendererTelemetryEventPayload,
-} from "./telemetry.js";
-import type {
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
 } from "./rendererActionTrace.js";
@@ -92,8 +86,6 @@ export const ServiceChannels = {
   ZCodeAgent: "zcode-agent",
   /** ZCode session 应用服务 */
   ZCodeSession: "zcode-session",
-  /** 会话分享发布、预览与 continuation API 编排 */
-  ConversationShare: "conversation-share",
   /** 文件系统监视服务 */
   FileWatcher: "file-watcher",
   /** OAuth 认证服务 */
@@ -133,8 +125,6 @@ export const ServiceChannels = {
   Memory: "memory",
   /** 首次启动设置同步服务 */
   SettingsSync: "settings-sync",
-  /** 用户反馈工单服务 */
-  Feedback: "feedback",
   /** Composer 附件在 host-local 与 remote runtime 之间的预传服务 */
   PromptAttachmentTransfer: "prompt-attachment-transfer",
   /** 闲时任务管理服务（与 automation 服务面独立） */
@@ -235,10 +225,6 @@ export const PlatformChannels = {
   OpenWorkspace: "zcode:open-workspace",
   /** Main → Renderer：deep link 直接打开指定本地工作区目录 */
   OpenWorkspacePath: "zcode:open-workspace-path",
-  /** Main → Renderer：打开内置反馈对话框 */
-  OpenFeedbackDialog: "zcode:open-feedback-dialog",
-  /** Main → Renderer：打开我的工单面板 */
-  OpenTicketsPanel: "zcode:open-tickets-panel",
   /** Main → Renderer：窗口全屏状态变化 */
   WindowFullscreenChanged: "zcode:window-fullscreen-changed",
   /** Renderer → Main：读取窗口最大化状态与系统原生圆角能力 */
@@ -268,8 +254,6 @@ export const PlatformChannels = {
   StorageScanProgress: "zcode:storage-scan-progress",
   /** Renderer → Main：打开外部 URL（用于 OAuth 跳转浏览器） */
   OpenExternal: "zcode:open-external",
-  /** Renderer → Main：查询当前语言下是否存在可用的用户社群入口 */
-  CanOpenCommunity: "zcode:can-open-community",
   /** Renderer → Main：在系统文件管理器中打开路径 */
   OpenInFileManager: "zcode:open-in-file-manager",
   /** Renderer → Main：使用系统默认应用打开本地文件 */
@@ -298,29 +282,17 @@ export const PlatformChannels = {
   OAuthCallback: "zcode:oauth-callback",
   /** Main → Renderer：转发支付 deep link URL */
   PaymentCallback: "zcode:payment-callback",
-  /** Main → Renderer：外部分享页请求导入 share code。 */
-  ShareImport: "zcode:share-import",
   /** Renderer → Main：OAuth 回调已处理完成，可继续后置启动流程 */
   OAuthCallbackHandled: "zcode:oauth-callback-handled",
   /** Renderer → Main：renderer 已就绪，可接收缓存的 deep link */
   RendererReady: "zcode:renderer-ready",
   /** Renderer → Main：通过统一 telemetry 层上报业务事件 */
-  ReportTelemetryEvent: "zcode:report-telemetry-event",
-  /** Renderer → Main：上报 ARMS 自定义事件 */
-  ReportArmsCustomEvent: "zcode:report-arms-custom-event",
   /** Renderer → Main：读取 Renderer 用户操作 Trace 灰度配置。 */
   GetRendererActionTraceConfig: "zcode:get-renderer-action-trace-config",
   /** Main → Renderer：Renderer 用户操作 Trace 灰度配置变化。 */
   RendererActionTraceConfigChanged: "zcode:renderer-action-trace-config-changed",
   /** Renderer → Main：发送已结束的 ui_action batch。 */
   ReportRendererActionTraceBatch: "zcode:report-renderer-action-trace-batch",
-  ReportLocalTtftBatch: "zcode:report-local-ttft-batch",
-  /** E2E preload → Main：读取 sendCustom 最终参数的内存 ring。 */
-  ReadFinalArmsCustomEventsE2E: "zcode:e2e:read-final-arms-custom-events",
-  /** E2E preload → Main：清空 sendCustom 最终参数的内存 ring。 */
-  ClearFinalArmsCustomEventsE2E: "zcode:e2e:clear-final-arms-custom-events",
-  /** E2E preload → Main：配置只针对目标 event name 的真实网络抑制。 */
-  ConfigureFinalArmsCustomEventsE2E: "zcode:e2e:configure-final-arms-custom-events",
   /** Renderer → Main：触发任务完成/失败的系统通知 */
   ShowTaskNotification: "zcode:show-task-notification",
   /** Main → Preload：通知 renderer 播放任务通知提示音 */
@@ -541,7 +513,6 @@ export const HostResponseTypes = {
   AgentProcessError: "agent-process-error",
   AgentProcessException: "agent-process-exception",
   /** 自动化 Host 首次输入 accepted 后报告新建 Session。 */
-  SessionCreateTelemetry: "session-create-telemetry",
   /** host → main：资源管理器采样结果（按 requestId 关联） */
   ResourceUsageSnapshotResult: "resource-usage-snapshot-result",
   /** host 内当前正在执行 prompt 的 agent session 数量变化 */
@@ -793,10 +764,6 @@ export interface PlatformChannelMap {
     request: BrowserViewResidencyTransitionPayload;
     response: void;
   };
-  [PlatformChannels.CanOpenCommunity]: {
-    request: Locale;
-    response: boolean;
-  };
   [PlatformChannels.OpenInFileManager]: {
     request: string;
     response: { success: boolean; error?: string };
@@ -838,24 +805,12 @@ export interface PlatformChannelMap {
     request: string;
     response: void;
   };
-  [PlatformChannels.ShareImport]: {
-    request: { shareCode: string };
-    response: void;
-  };
   [PlatformChannels.OAuthCallbackHandled]: {
     request: void;
     response: void;
   };
   [PlatformChannels.RendererReady]: {
     request: void;
-    response: void;
-  };
-  [PlatformChannels.ReportTelemetryEvent]: {
-    request: RendererTelemetryEventPayload;
-    response: void;
-  };
-  [PlatformChannels.ReportArmsCustomEvent]: {
-    request: ArmsCustomEventPayload;
     response: void;
   };
   [PlatformChannels.GetRendererActionTraceConfig]: {
@@ -868,18 +823,6 @@ export interface PlatformChannelMap {
   };
   [PlatformChannels.ReportRendererActionTraceBatch]: {
     request: RendererActionTraceBatchV1;
-    response: void;
-  };
-  [PlatformChannels.ReadFinalArmsCustomEventsE2E]: {
-    request: void;
-    response: FinalArmsCustomEventE2EEntry[];
-  };
-  [PlatformChannels.ClearFinalArmsCustomEventsE2E]: {
-    request: void;
-    response: void;
-  };
-  [PlatformChannels.ConfigureFinalArmsCustomEventsE2E]: {
-    request: ConfigureFinalArmsCustomEventE2ERequest;
     response: void;
   };
   [PlatformChannels.ShowTaskNotification]: {

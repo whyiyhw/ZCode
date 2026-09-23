@@ -5,14 +5,6 @@ import {
 } from "@zcode/shared";
 /* eslint-disable max-lines -- preload bridge 集中暴露桌面平台 IPC，拆散会让 contextBridge 权限边界更难审计。 */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from "electron";
-import {
-  installArmsRumBridgeIpcForward,
-  scheduleArmsEventBridgePatch,
-} from "../shared/armsRumBridgeForward.js";
-
-// ARMS frame preload 闭包内的 send 不会随后序 ipcRenderer.send 补丁生效，须同步包装 Bridge.send
-installArmsRumBridgeIpcForward(ipcRenderer);
-scheduleArmsEventBridgePatch();
 
 /** 从 command-line 参数中解析 --device-id= */
 function parseDeviceIdFromArgs(): string {
@@ -53,7 +45,6 @@ import type {
   OpenInEditorOptions,
   RemoteTarget,
   TaskNotificationPayload,
-  TelemetryRendererContext,
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
   RemoteSessionClosedEvent,
@@ -70,31 +61,16 @@ import type {
   WindowControlsOverlayReadyPayload,
   CreateTempTextAttachmentRequest,
   OpenCuaPermissionOnboardingOptions,
-  ConfigureFinalArmsCustomEventE2ERequest,
-  FinalArmsCustomEventE2EEntry,
 } from "@zcode/shared";
 import {
   InternalChannels,
   PlatformChannels,
   formatZCodeRendererProcessName,
-  shouldEnableE2ETestBridge,
 } from "@zcode/shared";
 import { createOAuthCallbackHandler } from "./oauthCallbackBridge.js";
 
-if (shouldEnableE2ETestBridge(process.env)) {
-  contextBridge.exposeInMainWorld("__zcodeFinalArmsCustomEventsE2E", {
-    read: (): Promise<FinalArmsCustomEventE2EEntry[]> =>
-      ipcRenderer.invoke(PlatformChannels.ReadFinalArmsCustomEventsE2E),
-    clear: (): Promise<void> => ipcRenderer.invoke(PlatformChannels.ClearFinalArmsCustomEventsE2E),
-    configure: (request: ConfigureFinalArmsCustomEventE2ERequest): Promise<void> =>
-      ipcRenderer.invoke(PlatformChannels.ConfigureFinalArmsCustomEventsE2E, request),
-  });
-}
-
 const openWorkspacePathCallbacks = new Set<(path: string) => void>();
 const pendingOpenWorkspacePaths: string[] = [];
-const shareImportCallbacks = new Set<(payload: { shareCode: string }) => void>();
-const pendingShareImports: { shareCode: string }[] = [];
 const MACOS_WINDOW_CONTROLS_BASE_LEFT_PADDING_PX = 96;
 const WINDOWS_WINDOW_CONTROLS_BASE_RIGHT_PADDING_PX = 136;
 const WINDOWS_TITLE_BAR_HEIGHT_PX = 48;
@@ -181,14 +157,6 @@ ipcRenderer.on(PlatformChannels.OpenWorkspacePath, (_event: unknown, path: strin
   for (const callback of openWorkspacePathCallbacks) {
     callback(path);
   }
-});
-
-ipcRenderer.on(PlatformChannels.ShareImport, (_event: unknown, payload: { shareCode: string }) => {
-  if (shareImportCallbacks.size === 0) {
-    pendingShareImports.push(payload);
-    return;
-  }
-  for (const callback of shareImportCallbacks) callback(payload);
 });
 
 function updateRendererProcessTitle(): void {
@@ -465,16 +433,6 @@ contextBridge.exposeInMainWorld("zcode", {
     }
     return () => openWorkspacePathCallbacks.delete(callback);
   },
-  onOpenFeedbackDialog: (callback: () => void): (() => void) => {
-    const handler = () => callback();
-    ipcRenderer.on(PlatformChannels.OpenFeedbackDialog, handler);
-    return () => ipcRenderer.removeListener(PlatformChannels.OpenFeedbackDialog, handler);
-  },
-  onOpenTicketsPanel: (callback: () => void): (() => void) => {
-    const handler = () => callback();
-    ipcRenderer.on(PlatformChannels.OpenTicketsPanel, handler);
-    return () => ipcRenderer.removeListener(PlatformChannels.OpenTicketsPanel, handler);
-  },
   /** 注册窗口全屏状态变化回调，返回 disposer */
   onWindowFullscreenChanged: (callback: (isFullscreen: boolean) => void): (() => void) => {
     const handler = (_event: unknown, isFullscreen: boolean) => callback(isFullscreen);
@@ -534,9 +492,6 @@ contextBridge.exposeInMainWorld("zcode", {
   },
   /** 打开外部 URL（用于 OAuth 跳转浏览器） */
   openExternal: (url: string) => ipcRenderer.send(PlatformChannels.OpenExternal, url),
-  /** 查询当前语言下是否存在可用的用户社群入口 */
-  canOpenCommunity: (locale: Locale): Promise<boolean> =>
-    ipcRenderer.invoke(PlatformChannels.CanOpenCommunity, locale),
   /** 在系统文件管理器中打开指定路径 */
   openInFileManager: (path: string) => ipcRenderer.invoke(PlatformChannels.OpenInFileManager, path),
   /** 使用系统默认应用打开本地文件 */
@@ -572,35 +527,8 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.on(PlatformChannels.PaymentCallback, handler);
     return () => ipcRenderer.removeListener(PlatformChannels.PaymentCallback, handler);
   },
-  onShareImport: (callback: (payload: { shareCode: string }) => void): (() => void) => {
-    shareImportCallbacks.add(callback);
-    while (pendingShareImports.length > 0) {
-      const payload = pendingShareImports.shift();
-      if (payload) callback(payload);
-    }
-    return () => shareImportCallbacks.delete(callback);
-  },
   /** 通知 main process renderer 已就绪 */
   notifyRendererReady: () => ipcRenderer.send(PlatformChannels.RendererReady),
-  /** 通过 main process 统一上报业务 telemetry 事件 */
-  reportTelemetryEvent: (payload: {
-    context: TelemetryRendererContext;
-    elementName: string;
-    eventRegion: string;
-    eventType: string;
-    eventText?: string;
-    eventExtraDetail: Record<string, string>;
-    userId?: string;
-    talkId?: string;
-    messageId?: string;
-  }) => ipcRenderer.invoke(PlatformChannels.ReportTelemetryEvent, payload),
-  /** 通过 main process 统一上报 ARMS 自定义事件 */
-  reportArmsCustomEvent: (payload: {
-    name: string;
-    group: string;
-    value?: number;
-    properties?: Record<string, string | number | boolean | undefined>;
-  }) => ipcRenderer.invoke(PlatformChannels.ReportArmsCustomEvent, payload),
   /** 读取 Renderer 用户操作 Trace 灰度配置。 */
   getRendererActionTraceConfig: (): Promise<RendererActionTraceConfigV1> =>
     ipcRenderer.invoke(PlatformChannels.GetRendererActionTraceConfig),
@@ -613,9 +541,6 @@ contextBridge.exposeInMainWorld("zcode", {
     return () =>
       ipcRenderer.removeListener(PlatformChannels.RendererActionTraceConfigChanged, handler);
   },
-  /** 发送已结束 Span；使用 send 避免遥测往返阻塞业务。 */
-  reportLocalTtftBatch: (batch: import("@zcode/shared").LocalTtftBatch): void =>
-    ipcRenderer.send(PlatformChannels.ReportLocalTtftBatch, batch),
   reportRendererActionTraceBatch: (batch: RendererActionTraceBatchV1): void =>
     ipcRenderer.send(PlatformChannels.ReportRendererActionTraceBatch, batch),
   /** 通过 main process 触发原生任务通知 */
@@ -774,9 +699,6 @@ window.addEventListener("message", (event) => {
 ipcRenderer.on(PlatformChannels.TaskNotificationSound, () => {
   window.postMessage(InternalChannels.TaskNotificationSound, "*");
 });
-
-// dom-ready autoInject 之后 Bridge 若被重置，再尝试一次包装
-scheduleArmsEventBridgePatch();
 
 // 启动控制面先于普通 RPC；reload 从 Main 的通知镜像补齐，不触发新迁移。
 ipcRenderer.on(InternalChannels.DatabaseStartupState, (_event, raw: unknown) => {

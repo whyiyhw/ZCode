@@ -112,7 +112,6 @@ export const runPrompt = async (
     | undefined;
   let closePromise: Promise<void> | undefined;
   let browserRuntime: ReturnType<typeof createCliHeadlessBrowserRuntime>;
-  let shutdownTelemetry: (() => Promise<void>) | undefined;
   // 常驻事件订阅的摘除句柄。声明在这里而不是 try 内，是为了让 finally 也能收口——
   // 任何早退（command-center 路径、抛错）都不能留下一个还在写 stdout 的 sink。
   let detachEvents: (() => void) | undefined;
@@ -136,7 +135,6 @@ export const runPrompt = async (
       await runCliCleanupWithTimeout(async () => browserRuntime?.close(), cleanupTimeoutMs);
       // Bug 根因：App.close 只结束 Session 并 flush，共享 OTLP Owner 过去没有进程级终态。
       // 单次 prompt 是最外层生命周期，必须与 prepare 对称 shutdown。
-      await runCliCleanupWithTimeout(async () => shutdownTelemetry?.(), cleanupTimeoutMs);
       providerRegistryRuntime?.dispose();
     })();
     await closePromise;
@@ -180,17 +178,8 @@ export const runPrompt = async (
       stderr: ctx.stderr,
       stdout: ctx.stdout,
     });
-    const prepareTelemetry =
-      deps.prepareZCodeTelemetryEnv ?? bootstrapModule?.prepareZCodeTelemetryEnv;
-    if (prepareTelemetry) {
-      shutdownTelemetry = deps.shutdownZCodeTelemetry ?? bootstrapModule?.shutdownZCodeTelemetry;
-    }
-    const appEnv = prepareTelemetry
-      ? await prepareTelemetry(env, {
-          cliVersion: version,
-          productVersion: env.ZCODE_APP_VERSION,
-        })
-      : env;
+    // 遥测出网链已删除（2026-09-23，PRIVACY-AUDIT.md §十五），不再准备 telemetry env。
+    const appEnv = env;
     const startProviderRegistryRuntime =
       deps.startProcessProviderRegistryRuntime ??
       bootstrapModule?.startProcessProviderRegistryRuntime;

@@ -1,5 +1,4 @@
 /* oxlint-disable eslint(max-lines) -- composer 集中收口输入区 wiring（附件/草稿/历史/mention），拆分会打散收口粒度。 */
-import { getLocalTtftObserver } from "@/v4/telemetry/localTtftObserver.js";
 /**
  * v4 会话 composer（composer parity）。
  *
@@ -58,11 +57,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
-import {
-  ChatErrorBanner,
-  resolveChatErrorBannerDisplayMessage,
-  shouldSuppressChatErrorBanner,
-} from "@/ChatErrorBanner.js";
+import { ChatErrorBanner, shouldSuppressChatErrorBanner } from "@/ChatErrorBanner.js";
 import {
   Attachment,
   Attachments,
@@ -117,7 +112,6 @@ import {
   isWorkspaceFileAddToChatEvent,
 } from "@/lib/workspaceFileDrag.js";
 import { appendWorkspaceFileMentionToComposer } from "@/lib/workspaceFileComposer.js";
-import { resolveProviderBaseURL } from "@/lib/registryProviderView.js";
 import type { ModelSelectionView } from "@zcode/services";
 import type { ModelSelectionState } from "@/hooks/useModelSelectionView.js";
 import type { ZCodeUiError } from "@/lib/zcodeUiError.js";
@@ -164,11 +158,7 @@ import {
 import { WebElementContextAttachmentChip } from "@/v4/composer/WebElementContextAttachmentChip.js";
 import { ConversationSelectionReferenceChip } from "@/v4/composer/ConversationSelectionReferenceChip.js";
 import type { AttachmentPutFn } from "@/v4/composer/attachmentUpload.js";
-import { useScopedConversationTelemetrySupervisor } from "@/v4/telemetry/ConversationTelemetryAttachment.js";
-import type { ConversationPromptTelemetrySeed } from "@/v4/telemetry/conversationTelemetrySupervisor.js";
 import type { ComposerSubmissionConfig } from "@/v4/composer/composerSubmissionConfig.js";
-import { buildV4ConversationPromptTelemetryExtraDetail } from "@/v4/telemetry/conversationPromptTelemetry.js";
-import { resolveAttachableShareContext } from "@/lib/conversationShareContext.js";
 
 const MODEL_SELECTION_LOADING_STATE: ModelSelectionState = { status: "loading" };
 
@@ -182,11 +172,8 @@ export interface ConversationComposerSendOptions {
   attachments?: AttachmentRef[];
   /** Prompt 文本内携带的上下文附件数量；用于阻止 /goal 等本地命令误消费。 */
   contextAttachmentCount?: number;
-  /** renderer-only：ACK accepted 后由 SessionPane 绑定真实 commandId/sessionId。 */
-  telemetrySeed?: ConversationPromptTelemetrySeed;
   /** 本次 busy input 的一次性投递覆盖，不改 session 偏好。 */
   requestedDelivery?: "startNow" | "queue" | "guide";
-  sharedContextRefs?: Array<{ kind: "shared_context_import"; context_id: string }>;
 }
 
 export type ConversationComposerSendResult = "sent" | "blocked" | "confirmationRequired";
@@ -408,7 +395,6 @@ interface ConversationComposerProps {
   onRuntimeLifecycle?: (listener: (state: "available" | "unavailable") => void) => () => void;
   provider?: ZCodeProvider;
   /** 宿主 pane 与 workspace 遮罩共同裁决的真实可见性，仅用于 visible-only telemetry。 */
-  telemetryVisible?: boolean;
   /** 点击发送时读取套餐身份；二次确认会继续复用同一份冻结 seed。 */
   readPlanIdentitySnapshot?: () => PlanIdentitySnapshot;
   onSendText: (
@@ -509,7 +495,6 @@ function ConversationComposerImpl({
   onRuntimeRestart,
   onRuntimeLifecycle,
   provider,
-  telemetryVisible = true,
   readPlanIdentitySnapshot,
   onSendText,
   onTextChange,
@@ -539,11 +524,6 @@ function ConversationComposerImpl({
 }: ConversationComposerProps) {
   const { intl, locale } = useZCodeIntl();
   const services = useOptionalServices();
-  const conversationTelemetry = useScopedConversationTelemetrySupervisor({
-    workspacePath,
-    ...(workspaceIdentity ? { workspaceIdentity } : {}),
-    ...(remoteSessionId ? { remoteSessionId } : {}),
-  });
   const draftScopeId = sessionId ?? V4_DRAFT_SCOPE_ROOT;
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
   const configPickerScopeKey = `${workspaceKey}\0${draftScopeId}`;
@@ -586,7 +566,6 @@ function ConversationComposerImpl({
   );
   const [heldQueueConfirmation, setHeldQueueConfirmation] = useState<{
     queueItemIds: readonly string[];
-    telemetrySeed: ConversationPromptTelemetrySeed;
     requestedDelivery?: "startNow" | "queue" | "guide";
   } | null>(null);
   const [sendTooltipOpen, setSendTooltipOpen] = useState(false);
@@ -596,13 +575,7 @@ function ConversationComposerImpl({
   const pendingRef = useRef(false);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
-  // 这条线断过一次：composer 原本读一个平行的 sharedContextImport prop，而 SessionPane 从没
-  // 传过它（全仓 `sharedContextImport=` 零命中），于是首条消息永远不带 sharedContextRefs。
-  // 现在从必然拿到的 snapshot 推导，理由与边界见 resolveAttachableShareContext。
-  const activeShareContext = resolveAttachableShareContext(snapshot?.sharedContextImport);
-  const pendingShareContext = activeShareContext?.status === "pending" ? activeShareContext : null;
   const inputApiRef = useRef<LexicalChatInputHandle | null>(null);
-  const reportedErrorKeysRef = useRef(new Set<string>());
   const primaryModifierPressed = usePrimaryFollowupModifier();
   const appleKeyboardPlatform = isAppleKeyboardPlatform();
   const enterSubmits = true;
@@ -1104,16 +1077,14 @@ function ConversationComposerImpl({
     hasCodeCommentContexts ||
     hasWebElementContexts ||
     hasPptxElementReferences ||
-    hasConversationSelectionReferences ||
-    Boolean(pendingShareContext);
+    hasConversationSelectionReferences;
   const hasComposerDraftContent =
     text.length > 0 ||
     hasAttachments ||
     hasCodeCommentContexts ||
     hasWebElementContexts ||
     hasPptxElementReferences ||
-    hasConversationSelectionReferences ||
-    Boolean(pendingShareContext);
+    hasConversationSelectionReferences;
   useEffect(() => {
     onDraftStateChange?.({
       hasContent: hasComposerDraftContent,
@@ -1143,7 +1114,6 @@ function ConversationComposerImpl({
     async (
       heldQueueDisposition?: "clearQueueAndSend" | "keepQueueAndSend",
       expectedHeldQueueItemIds?: readonly string[],
-      existingTelemetrySeed?: ConversationPromptTelemetrySeed,
       requestedDelivery?: "startNow" | "queue" | "guide",
     ) => {
       const trimmed = textRef.current.trim();
@@ -1158,7 +1128,6 @@ function ConversationComposerImpl({
       const hasPendingPptxElementReferences = currentPptxElementReferences.length > 0;
       const currentConversationSelections = conversationSelectionReferences;
       const hasPendingConversationSelections = currentConversationSelections.length > 0;
-      const submittedShareContext = pendingShareContext;
       // 草稿首发 accepted 后同一 composer 会原地从 __draft__ promotion 到
       // session scope；若成功清理时再读可变 ref，会误清新 scope，并把首条输入残留在
       // __draft__，下次新建任务又恢复。发送开始时冻结真正提交的 scope。
@@ -1172,8 +1141,7 @@ function ConversationComposerImpl({
           !hasPendingCodeCommentContexts &&
           !hasPendingWebElementContexts &&
           !hasPendingPptxElementReferences &&
-          !hasPendingConversationSelections &&
-          !submittedShareContext) ||
+          !hasPendingConversationSelections) ||
         pendingRef.current ||
         !submissionReady ||
         (createSubmissionFromComposer !== undefined && submission === null) ||
@@ -1189,48 +1157,6 @@ function ConversationComposerImpl({
       });
       pendingRef.current = true;
       setPending(true);
-      // Bug 根因：草稿 intent 只保存用户显式改动，正常继承模型位于冻结初始化 config。
-      // prewarm snapshot 尚未到达时若只读 draftConfig，send_btn 会错误落成空模型/glm。
-      const telemetryConfig = telemetryDraftConfig ?? snapshotRef.current?.config ?? draftConfig;
-      let telemetrySeed: ConversationPromptTelemetrySeed;
-      if (existingTelemetrySeed) {
-        // 队列二次确认复用首次点击的 seed：不重报 send_click，也不重置发送触发来源，
-        // 保证 send_click 与 send_result 严格 1:1。
-        telemetrySeed = existingTelemetrySeed;
-        if (telemetrySeed.localTtft)
-          getLocalTtftObserver()?.confirmation(telemetrySeed.localTtft, false);
-      } else {
-        const freshSeed: ConversationPromptTelemetrySeed = {
-          sendTime: Date.now(),
-          localTtft: !workspaceIdentity?.trim()
-            ? getLocalTtftObserver()?.start(
-                workspacePath,
-                (snapshotRef.current !== null &&
-                  snapshotRef.current.inputRouting.mode !== "startNow") ||
-                  false,
-                trimmed.startsWith("/"),
-              )
-            : undefined,
-          extraDetail: buildV4ConversationPromptTelemetryExtraDetail({
-            askMode: telemetryConfig?.mode,
-            modelName: telemetryConfig?.model,
-            configProvider: telemetryConfig?.provider,
-            agentProvider: provider,
-            providerBaseURL: resolveProviderBaseURL(telemetryConfig?.provider, modelSelectionView),
-            planIdentitySnapshot: readPlanIdentitySnapshot?.(),
-          }),
-        };
-        const sendTrigger = sendTriggerRef.current;
-        sendTriggerRef.current = "shortcut";
-        // recordSendClick 回填 sendClickId，必须用它的返回值作为后续 seed，
-        // 否则落定时拿不到关联键，send_result 会被当成后台任务跳过。
-        telemetrySeed =
-          conversationTelemetry?.recordSendClick({
-            sessionId: sessionId ?? null,
-            seed: freshSeed,
-            trigger: sendTrigger,
-          }) ?? freshSeed;
-      }
       let promptHistoryBeforeSend: readonly string[] | null = null;
       let promptHistoryAfterAppend: readonly string[] | null = null;
       let promptHistoryWasPersisted = false;
@@ -1287,25 +1213,12 @@ function ConversationComposerImpl({
         // 二次门禁：只消费预传完成的 ref，不在点击发送时回落上传。
         const readyAttachmentRefs = await attachmentsApi.prepareForSend();
         if (readyAttachmentRefs === null) {
-          if (telemetrySeed.localTtft)
-            getLocalTtftObserver()?.exclude(telemetrySeed.localTtft, "rejected");
           // send_click 已上报，此处不落定会留下无配对的悬空样本，污染成功率分母。
-          conversationTelemetry?.settleSendResult({
-            seed: telemetrySeed,
-            sessionId: sessionId ?? null,
-            status: "fail",
-            reasonCode: "attachment_not_ready",
-          });
           sendAction.fail({ failureStage: "attachment_not_ready" });
           return;
         }
         // 外部上下文不走协议附件；按 selection -> code comment -> web -> PPTX 的固定尾块顺序
         // 序列化，历史 user row 才能按相反顺序无损解析并隐藏内部 prompt block。
-        //
-        // 分享 handover 不在这里序列化：share URL 块纯粹是 renderer 自产自销（CLI/shared
-        // 里没有任何东西解析它），唯一作用是驱动一个已被产品裁掉的 chip，代价却是把一个
-        // share URL 塞进发给模型的正文。模型侧内容由隐藏的 shared_context 消息经
-        // inputIntent.sharedContextRefs 注入，与正文无关。
         const promptText = serializeComposerPromptContexts(trimmed, {
           codeComments: currentCodeCommentContexts,
           conversationSelections: currentConversationSelections,
@@ -1318,7 +1231,7 @@ function ConversationComposerImpl({
             conversationSelections: currentConversationSelections,
             webElements: currentWebElementContexts,
             pptxElements: currentPptxElementReferences,
-          }) + (submittedShareContext ? 1 : 0);
+          });
         if (trimmed) {
           promptHistoryBeforeSend = readPromptHistoryEntries(workspacePath);
           promptHistoryAfterAppend = appendPromptHistoryEntry(promptHistoryBeforeSend, trimmed);
@@ -1344,42 +1257,21 @@ function ConversationComposerImpl({
         }
         const sendResult = await onSendText(promptText, {
           submission,
-          telemetrySeed,
           ...(requestedDelivery ? { requestedDelivery } : {}),
           ...(heldQueueDisposition ? { heldQueueDisposition } : {}),
           ...(expectedHeldQueueItemIds ? { expectedHeldQueueItemIds } : {}),
           ...(readyAttachmentRefs.length > 0 ? { attachments: readyAttachmentRefs } : {}),
           ...(contextAttachmentCount > 0 ? { contextAttachmentCount } : {}),
-          ...(submittedShareContext
-            ? {
-                sharedContextRefs: [
-                  {
-                    kind: "shared_context_import" as const,
-                    context_id: submittedShareContext.contextId,
-                  },
-                ],
-              }
-            : {}),
         });
         if (sendResult === "blocked") {
-          if (telemetrySeed.localTtft)
-            getLocalTtftObserver()?.exclude(telemetrySeed.localTtft, "rejected");
           // 产品 guard 是一次正常拒绝，不应借异常路径表达；回滚发送前暂记的 history，
           // 同时不 clear editor/draft/附件，让用户切换模式后可以直接重试。
           rollbackPromptHistory();
           restoreSubmittedDraft();
-          conversationTelemetry?.settleSendResult({
-            seed: telemetrySeed,
-            sessionId: sessionId ?? null,
-            status: "fail",
-            reasonCode: "blocked",
-          });
           sendAction.reject({ resultSource: "authority_ack", admissionResult: "rejected" });
           return;
         }
         if (sendResult === "confirmationRequired") {
-          if (telemetrySeed.localTtft)
-            getLocalTtftObserver()?.confirmation(telemetrySeed.localTtft, true);
           rollbackPromptHistory();
           restoreSubmittedDraft();
           const latestQueueItemIds =
@@ -1387,7 +1279,6 @@ function ConversationComposerImpl({
           // 首次提交冻结当前队列；跨端 stale 后用最新投影替换，要求用户重新确认。
           setHeldQueueConfirmation({
             // 标记 queueConfirmed：确认后复用该 seed 落定，send_cost_ms 含用户在弹窗上的停留。
-            telemetrySeed: { ...telemetrySeed, queueConfirmed: true },
             ...(requestedDelivery ? { requestedDelivery } : {}),
             queueItemIds:
               latestQueueItemIds.length > 0 ? latestQueueItemIds : submittedQueueItemIds,
@@ -1420,17 +1311,9 @@ function ConversationComposerImpl({
       } catch (error) {
         rollbackPromptHistory();
         restoreSubmittedDraft();
-        if (telemetrySeed.localTtft)
-          getLocalTtftObserver()?.exclude(telemetrySeed.localTtft, "failed");
         // 发送失败草稿保留在输入框（不清空），仅记录原因。
         logger.warn(`[v4-composer] 发送失败: ${String(error)}`);
         // ACK 侧失败已由 SessionPane 落定；能走到这里的是 composer 自身链路异常。
-        conversationTelemetry?.settleSendResult({
-          seed: telemetrySeed,
-          sessionId: sessionId ?? null,
-          status: "fail",
-          reasonCode: "composer_error",
-        });
         sendAction.fail({ failureStage: "composer_send" });
       } finally {
         pendingRef.current = false;
@@ -1440,7 +1323,6 @@ function ConversationComposerImpl({
     [
       attachmentsApi,
       conversationSelectionReferences,
-      conversationTelemetry,
       draftConfig,
       createSubmissionFromComposer,
       submissionReady,
@@ -1448,7 +1330,6 @@ function ConversationComposerImpl({
       telemetryDraftConfig,
       modelSelectionView,
       onSendText,
-      pendingShareContext,
       provider,
       readPlanIdentitySnapshot,
       removeCodeCommentContext,
@@ -1469,26 +1350,21 @@ function ConversationComposerImpl({
   // Lexical onChange（首字符也稳定回传，见 LexicalChatInput.TextContentPlugin）。
   const handleEditorChange = useCallback(
     (value: string) => {
-      conversationTelemetry?.recordComposerTextChange(value);
       updateText(value);
       // 正文先进入与 mode/model 相同的内存 Draft；防抖只负责补充最新 Lexical JSON。
       updateComposerContent({ text: value });
       scheduleDraftPersist();
     },
-    [conversationTelemetry, scheduleDraftPersist, updateComposerContent, updateText],
+    [scheduleDraftPersist, updateComposerContent, updateText],
   );
 
   const handleEditorFocus = useCallback(() => {
-    conversationTelemetry?.recordComposerFocus();
     // 程序性聚焦不算「点击输入框」；标记一次性消费，之后的手动 focus 照常上报。
     if (programmaticFocusRef.current) {
       programmaticFocusRef.current = false;
       return;
     }
-    conversationTelemetry?.recordComposerFocusClick({
-      sessionId: sessionId ?? null,
-    });
-  }, [conversationTelemetry, sessionId]);
+  }, [sessionId]);
 
   // 编辑器提交（Enter / 发送键 form submit 同路径）。返回 false：编辑器不自行 reset，
   // 由 submit 成功后经 inputApiRef.clear() 清空——失败时草稿留在输入框。
@@ -1499,7 +1375,6 @@ function ConversationComposerImpl({
       reversePointerDeliveryRef.current = false;
       const followupMode = snapshotRef.current?.config.followupMode;
       void submit(
-        undefined,
         undefined,
         undefined,
         reverseDelivery && followupMode ? resolveOppositeFollowupDelivery(followupMode) : undefined,
@@ -1518,7 +1393,6 @@ function ConversationComposerImpl({
       void submit(
         undefined,
         undefined,
-        undefined,
         followupMode ? resolveOppositeFollowupDelivery(followupMode) : undefined,
       );
       return false;
@@ -1531,7 +1405,6 @@ function ConversationComposerImpl({
     void submit(
       "clearQueueAndSend",
       heldQueueConfirmation.queueItemIds,
-      heldQueueConfirmation.telemetrySeed,
       heldQueueConfirmation.requestedDelivery,
     );
   }, [heldQueueConfirmation, submit]);
@@ -1541,7 +1414,6 @@ function ConversationComposerImpl({
     void submit(
       "keepQueueAndSend",
       heldQueueConfirmation.queueItemIds,
-      heldQueueConfirmation.telemetrySeed,
       heldQueueConfirmation.requestedDelivery,
     );
   }, [heldQueueConfirmation, submit]);
@@ -1620,24 +1492,6 @@ function ConversationComposerImpl({
   const resolvedSendTooltipShortcut = modifierTooltip?.shortcut ?? sendShortcut;
   const stopTooltipTitle = intl.formatMessage({ id: "chat.stop" });
   const visibleError = error && !shouldSuppressChatErrorBanner(error) ? error : null;
-
-  useEffect(() => {
-    if (!visibleError || !conversationTelemetry || !telemetryVisible) return;
-    const telemetryKey = [
-      visibleError.taskId ?? sessionId ?? "",
-      visibleError.code ?? "",
-      visibleError.traceId ?? "",
-      visibleError.message,
-    ].join(":");
-    if (reportedErrorKeysRef.current.has(telemetryKey)) return;
-    reportedErrorKeysRef.current.add(telemetryKey);
-    // 错误只有经过 suppression 后真实进入 render 才曝光；同一 composer mount 相同 key 一次。
-    conversationTelemetry.reportVisibleChatError({
-      errorKey: telemetryKey,
-      displayMessage: resolveChatErrorBannerDisplayMessage(visibleError, intl),
-      error: visibleError,
-    });
-  }, [conversationTelemetry, intl, sessionId, telemetryVisible, visibleError]);
 
   const attachmentAction = useMemo(
     () => ({
@@ -2008,7 +1862,6 @@ function ConversationComposerImpl({
     removeWebElementContext,
     removePptxElementReference,
     conversationSelectionReferences,
-    pendingShareContext,
     webElementContexts,
     pptxElementReferences,
     onOpenCodeViewer,
@@ -2315,11 +2168,6 @@ function ConversationComposerImpl({
         open={heldQueueConfirmation !== null}
         onOpenChange={(open) => {
           if (!open && !pendingRef.current) {
-            if (heldQueueConfirmation?.telemetrySeed.localTtft)
-              getLocalTtftObserver()?.exclude(
-                heldQueueConfirmation.telemetrySeed.localTtft,
-                "cancelled",
-              );
             setHeldQueueConfirmation(null);
           }
         }}

@@ -81,7 +81,6 @@ import { ToolCallBlock } from "@/ToolCallBlocks.js";
 import { resolveWorkflowRunOpenToolCallId } from "@/v4/workflowRunCardJoin.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
-import { reportAppTelemetryEvent } from "@/lib/appTelemetry.js";
 import { runUserAction, runUserActionAsync } from "@/lib/userActionTelemetry.js";
 import { logger } from "@/logger.js";
 import type { AssistantPreviewCard } from "@/lib/assistantPreviewCards.js";
@@ -1369,20 +1368,6 @@ export const ConversationAssistantTextActions = memo(function ConversationAssist
               messageId: entityId,
             });
           },
-        );
-      }
-      if (platform && entityId) {
-        void reportAppTelemetryEvent(
-          platform,
-          {
-            elementName: "assistant_message_feedback",
-            eventRegion: "chat",
-            eventType: "ck",
-            eventExtraDetail: { reaction: resolvedFeedback ?? "none" },
-            ...(sessionId ? { talkId: sessionId } : {}),
-            messageId: entityId,
-          },
-          "ConversationRowView",
         );
       }
     },

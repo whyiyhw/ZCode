@@ -61,10 +61,7 @@ jobs:
           - { runs-on: macos-latest, zos: mac, zarch: arm64 }
     runs-on: ${{ matrix.runs-on }}
     env:
-      # 社区版隐私基线（PRIVACY-AUDIT.md E2）：显式清空遥测端点，防止环境继承烘焙进产物。
-      ZCODE_TELEMETRY_ENABLED: ""
-      ZCODE_TELEMETRY_REPORT_ENDPOINT: ""
-      ZCODE_ARMS_RUM_ENDPOINT: ""
+      # 遥测栈已删除（PRIVACY-AUDIT.md §十五）；OTLP 变量清空保留为防回归兜底（CLI 调试链仍读 OTLP env）。
       OTEL_EXPORTER_OTLP_ENDPOINT: ""
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ""
@@ -122,9 +119,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DIST_BASE_URL: ${{ inputs.dist-base-url || 'https://whyiyhw.github.io/ZCode/zcode-dist/' }}
-      ZCODE_TELEMETRY_ENABLED: ""
-      ZCODE_TELEMETRY_REPORT_ENDPOINT: ""
-      ZCODE_ARMS_RUM_ENDPOINT: ""
       OTEL_EXPORTER_OTLP_ENDPOINT: ""
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ""
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: ""

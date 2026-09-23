@@ -191,10 +191,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     ...traceContextToLogContext(traceContext),
     module: "adapters.model",
   });
-  const modelTelemetry = createModelTelemetry({
-    owner: options.telemetryOwner,
-    sessionId,
-  });
+  // 遥测出网链已删除；保留 Noop 注入点维持 runtime 结构（见 @zcode/telemetry/src/bootstrap.ts）。
+  const modelTelemetry = createModelTelemetry({ sessionId });
   let nodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let ownedNodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let providerModelRuntime: ApiProviderModelRuntime | undefined;

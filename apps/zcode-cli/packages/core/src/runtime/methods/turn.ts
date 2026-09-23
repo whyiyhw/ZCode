@@ -1,4 +1,3 @@
-import { beginLocalTurnPreparation, type LocalTtftDetail } from "@zcode/contracts";
 import { runtimeInputMetadata } from "../../agent/runtime-input-presentation.js";
 import {
   CoreErrorType,
@@ -137,21 +136,7 @@ export async function executeTurnCommand(
   // 拒绝直接穿出。记录当前阶段并区分是否已被内层处理，便于生产日志还原卡点。
   let turnPhase = "queued";
   let turnFailureHandled = false;
-  let finishPreparation: () => void = () => {};
-  const preparationStages: Record<string, LocalTtftDetail["stage"]> = {
-    context_initialization: "context",
-    session_start_hooks: "hooks",
-    user_prompt_hooks: "hooks",
-    session_persistence: "persistence",
-    turn_started_event: "persistence",
-    target_accounting: "persistence",
-  };
   const startTurnPhase = (phase: string): number => {
-    const stage = preparationStages[phase];
-    finishPreparation =
-      stage && stage !== "attempt" && stage !== "retry_wait" && stage !== "user_confirmation"
-        ? beginLocalTurnPreparation(turnTraceContext, stage)
-        : () => {};
     turnPhase = phase;
     const startedAt = Date.now();
     this.logger?.info("Turn phase started", {
@@ -164,7 +149,6 @@ export async function executeTurnCommand(
     return startedAt;
   };
   const completeTurnPhase = (phase: string, startedAt: number): void => {
-    finishPreparation();
     this.logger?.info("Turn phase completed", {
       ...traceContextToLogContext(turnTraceContext),
       durationMs: Date.now() - startedAt,
@@ -183,7 +167,6 @@ export async function executeTurnCommand(
   const execute = () =>
     runWithContextAsync(turnTraceContext, async () => {
       const executionStartedAt = performance.timeOrigin + performance.now();
-      beginLocalTurnPreparation(turnTraceContext, "execution")();
       throwIfTurnAborted(turnAbortSignal);
       let admittedModel;
       try {
@@ -434,45 +417,6 @@ export async function executeTurnCommand(
           workingDirectory: this.workingDirectory,
         });
         logResolvedTurnAttachments(this.logger, turnTraceContext, resolvedAttachments);
-        const sharedContextRefs = options?.sharedContextRefs ?? options?.intent?.sharedContextRefs;
-        if (sharedContextRefs && sharedContextRefs.length > 0) {
-          const [reference] = sharedContextRefs;
-          if (!reference || reference.kind !== "shared_context_import") {
-            throw new Error("invalid shared context reference");
-          }
-          if (!this.sessionStore) throw new Error("shared context import storage is unavailable");
-          const alreadyHydrated = this.messageHistory
-            .borrowReadOnlyRuntimeEntries()
-            .some(
-              (entry) => entry.kind !== "attachment" && entry.metadata?.source === "shared_context",
-            );
-          if (!alreadyHydrated) {
-            const importedMessages = await this.sessionStore.messages({
-              sessionID: this.sessionId,
-            });
-            const contextMessage = importedMessages.find(
-              (message) =>
-                message.info.role === "user" &&
-                message.info.source === "shared_context" &&
-                message.info.metadata &&
-                typeof message.info.metadata === "object" &&
-                (message.info.metadata as Record<string, unknown>).contextId ===
-                  reference.context_id,
-            );
-            const contextText = contextMessage?.parts
-              .filter(
-                (part): part is Extract<MessagePart, { type: "text" }> => part.type === "text",
-              )
-              .map((part) => part.text)
-              .join("\n")
-              .trim();
-            if (!contextText) throw new Error("shared context content is unavailable");
-            this.messageHistory.addUser(
-              contextText,
-              runtimeMetadataForSyntheticUserMessageSource("shared_context"),
-            );
-          }
-        }
         await this.persistPendingModelChangeTimeline(turnTraceContext);
         if (options?.skipInputRecord !== true && options?.inputVisibility === "model-only") {
           const inputSource = options.inputSource ?? "goal-continuation";

@@ -1,4 +1,3 @@
-import { localTtftContextSchema, localTtftClockSchema } from "../localTtft.js";
 // Command 层：信封 / ACK / 命令全集 payload。
 // conversation rewind 无独立命令（裁决：= editUserQuery 的 UI 入口）；
 // workspace-only 文件撤销走 applyFileRewind，不截断聊天历史。
@@ -23,9 +22,6 @@ import {
   zcodeBrowserAmbientContextSchema,
   zcodeProtocolMcpServerSchema,
 } from "../zcode-protocol/index.js";
-import { sharedContextRefSchema } from "./shared-context-ref.js";
-export type { SharedContextRef } from "./shared-context-ref.js";
-
 const createSessionRequestedConfigSchema = z.object({
   modelSelection: modelSelectionSchema.optional(),
   provider: z.string().optional(),
@@ -87,7 +83,6 @@ export const commandPayloadSchemas = {
       browserAmbientContext: zcodeBrowserAmbientContextSchema.optional(),
       // Share handover 只允许当前 session 的一个已导入上下文；完整正文由 runtime 从
       // 持久化 provenance 解析，不能随 command 从 renderer 传入。
-      context_refs: z.array(sharedContextRefSchema).max(1).optional(),
       heldQueueDisposition: z.enum(["clearQueueAndSend", "keepQueueAndSend"]).optional(),
       // 暂停队列确认框打开时看到的 queueItemId 集合。CLI 在执行 clear/keep 前校验，
       // 防止桌面/手机并发增删后把用户没确认过的新队列一并处置。
@@ -240,7 +235,6 @@ export const commandPayloadSchemas = {
   amendWorkflowRunSettings: amendWorkflowRunSettingsPayloadSchema,
   renameSession: z.object({ title: z.string() }),
   deleteSession: z.object({}),
-  discardSharedContext: z.object({ contextId: z.string().trim().min(1) }).strict(),
 } as const;
 
 export type CommandType = keyof typeof commandPayloadSchemas;
@@ -318,7 +312,6 @@ export const ROW_TARGETING_COMMANDS: ReadonlySet<CommandType> = new Set([
 
 // ── 信封 ──
 export const commandEnvelopeSchema = z.object({
-  ttft: localTtftContextSchema.optional(),
   // uuid v7，客户端生成，重试不变。
   commandId: z.string(),
   clientId: z.string(),
@@ -427,7 +420,6 @@ export type CommandResult = z.infer<typeof commandResultSchema>;
 export const commandAckSchema = z.object({
   /** 会话创建期采用的 App Memory 开关；旧发送端缺省表示未知。 */
   memoryEnabled: z.boolean().optional(),
-  ttftExcluded: z.literal("capacity").optional(),
   commandId: z.string(),
   // accepted 不承诺跨 CLI 进程存活；最终收口以权威数据（sourceCommandId）为准。
   status: z.enum(["accepted", "rejected", "stale", "duplicate", "noop", "failed"]),
@@ -473,7 +465,6 @@ export type CommandQueryItem = z.infer<typeof commandQueryItemSchema>;
 export const commandsQueryResultSchema = z
   .object({
     results: z.array(commandQueryItemSchema).min(1).max(64),
-    clock: localTtftClockSchema.optional(),
   })
   .strict();
 export type CommandsQueryResult = z.infer<typeof commandsQueryResultSchema>;

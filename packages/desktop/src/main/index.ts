@@ -1,16 +1,13 @@
-import { createLocalTtftExporter } from "./localTtftExporter.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
 import { powerSaveBlocker } from "electron";
-import { crashCapturePaths } from "./appCrashCaptureBootstrap.js";
-import { armsInitPromise } from "./appARMSBootstrap.js";
+// ARMS 远端 crash 上报已随遥测栈删除；本模块仍负责本地取证 crash 归档初始化，必须保持副作用加载。
+import "./appCrashCaptureBootstrap.js";
 import {
   onLocalDatabaseStartupReady,
   configureDatabaseStartupQuit,
 } from "./databaseStartupRelay.js";
-import armsRum from "@arms/rum-electron";
-import { createArmsUserIdentitySync } from "./armsUserIdentity.js";
 import { ensureDesktopDeviceMidSync } from "./desktopDeviceMid.js";
 import { buildBrowserViewCloseTabNotification } from "./browserView/browserCloseTabNotification.js";
 import { BrowserGuestManager } from "./browserView/browserGuestManager.js";
@@ -34,7 +31,6 @@ import {
   dialog,
   ipcMain,
   nativeImage,
-  net,
   protocol,
   session,
   webContents,
@@ -44,12 +40,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import {
-  createCredentialService,
   createSettingService,
-  createTelemetryCore,
-  createTelemetryMarketingParamsLoader,
-  createTelemetryUserIdLoader,
-  createTelemetryAuthorizationLoader,
   buildRuntimeProcessEnvPatch,
   captureLoginShellEnvSnapshot,
   getConversationWorkspaceDir,
@@ -65,17 +56,11 @@ import {
   ZCODE_PRODUCT_FLAVOR,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DEFAULT_LOCALE,
-  ZCODE_VERSION,
-  ZCODE_TELEMETRY_ENABLED,
-  ZCODE_ARMS_RUM_ENDPOINT,
   resolveZCodeEndpointOrigin,
-  shouldEnableE2ETestBridge,
   HostMessageTypes,
 } from "@zcode/shared";
 import { logger } from "./logger.js";
-import { markMainLaunchAppReady } from "./desktopLaunchMarks.js";
 import { createCuaPipFocusRouter, resolveCuaPipWindowKey } from "./cuaPipFocusRouter.js";
-import { createDesktopTelemetryFetch } from "./desktopTelemetryFetch.js";
 import { BroadcastHub } from "./broadcastHub.js";
 import { TaskRealtimeBus } from "./taskRealtimeBus.js";
 import { createRendererActionTraceBroker } from "./rendererActionTraceBroker.js";
@@ -128,7 +113,6 @@ import {
   resolveBundledGlmBinaryPath,
   resolveRemoteAssetDirs,
   resolveZCodeEndpointEnvBaseOrigin,
-  desktopRuntimeEnv,
   runtimeApplicationName,
   runtimeHomePath,
   runtimeSessionDataPath,
@@ -164,24 +148,10 @@ import { resolveCanonicalWslTarget } from "./desktopWslTargetResolver.js";
 import {
   setBrowserUseGuestWebContentsIdsProvider,
 } from "./resourceManagerWindow.js";
-import { createDesktopHelpConfigReader } from "./desktopHelpConfig.js";
 import { registerPlatformIpcHandlers } from "./desktopMainIpcPlatform.js";
 
 import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
-import {
-  configureDesktopStabilityTelemetry,
-  notifyStabilityAppExit,
-  reportAgentProcessExitToArms,
-  reportAgentProcessReadyToArms,
-  reportAgentProcessStartToArms,
-  reportAgentProcessSpawnErrorToArms,
-  reportAgentProcessExceptionToArms,
-  registerDesktopStabilityMonitors,
-  registerStabilityMainWindow,
-  scheduleReportPerfAppStartAfterMainViewReady,
-} from "./desktopStabilityTelemetry.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
-import { mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
 import { snapshotWindowsPackagedResources } from "./windowsInstallResourceLocks.js";
 
 registerLocalMediaPreviewScheme(protocol);
@@ -587,7 +557,6 @@ const disposingHostProcessTimers = new WeakMap<
   ReturnType<typeof setTimeout>
 >();
 const mainSettingService = createSettingService();
-const appTelemetryCredentialService = createCredentialService();
 async function resolveCurrentZCodeEndpointOrigin() {
   return resolveZCodeEndpointOrigin({
     env: ZCODE_ENV,
@@ -595,17 +564,8 @@ async function resolveCurrentZCodeEndpointOrigin() {
     overrideOrigin: (await mainSettingService.get()).zcodeEndpointOrigin,
   });
 }
-const appTelemetryCore = createTelemetryCore({
-  loadUserId: createTelemetryUserIdLoader(appTelemetryCredentialService),
-  loadAuthorization: createTelemetryAuthorizationLoader(appTelemetryCredentialService),
-  loadMarketingParams: createTelemetryMarketingParamsLoader(appTelemetryCredentialService),
-  resolveZCodeEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
-  fetchImpl: createDesktopTelemetryFetch(net),
-});
 
 app.on("browser-window-focus", (_event, win) => {
-  // 登出/切号发生在 host 子进程，主进程无即时信号；窗口聚焦时兜底刷新 ARMS user.name
-  void armsUserIdentitySync.refresh();
   rebuildMenu();
   // 设置/更新等无 Host 的 ZCode 窗口也算前台：router 会先把旧 workspace Host 清成 null，
   // 再把无 Host 的新窗口事实静默丢弃，避免旧会话 PiP 继续显示。
@@ -628,22 +588,6 @@ const remoteSessionManager = createRemoteWorkspaceSessionManager({
 });
 
 const deviceMid = ensureDesktopDeviceMidSync();
-// 帮助配置是公开读取，不能复用附带账号鉴权的配置响应缓存。
-const readHelpConfig = createDesktopHelpConfigReader({
-  appVersion: ZCODE_VERSION || app.getVersion(),
-  deviceMid,
-  resolveEndpointOrigin: resolveCurrentZCodeEndpointOrigin,
-});
-// 灰度链已移除（spec/client-config-rollout-removal.md）：/api/v1/client/configs 不再被
-// desktop main 周期性/事件驱动拉取，仅剩 helpConfig 的用户触发按需读取。
-const localTtftExporter = createLocalTtftExporter({
-  env: { ...hostProcessLocalEnv, ...process.env },
-  version: ZCODE_VERSION || app.getVersion(),
-  logger,
-});
-ipcMain.on(PlatformChannels.ReportLocalTtftBatch, (_event, batch: unknown) =>
-  localTtftExporter.enqueue(batch),
-);
 const rendererActionTraceBroker = createRendererActionTraceBroker({
   exporter: createRendererActionTraceExporter({
     ...hostProcessLocalEnv,
@@ -652,14 +596,6 @@ const rendererActionTraceBroker = createRendererActionTraceBroker({
   logger,
 });
 let disposeRendererActionTraceIpc: (() => void) | undefined;
-const armsUserIdentitySync = createArmsUserIdentitySync({
-  deviceMid,
-  // 采集停用时 SDK 未初始化，setConfig 会抛错。
-  setUser:
-    ZCODE_TELEMETRY_ENABLED && ZCODE_ARMS_RUM_ENDPOINT
-      ? (user) => armsRum.setConfig("user", user)
-      : () => {},
-});
 
 function extractOpenWorkspacePathFromDeepLinkUrl(url: string): string | null {
   try {
@@ -782,11 +718,6 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
   browserScreenshotSurfaceCoordinator.dispose();
   disposeRendererActionTraceIpc?.();
   disposeRendererActionTraceIpc = undefined;
-  notifyStabilityAppExit(
-    "app_quit",
-    logger,
-    { exitCode: 0, exitKind: "normal" },
-  );
 
   const cronSchedulerToDispose = cronScheduler;
   cronScheduler = null;
@@ -801,10 +732,6 @@ async function prepareAppQuit(reason: string, kind: AppShutdownKind = "normal"):
   appQuitPreparationInFlight = Promise.all([
     // 退出屏障结束后再启动窗口尺寸写入，可能在 app.exit 前留下 setting.json.lock。
     // 尺寸已在 resize 防抖或最大化状态变化时保存，退出屏障不再创建新的尺寸写入。
-    // 修复原因：Main 过去不会等待仍在发送的 /event/report，正常退出也会直接丢事件。
-    // 与其它 owner 并行进入既有屏障，最多等待 2 秒，避免 telemetry 串行放大退出预算。
-    appTelemetryCore.flushPendingReports({ timeoutMs: 2_000 }),
-    localTtftExporter.shutdown(),
     rendererActionTraceBroker.shutdown().catch((error) => {
       logger.warn(`[app-quit] renderer action trace shutdown failed (${reason}):`, error);
     }),
@@ -953,7 +880,6 @@ async function executeDesktopCommandForApp(
   senderWindow?: BrowserWindow | null,
 ) {
   return executeDesktopCommand({
-    fetchHelpConfig: readHelpConfig,
     command,
     senderWindow,
     logger,
@@ -1108,14 +1034,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
             windowsCuaOperationIndicator.handleState(source, event),
           onCuaOperationStateSourceExited: (source) =>
             windowsCuaOperationIndicator.clearSource(source),
-          onAgentProcessExited: (event) => reportAgentProcessExitToArms(event, logger),
-          onAgentProcessError: (event) => reportAgentProcessSpawnErrorToArms(event, logger),
-          onAgentProcessException: (event) => reportAgentProcessExceptionToArms(event, logger),
-          onAgentProcessReady: (event) => reportAgentProcessReadyToArms(event, logger),
-          onAgentProcessSpawned: (event) => reportAgentProcessStartToArms(event, logger),
-          onSessionCreateTelemetry: (message) => {
-            void appTelemetryCore.reportEvent(message.event).catch(() => {});
-          },
           onCronRunResult: forwardCronRunResult,
           onOffPeakRunResult: forwardOffPeakRunResult,
           onCronSchedulerWakeRequested: wakeCronScheduler,
@@ -1171,7 +1089,6 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
       await mainSettingService.update({ desktopWindowSize: state });
     },
   });
-  registerStabilityMainWindow(win);
   return win;
 }
 
@@ -1232,7 +1149,6 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 });
 
 app.whenReady().then(async () => {
-  markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,
   });
@@ -1340,7 +1256,6 @@ app.whenReady().then(async () => {
   });
 
   registerPlatformIpcHandlers({
-    fetchHelpConfig: readHelpConfig,
     logger,
     // CDP-on-guest pivot：renderer `<webview>` dom-ready 上报 guest webContentsId → attach。
     attachBrowserGuest: (key, webContentsId, options) => {
@@ -1443,17 +1358,6 @@ app.whenReady().then(async () => {
 
   registerRemoteIpcHandlers({
     logger,
-    onOAuthCallbackHandledSideEffect: () => {
-      void armsUserIdentitySync.refresh();
-    },
-    appTelemetryCore,
-    armsCustomContext: {
-      deviceMid,
-      platform: process.platform,
-      appVersion: ZCODE_VERSION,
-      armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-    },
-    finalArmsCustomEventE2EEnabled: shouldEnableE2ETestBridge(process.env),
     createRemoteWorkspaceSession: remoteSessionManager.createRemoteWorkspaceSession,
     disposeRemoteWorkspaceSession: remoteSessionManager.disposeRemoteWorkspaceSession,
     cancelPendingRemoteWorkspaceSessionsForWindow:
@@ -1466,30 +1370,8 @@ app.whenReady().then(async () => {
     listSSHConfigAliases,
   });
 
-  // 等待 ARMS 完成 init（含渲染进程注入监听），避免首窗 dom-ready 早于 SDK 注册导致无上报
-  await armsInitPromise;
-
-  // ARMS init 完成后首次写入 user.name（落 device_mid）
-  void armsUserIdentitySync.refresh();
-
-  // 未配置 ARMS 端点时不初始化上报 context，避免把空转误当成已启用。
-  if (ZCODE_TELEMETRY_ENABLED && ZCODE_ARMS_RUM_ENDPOINT) {
-    configureDesktopStabilityTelemetry({
-      deviceMid,
-      platform: process.platform,
-      appVersion: ZCODE_VERSION,
-      armsEnv: mapZCodeEnvToArmsRumEnv(desktopRuntimeEnv),
-    });
-  }
-  registerDesktopStabilityMonitors(logger, crashCapturePaths);
-
   logger.info("[startup] 创建主窗口");
   await primaryWindowCoordinator.ensurePrimaryWindow("app-ready");
-
-  const primaryWindow = getApplicationWindowsExcludingCuaIndicator()[0];
-  if (primaryWindow) {
-    scheduleReportPerfAppStartAfterMainViewReady(primaryWindow.webContents, logger);
-  }
 
   // 启动后检测 CPU 架构是否匹配（如 Apple 芯片误装 x64 版本经 Rosetta 转译运行），
   // 命中后异步弹框提示安装原生架构版本，不阻塞主界面。

@@ -18,7 +18,6 @@ import {
   type CodingPlanEntryInventory,
 } from "@/hooks/useCodingPlanEntryPlanList.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { reportCodingPlanUpgradeClick } from "@/lib/codingPlanFunnelTelemetry.js";
 
 interface CodingPlanUpgradeDialogContextValue {
   inventory: CodingPlanEntryInventory;
@@ -75,7 +74,6 @@ export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactN
           }
         : nextTarget;
       if (nextTarget.funnelContext) {
-        void reportCodingPlanUpgradeClick(platform, nextTarget.funnelContext);
       }
       setTarget(nextTarget);
       // 每次显式打开隔离旧 webview 事件，旧 dom-ready 不能确认新的观察请求。

@@ -45,7 +45,7 @@
 
 ### 2.2 开源版仍存在的通道（社区版整改的直接对象）
 
-**A. 三条受同一总闸管辖的遥测通道。** 上游 `packages/shared/src/env.ts` 硬编码 `ZCODE_TELEMETRY_ENABLED = true`；端点（数仓、阿里云 ARMS RUM）由构建/运行环境注入、开源构建产物不内嵌——但官方 CI 会把它们烘焙进产物（实测官方 3.14.1 asar 内含 `proj-xtrace-….aliyuncs.com` 的 RUM 与 OTLP 端点，且环境变量名已被静态替换抹去）：
+**A. 三条受同一总闸管辖的遥测通道（2026-09-23 起整栈物理删除，见 PRIVACY-AUDIT.md §十五；下表为审计时记录的历史行为）。** 上游 `packages/shared/src/env.ts` 硬编码 `ZCODE_TELEMETRY_ENABLED = true`；端点（数仓、阿里云 ARMS RUM）由构建/运行环境注入、开源构建产物不内嵌——但官方 CI 会把它们烘焙进产物（实测官方 3.14.1 asar 内含 `proj-xtrace-….aliyuncs.com` 的 RUM 与 OTLP 端点，且环境变量名已被静态替换抹去）：
 
 | 通道                     | 内容                                                                                                                | 频率                                  |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -55,7 +55,7 @@
 
 **B. 不受任何开关管辖的指纹通道。** `buildZCodeSourceHeaders` 给**每一次**打向官方端点的 API 附加 `X-Device-Mid`（持久设备 UUID，永不轮换）、`X-Client-Timezone`、`X-Os-Version`、语言、渠道等全套识别头；CLI 侧更进一步——对**用户自建的第三方模型端点**也发同样指纹头外加 `HTTP-Referer: zcode.z.ai`，Anthropic 协议请求体里还嵌 `metadata.user_id = {device_id, session_id}`。生产身份的安装包每小时向更新清单接口发 `device_mid` 心跳。
 
-**C. 内容出网通道（用户触发，但边界过宽）。** 会话分享会把整段对话与工作区文件字节上传服务端（有确认对话框）；问题反馈的 `full` 档会把**整个应用数据目录（上限 1GB）**直传厂商 OSS——其中包含 `rollout/debug` 下的 model-io 明文（完整提示词与代码）与凭据备份文件。
+**C. 内容出网通道（用户触发，但边界过宽）。** 会话分享曾把整段对话与工作区文件字节上传服务端（有确认对话框）——该功能已于 2026-09-23 随其发布链整体下线（见 PRIVACY-AUDIT.md §十五）；历史上问题反馈的 `full` 档曾把**整个应用数据目录（上限 1GB）**直传厂商 OSS——该路径已在 2026-09-21 移除，反馈功能本身也于 2026-09-23 整体下线（见 PRIVACY-AUDIT.md §十三）。
 
 **D. 本地明文与暴露面。** model-io 全量请求/响应（完整系统提示词、代码、工具结果）在**生产环境默认落盘**；`credentials.json` 的"加密"密钥由 `platform+homedir+username` 推导，等价混淆且兼容明文回读；会话库 db.sqlite 明文；`packages/server` 的 HTTP/WS 默认无 token、无 Origin/Host 校验——恶意网页可跨站连上本机 `ws://127.0.0.1:3030/ws` 读取会话、执行终端命令。
 
@@ -67,11 +67,11 @@
 
 | #   | 整改                                  | 位置                                                                            | 效果                                                                                                                                  |
 | --- | ------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 遥测总闸改 opt-in 默认关              | `packages/shared/src/env.ts`                                                    | 数仓 + ARMS + 远程 crash 三条通道整体熄火                                                                                             |
+| 1   | 遥测总闸改 opt-in 默认关（2026-09-23 起遥测整栈已物理删除，开关随之移除，见 §十五） | `packages/shared/src/env.ts`                                       | 数仓 + ARMS + 远程 crash 三条通道先熄火、后整栈删除                                                                                  |
 | 2   | 桌面/服务侧指纹头收口                 | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带（2026-09-22 修订：`/api/v1/zcode-plan/` 计费路径族按服务端硬契约豁免补回三头，缺头即 400，见 PRIVACY-AUDIT.md §十二） |
 | 3   | CLI 指纹头按端点放行                  | 新增 `apps/zcode-cli/packages/adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸 |
 | 4   | model-io 落盘改 opt-in                | `apps/zcode-cli/packages/adapters/src/model/runner-debug.ts`                    | 默认不再写明文提示词/代码 JSONL                                                                                                       |
-| 5   | 反馈 full 档移除                      | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭                                                                                     |
+| 5   | 反馈 full 档移除（2026-09-23 已随反馈功能整体下线） | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭；后续反馈功能整体删除，通道不复存在                    |
 | 6   | server fail-closed + Origin/Host 校验 | `packages/server/src/http.ts`                                                   | 非回环监听无 token 拒绝启动；跨站 WS 劫持与 DNS rebinding 被拦                                                                        |
 | 7   | 安装脚本强制哈希校验                  | `scripts/zcode-distribution/installer.mjs`                                      | 解压前 sha256 三方一致（latest.json / sha256.txt / 实际文件）                                                                         |
 
@@ -101,14 +101,14 @@
 
 | 环境变量                       | 语义                                        | 默认                   |
 | ------------------------------ | ------------------------------------------- | ---------------------- |
-| `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸                   | 关                     |
+
 | `ZCODE_BILLING_CONTRACT_HEADERS=0` | 计费契约三头（时区/OS 版本/设备标识，仅 `/api/v1/zcode-plan/` 路径）紧急关闭闸 | 开（该路径族默认携带） |
 | `ZCODE_SEND_DEVICE_MID=true`   | 全局 `X-Device-Mid` 指纹头（历史逃生口；计费路径已由上一行覆盖） | 关                     |
 | `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点收全集） |
 | `ZCODE_MODEL_IO_ENABLED=1`     | model-io 全量落盘（诊断用）                 | 关                     |
 | `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行 Origin 白名单               | 空                     |
 
-**产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七；2026-09-22 起口径见 §十二）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；计费契约头 `X-Client-Timezone`/`X-Os-Version` 自 §十二 起改为「成对出现」断言——头名必须与 scoped 实现证据（`/api/v1/zcode-plan/` 前缀判定 + `ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）同时在 asar，证明是路径级豁免而非无条件回滚；新开关字符串应在（实测在）。残留的 `sdk.rum.aliyuncs` 字符串属打包在内的 ARMS SDK 死代码——总闸默认关使其不可达，SDK 物理摘除列于 P1。
+**产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七；2026-09-22 起口径见 §十二）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；计费契约头 `X-Client-Timezone`/`X-Os-Version` 自 §十二 起改为「成对出现」断言——头名必须与 scoped 实现证据（`/api/v1/zcode-plan/` 前缀判定 + `ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）同时在 asar，证明是路径级豁免而非无条件回滚；新开关字符串应在（实测在）。ARMS SDK 与遥测整栈已于 2026-09-23 物理删除（§十五）；`sdk.rum.aliyuncs` 等字符串现为零命中硬断言。
 
 **CI 门禁**：`.github/workflows/community-build.yml` 把上述断言变成会挂构建的硬门禁——所有作业在 job 级显式清空遥测端点环境变量，桌面出包后自动运行 `scripts/community/assert-privacy.mjs`（断言集与本节口径一致，零依赖可本地复跑）。该脚本已经双向验证：社区产物 PASS（10/10），官方 3.14.1 产物 FAIL（10/10，并枚举出其烘焙的 proj-xtrace 上报端点）。流水线同时产出三平台桌面安装包与 CLI/Web 发行树，`install.sh` 所需的 latest.json/releases 目录结构可一键发布到 gh-pages。
 

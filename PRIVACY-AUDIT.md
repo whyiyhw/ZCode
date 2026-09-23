@@ -31,14 +31,14 @@
 
 | # | 通道 | 证据 | 默认状态 | 处置 |
 |---|---|---|---|---|
-| A1 | 数仓事件（user_id/device_mid/分辨率/营销归因/事件明细） | `services/src/telemetry/telemetryCore.ts:368,394-432` | **已关**（fork 总闸默认 false） | 保持 |
-| A2 | **全量指纹头随每次 ZCode endpoint API 外发**：`X-Device-Mid`、`X-Client-Timezone`、`X-Os-Version`、语言、平台、渠道 | `shared/src/zcode-source-headers.ts:45-58`；注入点 `services/src/providers/api/nodeApiClient.ts:62-74`（OAuth/计费/配置/分享/反馈全走这里） | **开，无开关** | P0：删 `X-Device-Mid`/时区/OS 版本三头，或并入遥测总闸 |
-| A3 | **灰度配置拉取**（启动 + 1h TTL）：`/api/v1/client/configs` 带全套 sourceHeaders | `desktop/src/main/desktopContextPromptRollout.ts:88-124`、`desktopHelpConfig.ts:14-32` | **开，不受遥测开关管** | P0：与 A2 一并收口 |
+| A1 | 数仓事件（user_id/device_mid/分辨率/营销归因/事件明细） | （历史通道）原 `services/src/telemetry/telemetryCore.ts` | ✅ **已删除**（2026-09-23 整栈移除，见 §十五） | 完成 |
+| A2 | **全量指纹头随每次 ZCode endpoint API 外发**：`X-Device-Mid`、`X-Client-Timezone`、`X-Os-Version`、语言、平台、渠道 | `shared/src/zcode-source-headers.ts:45-58`；注入点 `services/src/providers/api/nodeApiClient.ts:62-74`（OAuth/计费/配置/分享全走这里；反馈通道已于 2026-09-23 下线） | **开，无开关** | P0：删 `X-Device-Mid`/时区/OS 版本三头，或并入遥测总闸 |
+| A3 | **灰度配置拉取**（启动 + 1h TTL）：`/api/v1/client/configs` 带全套 sourceHeaders | （历史通道）原 `desktop/src/main/desktopContextPromptRollout.ts`、`desktopHelpConfig.ts` | **已消灭**（灰度链 2026-09-22 移除；helpConfig 用户触发拉取链 2026-09-23 随社群入口下线，见 §十四） | 完成 |
 | A4 | **CLI 对所有模型 provider（含用户自建第三方端点）发指纹头**：`HTTP-Referer: zcode.z.ai`、版本、时区、locale、OS 内核版本 | `apps/zcode-cli/packages/bootstrap/src/model-config.ts:47-66`；注入 `adapters/src/model/model-execution.ts:202-208` | **开，无开关** | P0：仅对官方端点注入 + `ZCODE_SEND_CLIENT_HEADERS=0` 紧急开关 |
 | A5 | **Anthropic 协议请求体带 `metadata.user_id = {device_id, session_id}`，对第三方端点同样生效** | `adapters/src/model/anthropic-request-metadata.ts:7-32`；调用 `runner-generate.ts:166`、`runner-stream.ts:284` | **开** | P0：同 A4 按端点放行 |
 | A6 | 更新探测每小时心跳：`GET /api/v1/releases/electron/manifest?platform=&device_mid=&channel=` + `X-Device-Mid` 头 | `desktop/src/main/manifestUpdateProvider.ts:77-93,218-223`；`autoUpdater.ts:26` | production flavor 开；**社区构建（preview flavor）关** | P1：删 device_mid；需要彻底断时 patch 掉 `initAutoUpdater` |
-| A7 | ARMS RUM 全家桶（jsError/consoleError/crash/api/click/longTask + agent 崩溃 stderr tail ≤4000 字符） | `desktop/src/main/appARMSBootstrap.ts:168-268`、`desktopStabilityTelemetry.ts:464-652`；collectors `desktop/src/shared/armsRumShared.ts:9-19` | **关**（总闸+端点双门），但 SDK 常驻安装包 | P1：从 asar 移除 SDK 与强制注入清单 |
-| A8 | 营销归因（utm/channel_id）持久化并附于每个遥测事件 | `services/src/oauth/callbackAttribution.ts:3-17` → `oauthCredentialRepo.ts:226-239` → telemetryCore | 关（随 A1），本地明文常驻 | P2：删持久化 |
+| A7 | ARMS RUM 全家桶（jsError/consoleError/crash/api/click/longTask + agent 崩溃 stderr tail ≤4000 字符） | （历史通道）原 `desktop/src/main/appARMSBootstrap.ts` 等 | ✅ **已删除**（2026-09-23 随 E1 摘除，见 §十五） | 完成 |
+| A8 | 营销归因（utm/channel_id）持久化并附于每个遥测事件 | `services/src/oauth/callbackAttribution.ts` → `oauthCredentialRepo.ts`（持久化仍在，遥测读取方已删） | 随 A1 删除上报侧 | P2：删持久化本身（OAuth 凭据库内的归因字段） |
 | A9 | provider 内置配置远端刷新（版本+平台，无 deviceMid） | `provider-node/src/zcode-builtin-download.ts:50-57`；CLI 接线 `bootstrap/src/app/process-provider-registry-runtime.ts:60-90` | 仅 SEA 打包态启用 | P2：加 kill-switch |
 | A10 | 官方端点改道网关：`open.bigmodel.cn`/`api.z.ai` 的 anthropic 端点改发 `zcode.z.ai/api/v1/ultra[-zai]/anthropic` | `adapters/src/model/official-coding-plan-gateway.ts:22-94` | 开（精确匹配官方端点） | 保留但文档显式声明 |
 
@@ -48,8 +48,8 @@
 
 | # | 通道 | 证据 | 备注 |
 |---|---|---|---|
-| B1 | **会话分享发布**：整段对话 + 工作区文件字节 multipart 上传 zcode.z.ai | `services/src/conversation-share/conversationShareHttpClient.ts:275-298`、`conversationShareArtifactSource.ts:158`；有 disclosure 确认 + 服务端安全检查（`conversationShareService.ts:1925,2344-2373`） | P1：社区版改用现成 `createUnsupportedConversationShareService`（`node.ts:2409-2412`）只留导入 |
-| B2 | **反馈工单日志直传 OSS**：compact 档 ≤2MB logs/；`full:true` 打包**整个 appConfigDir（上限 1GB）**，可能裹入 setting.json、凭据备份 | `services/src/feedback/feedbackService.ts:232-248`、`feedbackHttpClient.ts:494-544,932-1090`；身份 `X-Device-Mid` + JWT | P0：删 full 档与 OSS 直传；日志白名单化 |
+| B1 | **会话分享发布**：整段对话 + 工作区文件字节 multipart 上传 zcode.z.ai | （历史通道）原 `services/src/conversation-share/` | ✅ **已删除**（2026-09-23 发布链与导入/落地页整体下线，见 §十五；持久化 schema 的 sharedContext 解码分支保留以兼容旧会话文件） | 完成 |
+| B2 | **反馈工单日志直传 OSS**：compact 档 ≤2MB logs/；`full:true` 打包**整个 appConfigDir（上限 1GB）**，可能裹入 setting.json、凭据备份 | （历史通道）原 `services/src/feedback/feedbackService.ts`、`feedbackHttpClient.ts`；身份 `X-Device-Mid` + JWT | ✅ 已随 2026-09-23 反馈功能整体下线彻底消灭（见 §十三）；full 档与 OSS 直传在此前 2026-09-21 已先行移除（见 §七第 5 条） |
 | B3 | 模型 API 本体（提示词/代码进上下文即出境） | 服务本体，非通道缺陷 | 不可移除；靠上下文自觉 + 可选本地模型 |
 | B4 | Coding Plan webview 向官网 localStorage 注入 OAuth token + `__zcodeReportContext__`（deviceMid/userId） | `ui/src/settings/model-provider-section/codingPlanEmbeddedWebview.ts:186-240`；preload origin 门禁 `desktop/src/preload/codingPlanWebview.ts:34-62` | P2：改 postMessage 按需传递 |
 
@@ -86,7 +86,7 @@
 
 | # | 问题 | 证据 | 处置 |
 |---|---|---|---|
-| E1 | ARMS SDK + OTLP 导出器 + `@babel/runtime` 被强制打进 asar；`patches/@arms__rum-electron` 还在**增强**采集（console.error 多参数、minidump process_type 解析） | `desktop/electron-builder.config.js:110-152`、`scripts/bundle.mjs:88-117`、`patches/@arms__rum-electron@0.0.3.patch` | P1：移除依赖与注入清单，`appARMSBootstrap.ts` 静态 import 改门控动态或删除 |
+| E1 | ARMS SDK + OTLP 导出器 + `@babel/runtime` 被强制打进 asar；`patches/@arms__rum-electron` 还在**增强**采集（console.error 多参数、minidump process_type 解析） | （历史问题）原 `desktop/electron-builder.config.js` 注入清单、`patches/@arms__rum-electron@0.0.3.patch` | ✅ **已删除**（2026-09-23：依赖、patch、注入清单、本地 TTFT OTLP 导出链整体移除，见 §十五） | 完成 |
 | E2 | 构建期 env 注入面：`__ZCODE_ENDPOINT_ENV__`（ZCODE_BASE_URL 等 5 键）与 renderer `VITE_*` 烘进产物；`scripts/load-endpoint-env.mjs` 会合并未跟踪 `.env` | `desktop/tsup.config.ts:97-114`、`desktop/vite.config.ts:190-209` | P1：CI 构建前显式 unset 全部遥测 env（清单见下） |
 | E3 | **install.sh 不校验 sha256**（sha256.txt 是死文件），BASE_URL 劫持可装入任意代码 | `scripts/zcode-distribution/installer.mjs:3-58`；生成方 `build-zcode.mjs:268-288` | P0：安装脚本加 `sha256sum -c` |
 | E4 | 构建机外联：electron/electron-builder 二进制（npmmirror，无哈希校验的镜像回退）、Node 运行时（cdn.npmmirror.com）；native-search 源包与 ripgrep 预编译**已全量钉 sha256** | `mise.toml:7`、`bundle.mjs:160-231`、`native-search-tools-config.mjs:43-173` | P2：按需改镜像 |
@@ -225,3 +225,46 @@
 口径更新：A2 的处置保持"默认不外发"，本节为**计费路径族的显式豁免记录**；`ZCODE_SEND_DEVICE_MID=true` 全局逃生口语义不变。同日发现社区 CI 编译期 `ZCODE_ENV` 缺省被烧成 `"test"`（`X-Release-Channel` 错发），已在 `community-build.yml` 编译步骤补 `ZCODE_ENV=production` + `ZCODE_PREVIEW_IDENTITY=1`（Preview 身份与数据目录隔离不变）。
 
 断言门禁同步（§9.5 口径修订）：`scripts/community/assert-privacy.mjs` 的 `X-Client-Timezone`/`X-Os-Version` 全量禁串自本节起改为**成对证明**断言——头名出现时，scoped 实现证据串（`/api/v1/zcode-plan/` 前缀判定、`ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）必须在同一 asar 内存在且为正向必在项；agent 侧命中改为 INFO（shared 依赖副本可含契约实现代码，CLI 模型链路不调用 serverContract，`ZCODE_SEND_CLIENT_HEADERS` 总闸仍在 agent 必在项中）。若未来服务端取消该契约，恢复禁串口径时须同步改回本节与 §9.5。COMMUNITY-EDITION.md 的整改表/开关表/产物验证段已按本节口径同步。
+
+## 十三、反馈功能整体下线（2026-09-23）
+
+「问题上报」（反馈中心/我的反馈工单）与「给产品提需求」两个功能整体删除，B2 通道自此不存在任何出网路径：
+
+- **UI**：`packages/ui/src/feedback/` 整目录（20 文件：FeedbackCenter、FeatureRequestDialog、TicketsView、提交表单/进度/截图选择/后台续传等）删除；错误横幅、任务右键菜单、Header 更多菜单、会话订阅错误面板、远程连接失败条、quickpick 命令中的全部反馈入口移除。错误横幅的「复制完整报错」保留，模板 key 从 `feedback.submit.template.section.*` 迁移为 `chat.error.copy.*`。
+- **服务与协议**：`packages/services/src/feedback/` 整目录删除（feedbackService/feedbackHttpClient OSS 直传/本地工单索引/诊断打包）；`ServiceChannels.Feedback`、`PlatformChannels.OpenFeedbackDialog/OpenTicketsPanel`、`DesktopCommandIds.OpenFeedback`、`IPlatformService.openFeedback/onOpenFeedbackDialog/onOpenTicketsPanel`、host↔main `feedbackApiBase` 字段同步摘除。
+- **隐私面收口**：`shared/src/feedbackPrivacy.ts`（redactFeedbackText 脱敏原语）随最后三个消费方（错误/任务/远程连接反馈草稿）一起删除；`X-Device-Mid` + JWT 工单身份链、`~/.zcode/feedback` 数据目录（storageCatalog 的 logs/exports 分类项同步移除）、`config/default.json` 的 `feedback_url`/`feedback_use_external_form` 均不再存在。远端 `/api/v1/client/configs` 仍返回这些字段时会被 helpAppConfig 忽略。
+- **遗留**：旧安装的 `~/.zcode/feedback/` 成为孤儿目录（无消费方，不做启动期清理，资源管理器也不再列出）；`ZCODE_FEEDBACK_API_BASE` env 不再被读取。
+
+## 十四、用户社群入口下线（2026-09-23）
+
+紧随 §十三 的反馈功能删除，「用户社群」入口（飞书/Discord 渠道链接）整体移除，A3 的 helpConfig 拉取链随之彻底消灭：
+
+- **配置层整删**：`shared/src/helpAppConfig.ts`（`/api/v1/client/configs` 的 helpConfig 读取/缓存/解析）与 `shared/src/remoteAppConfig.ts`（`community_urls` 解析；`forceUpdate` getter 早已无消费方）两个文件删除。`/api/v1/client/configs` 端点仍被 coding-plan 订阅与内置 provider 下载链使用，不受影响。
+- **入口移除**：帮助菜单「用户社群」项、quickpick community 命令、`IPlatformService.openCommunity/canOpenCommunity`、`DesktopCommandIds.OpenCommunity`、`PlatformChannels.CanOpenCommunity` IPC、desktop `desktopHelpConfig.ts` 与 main 的 fetchHelpConfig 接线、web `communityUrl.ts` 与平台实现。
+- **配置与打包**：`config/default.json` 清空为 `{}`（文件保留），electron-builder 不再把该文件拷入 resources；README 记录历史字段。
+- **隐私面收口**：helpConfig 是唯一"公开读取 + 携带 sourceHeaders 指纹头"的 `/client/configs` 消费链（A3），删除后该请求不再发生。
+
+## 十五、遥测整栈与会话分享链整体删除（2026-09-23）
+
+同日三连删：死代码三件（`V4ChatPane`/`networkErrorClassifier`/`armsRumShared`）、会话分享发布链（B1）、ARMS SDK（E1/A7）与数仓遥测整栈（A1，推翻 2026-09-21「门控保留」口径改为彻底删除）。
+
+**会话分享（B1）**：`services/src/conversation-share/` 整目录、web 落地页（`web/src/share/`）、UI 全部发布/导入入口（分享菜单、选择面板/确认/成功 Dock、导入横幅、只读时间线、deep link `zcode://share/import` 链）、`ServiceChannels.ConversationShare`、`PlatformChannels.ShareImport` 与 `IConversationShareService` 契约整体移除。web OAuth 基础设施（callback 页/state codec）保留（通用登录设施，见代码注释对 `/remote` 的预留）。持久化兼容：`zcodeSessionImportHistorySchema` 的 `sharedContext` 解码分支、legacy `"shared_context"` 消息来源枚举、sqlite store 的 `transitionSharedContextImport`、RowView 的 share 尾块剥离 parser 均保留——老会话文件必须继续可读；只删生产方。
+
+**遥测整栈（A1/E1/A7）**：
+- 数仓：`services/src/telemetry/`（telemetryCore `/event/report`）、`shared/src/telemetry{,Redaction}.ts`、`sessionCreateTelemetry.ts`、`remoteUsageTelemetry.ts`、ui 侧 `appTelemetry` + 15 个功能文件里的 `reportAppTelemetryEvent` 调用点、desktop `appTelemetryCore`/IPC。
+- ARMS：`@arms/rum-electron` 依赖与其 patch、`appARMSBootstrap` 注入链、ui ARMS 家族（uiPerf/reactError/sendFunnel/planUsage/chatErrorBanner/sessionOpen + E2E ring）、`ArmsCustomEventPayload` 契约与 5 个 IPC 通道。
+- 本地 TTFT OTLP 导出链：`localTtft.ts` schema、协议帧 `ttft/ttftRelated` 字段与 `v4/telemetry/local-ttft` 通知、UI observer、desktop exporter、CLI recorder（`ZCODE_LOCAL_TTFT_ENABLED` 逃生口随之消失）。启动 LaunchMarks 链（main→renderer 注入→uiPerf）一并删除。
+- host↔main `AgentProcess*` 消息族与 `SessionCreateTelemetry`：唯一消费方是 ARMS 稳定性上报，随之删除（发送端 host/index 与 desktopHostProcess 回调参数同步摘除）。
+- env 开关 `ZCODE_TELEMETRY_ENABLED`/`ZCODE_TELEMETRY_REPORT_ENDPOINT`/`ZCODE_ARMS_RUM_ENDPOINT`/`mapZCodeEnvToArmsRumEnv` 从 `shared/env.ts` 移除，被设置时直接忽略。
+- 远程 crash：ARMS crash collector 消失；本地 `crashReporter`（`uploadToServer:false`）回落为常开取证通道（C5 本地 dump 归档保留）。
+
+**保留红线**（功能性依赖，非遥测）：deviceMid（`~/.zcode/v2/telemetry-state.json`，计费契约头 C7）、renderer action-trace 调试链（本地 OTLP 逃生口）、`v4/telemetry/event` conversationTelemetryFact 流与 CLI facts normalizer（zcode-server-cli `taskActivityTracker` 用 turn.started/turn.terminal 统计运行任务数——纯本地 IPC，无出网；其余 fact 种类暂留待后续裁剪）、`adapters/src/mcp/telemetry.ts`（进程登记表）、`runner-telemetry.ts`（模型失败分类）、model-io 记录（`ZCODE_MODEL_IO_ENABLED`，独立开关）。
+
+**断言门禁同步（§9.5 口径修订）**：`scripts/community/assert-privacy.mjs` 的 `ASAR_REQUIRED` 移除 `ZCODE_TELEMETRY_ENABLED`（保留 `ZCODE_SEND_DEVICE_MID`，计费）；原 `DORMANT_INFO` 两条（`sdk.rum.aliyuncs`/`rum/web/v2`）从 INFO 升级为零命中硬断言（遥测已物理删除，再出现即回归）。CI workflow 不再清空 `ZCODE_TELEMETRY_*` env（OTLP 清空保留为 CLI 调试链防回归兜底）。
+
+### §十五补记（2026-09-23 同日收尾）
+
+- **CLI 侧 OTLP 导出链删除**：`@zcode/telemetry` 包的 OTLP exporter/agent-metrics/error-sanitizer/provider-endpoint/compatibility-adapters 与 `telemetry-bootstrap` 入口（`prepareZCodeTelemetryEnv`/`shutdownZCodeTelemetry`，涉及 zcode-protocol-entrypoint、cli-types、prompt-command、tui 三处接线）整体移除；`createModelTelemetry` 保留为恒 Noop 的注入点，本地 model-io 记录（`ZCODE_MODEL_IO_ENABLED`）不经此链，行为不变。
+- **本地 TTFT 全链删除**（超出 §十五初稿范围）：shared `localTtft.ts` schema、协议信封 `ttft` 字段与 ACK `ttftExcluded`、`v4/telemetry/local-ttft` 通知、CLI `LocalTtftRecorder`/compaction/clock 三件、v4-gateway 全部接线（receive/admitted/event/帧附加/queryCommands 时钟探测）、UI observer/transport 校准、desktop exporter、services `onDynamicLocalTtftFacts` 事件面、contracts `local-turn-preparation` 追踪与 core `beginLocalTurnPreparation` 接线。`ZCODE_LOCAL_TTFT_ENABLED` 逃生口随之消失。
+- **依赖与产物**：`@arms/rum-electron` 依赖 + `patches/@arms__rum-electron@0.0.3.patch` + `@babel/runtime`（其 peer）移除；THIRD-PARTY-NOTICES 与 npm-overrides 的三条 @arms 条目手工等价清理（本机 `pnpm -r ls` 撞 EMFILE 无法本地再生成，CI 首跑会复核）；保留的 `@opentelemetry/*` 均为 action-trace 调试链在用。
+- **desktop 遗留核验**：crash 本地取证回落（`remoteCrashReporterEnabled=false`）、`rendererActionTraceIpc` 的 localTtftEnabled 标志、`desktopRuntimeEnv` 的 OTLP 定向转发与 shared runtimeEnv 采集区（`readZCodeAgentTelemetryEnv` 等）均已摘除；env 清洗仍会从 tool env 剥离 OTEL 键（防泄漏兜底，保留）。

@@ -14,9 +14,9 @@ interface EnsureDesktopDeviceMidSyncOptions {
 /**
  * 同步确保设备身份文件（磁盘文件名沿用 telemetry-state.json，与 CLI / 远端 server 共享）里有 deviceMid，并返回该值。
  *
- * 与数仓上报（telemetryCore）共用同一个文件的 `deviceMid` 字段，使 ARMS 与数仓两套
- * device_mid 统一为同一个持久化 UUID。ARMS 侧需要在窗口创建前同步取值（经 preload
- * `--device-id=` 注入），故此处用 node:fs 同步读写。
+ * 该文件历史上与数仓上报（telemetryCore）/ ARMS 共用同一个 `deviceMid` 字段；远端遥测
+ * 已下线，但 billing 与 CLI / 远端 server 仍读取同一持久化 UUID，文件名与字段保持不变。
+ * 窗口创建前需同步取值（经 preload `--device-id=` 注入），故此处用 node:fs 同步读写。
  *
  * 竞态规避：
  * - 已存在合法 deviceMid 时直接返回、绝不写盘（老用户/二次启动零写入）。

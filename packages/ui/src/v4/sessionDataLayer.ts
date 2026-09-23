@@ -5,7 +5,6 @@
 // Map<workspaceKey, SessionDataLayer>，本层不感知 workspace。
 import { ConversationProjectionStore } from "@/v4/conversationProjectionStore.js";
 import { shouldExposeE2EStoreBridge } from "@/lib/e2eStoreBridge.js";
-import type { SessionOpenKind } from "@/lib/sessionOpenArmsTelemetry.js";
 import { conversationTopic, type ConversationTransport } from "@/v4/transport.js";
 import { logger } from "@/logger.js";
 import type { CommandsQueryParams, CommandsQueryResult } from "@zcode/shared/zcode-protocol-v4";
@@ -20,6 +19,9 @@ export interface SessionLease {
   readonly startedAt: number;
   release(): void;
 }
+
+// 会话打开方式标签（历史 telemetry 专用类型；功能层仍用于 open 时序判定）。
+export type SessionOpenKind = "cold" | "warm" | "keep_warm";
 
 interface SessionDataLayerOptions {
   transport: ConversationTransport;

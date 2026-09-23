@@ -29,7 +29,7 @@ export type { WorkspacePurpose } from "./workspacePurpose.js";
 export { DEFAULT_LOCALE } from "./protocol.js";
 export { ZCODE_VERSION, ZCODE_COMMIT, ZCODE_BUILD_TIME } from "./version.js";
 export type { HelloMessage, HelloAckMessage } from "./handshake.js";
-export type { ArmsRumEnv, ZCodeEnv, ZCodeProductFlavor } from "./env.js";
+export type { ZCodeEnv, ZCodeProductFlavor } from "./env.js";
 export type { RemoteAssetInstallMode } from "./remoteAssetInstallMode.js";
 export type {
   RemoteResourcePackageId,
@@ -64,10 +64,6 @@ export {
   ZCODE_APP_VERSION_ENV,
   ZCODE_BUILD_COMMIT_ID_ENV,
   RUNTIME_ZCODE_DEBUG,
-  ZCODE_TELEMETRY_REPORT_ENDPOINT,
-  ZCODE_ARMS_RUM_ENDPOINT,
-  ZCODE_TELEMETRY_ENABLED,
-  mapZCodeEnvToArmsRumEnv,
   normalizeZCodeEnv,
   normalizeZCodeProductFlavor,
 } from "./env.js";
@@ -90,7 +86,6 @@ export * from "./zcode-session-visible-content.js";
 export * from "./official-mcp-auth.js";
 export * from "./official-mcp-tool-error.js";
 export * from "./conversation-message-projection-policy.js";
-export * from "./conversation-share.js";
 export * from "./conversation-preview-artifacts.js";
 export * from "./zcode-session-task-status.js";
 export * from "./zcode-tool-projection-memory.js";
@@ -120,10 +115,7 @@ export * from "./channels.js";
 export * from "./storage.js";
 export * from "./oauth.js";
 export * from "./desktopMenu.js";
-export * from "./feedback.js";
 export * from "./e2e-test-bridge.js";
-export * from "./remoteAppConfig.js";
-export * from "./helpAppConfig.js";
 export * from "./remoteAssetInstallMode.js";
 export * from "./onboardingRecord.js";
 export * from "./remoteResourcePackages.js";
@@ -136,39 +128,6 @@ export {
   buildLocalMediaPreviewUrl,
   createOpenInEditorRemoteTarget,
 } from "./platform.js";
-export type {
-  ArmsCustomEventPayload,
-  ConfigureFinalArmsCustomEventE2ERequest,
-  FinalArmsCustomEventE2EEntry,
-  FinalArmsCustomEventPayload,
-  RendererTelemetryEventPayload,
-  TelemetryEventPayload,
-  TelemetryRendererContext,
-} from "./telemetry.js";
-export {
-  collectTelemetryRendererContext,
-  resolveSafeTelemetryHostname,
-  sanitizeTelemetryErrorMessage,
-  sanitizeTelemetryEventDetail,
-} from "./telemetry.js";
-export type {
-  RedactTelemetryTextOptions,
-  TelemetryProviderIdentity,
-  TelemetryProviderScope,
-} from "./telemetryRedaction.js";
-export {
-  TELEMETRY_SAFE_BUILTIN_MODEL_IDS,
-  TELEMETRY_TEXT_MAX_LENGTH,
-  redactTelemetryText,
-  redactTelemetryUrl,
-  resolveTelemetryModelId,
-  resolveTelemetryProviderScope,
-  sanitizeTelemetryModelValue,
-} from "./telemetryRedaction.js";
-export * from "./remoteUsageTelemetry.js";
-export * from "./sessionCreateTelemetry.js";
-export type { LaunchMarks } from "./launchMarks.js";
-export { LAUNCH_MARKS_QUERY_KEY, parseLaunchMarks, serializeLaunchMarks } from "./launchMarks.js";
 export type {
   CancelPendingRemoteConnectionRequest,
   BindRemoteWorkspaceSessionContextRequest,
@@ -292,9 +251,7 @@ export * from "./execution-state.js";
 
 export { bashOutputDisplaySchema } from "./bash-output-display.js";
 
-export * from "./localTtft.js";
 export * from "./pluginStoreOrder.js";
 export * from "./clientConfig.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
-export { redactFeedbackText } from "./feedbackPrivacy.js";

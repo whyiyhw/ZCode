@@ -21,7 +21,6 @@ import {
   type IChannelServer,
   LoggingChannelServer,
 } from "@zcode/rpc";
-import { reportHostSessionCreate } from "./hostSessionCreateTelemetry.js";
 import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
@@ -33,7 +32,6 @@ import {
   IModelSelectionService,
   ISettingService,
   IWindowControllerService,
-  IConversationShareService,
   IZCodeAgentService,
   IZCodeTaskService,
   IZCodeSessionService,
@@ -133,7 +131,6 @@ import {
   materializeRemotePromptAttachments,
 } from "./remotePromptAttachments.js";
 import { createWindowHostAttachmentRegistry } from "./windowHostAttachmentRegistry.js";
-import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
 import {
   createWindowRemoteConnectionRegistry,
   type WindowRemoteConnectionCloseEvent,
@@ -619,15 +616,6 @@ async function dispatchOffPeakRun(request: OffPeakRunDispatchRequest): Promise<{
       offPeakTaskId: request.offPeakTaskId,
       offPeakRunType,
     });
-    // 只有 init 实际新建；绑定首跑和跨票续跑只是原 Session 的后续输入。
-    if (dispatchKind === "init") {
-      reportHostSessionCreate(parentPort, {
-        sessionId: taskId,
-        messageId: traceId,
-        source: "automation_idle",
-        workspaceIdentity: request.workspaceIdentity,
-      });
-    }
     return { conversationId: taskId, sessionId: taskId };
   } catch (error) {
     if (trackedKey) disposeOffPeakRunSubscription(trackedKey);
@@ -890,15 +878,6 @@ async function dispatchCronRun(request: CronRunDispatchRequest): Promise<{
       clientMode: "desktop-continuous",
       automationId: request.automationId,
     });
-    // prompt 创建的定时任务带 targetTaskId，追加原会话不能计成 session_create。
-    if (!request.targetTaskId) {
-      reportHostSessionCreate(parentPort, {
-        sessionId: task.taskId,
-        messageId: promptTraceId,
-        source: "automation_scheduled",
-        workspaceIdentity: request.workspaceIdentity,
-      });
-    }
     return { taskId: task.taskId, sessionId: task.taskId };
   } catch (error) {
     if (trackedKey) disposeCronRunSubscription(trackedKey);
@@ -974,53 +953,6 @@ async function dispatchManualAutomationRun(params: {
 
 // Node warning 不是远端连接失败，改成结构化 warn，避免默认 stderr 被误染成 error。
 process.on("warning", (warning) => logger.warn(`${warning.name}: ${warning.message}`));
-
-const runtimeProcessLifecycleReporter = {
-  onSpawn(event) {
-    if (!parentPort) {
-      return;
-    }
-
-    parentPort.postMessage({
-      type: HostResponseTypes.AgentProcessSpawned,
-      ...event,
-    });
-  },
-  onReady(event) {
-    if (!parentPort) {
-      return;
-    }
-
-    parentPort.postMessage({
-      type: HostResponseTypes.AgentProcessReady,
-      ...event,
-    });
-  },
-  onExit(event) {
-    if (!parentPort) {
-      return;
-    }
-
-    parentPort.postMessage({
-      type: HostResponseTypes.AgentProcessExited,
-      ...event,
-      signal: event.signal ?? null,
-    });
-  },
-  onError(event) {
-    if (!parentPort) {
-      return;
-    }
-
-    parentPort.postMessage({
-      type: HostResponseTypes.AgentProcessError,
-      ...event,
-    });
-  },
-  onException(event) {
-    parentPort?.postMessage({ type: HostResponseTypes.AgentProcessException, ...event });
-  },
-} satisfies NonNullable<Parameters<typeof createLocalServices>[0]>["processLifecycleReporter"];
 
 const runtimeTaskReporter = {
   onRunningTaskCountChanged(event) {
@@ -1919,19 +1851,6 @@ function exposeServicesOnMessagePort(
   if (connectionScope) {
     overrides.set(IZCodeAgentService.channelName, connectionScope.service);
   }
-  const conversationShareService = services.getOptional(IConversationShareService);
-  if (conversationShareService) {
-    // Share service 若继续持有 raw Agent，会绕过当前 MessagePort 已握手的 trusted carrier，
-    // rowsRange 会以 connection untrusted 拒绝。必须复用同一 attachment connection scope。
-    overrides.set(
-      IConversationShareService.channelName,
-      scopeConversationShareServiceForAttachment(
-        conversationShareService,
-        clientMode,
-        connectionScope?.service,
-      ),
-    );
-  }
   services.exposeOnChannelServer(server, overrides);
   let disposed = false;
   let flowUpdateChain = Promise.resolve();
@@ -2708,12 +2627,7 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               serviceAuthorityMode: "desktop-local",
               zcodeAgentSpawnFallbackCwd: msg.agentSpawnFallbackCwd,
               zcodeBuiltinProviderConfigFilePath: msg.zcodeBuiltinProviderConfigFilePath,
-              processLifecycleReporter: runtimeProcessLifecycleReporter,
               taskRuntimeReporter: runtimeTaskReporter,
-              feedback: {
-                getDeviceMid: () => msg.deviceMid,
-                apiBaseUrl: msg.feedbackApiBase,
-              },
               forwardSessionMessageSendRequested: (request) => {
                 parentPort?.postMessage({
                   type: HostResponseTypes.SessionMessageSendRequested,

@@ -1,5 +1,4 @@
 import { DatabaseStartupAdmission } from "./databaseStartupAdmission.js";
-import { initializeDesktopLocalTtft } from "./localTtftBootstrap.js";
 import { createRoot } from "react-dom/client";
 import { useEffect } from "react";
 import {
@@ -12,7 +11,6 @@ import {
   createRemoteWorkspaceDisconnectedError,
   playTaskNotificationSound,
   setStreamClientId,
-  setReactErrorArmsReporter,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
 import { connectViaMessagePort, createMessagePortServiceConnection } from "@zcode/client";
@@ -20,9 +18,6 @@ import {
   InternalChannels,
   databaseStartupStateSchema,
   type DatabaseStartupControl,
-  parseLaunchMarks,
-  LAUNCH_MARKS_QUERY_KEY,
-  type LaunchMarks,
   DEFAULT_LOCALE,
 } from "@zcode/shared";
 import type { Locale } from "@zcode/shared";
@@ -43,19 +38,8 @@ type DesktopRendererImportMetaEnv = {
 
 startPerformanceTimelineCleanup();
 
-// T4:renderer bundle 开始执行。同时从 loadURL query 解析 main 注入的 T0-T3。
+// T4:renderer bundle 开始执行。
 const rendererStartedAt = Date.now();
-const launchMarks: LaunchMarks | null = parseLaunchMarks(
-  new URLSearchParams(window.location.search).get(LAUNCH_MARKS_QUERY_KEY),
-);
-(
-  window as Window & {
-    __ZCODE_RENDERER_START__?: number;
-    __ZCODE_LAUNCH_MARKS__?: LaunchMarks | null;
-  }
-).__ZCODE_RENDERER_START__ = rendererStartedAt;
-(window as Window & { __ZCODE_LAUNCH_MARKS__?: LaunchMarks | null }).__ZCODE_LAUNCH_MARKS__ =
-  launchMarks;
 registerE2EStoreBridgesIfEnabled();
 
 function registerE2EStoreBridgesIfEnabled() {
@@ -137,7 +121,6 @@ let baseServicesForRemoteSessions: IServiceAccessor | null = null;
 const pendingRemoteWorkspaceServicePorts: RemoteWorkspaceServicePortRegistration[] = [];
 
 const desktopPlatform = createDesktopPlatform({ isLocalDevelopmentRuntime });
-initializeDesktopLocalTtft(desktopPlatform);
 initializeDesktopUserActionTrace({
   platform: desktopPlatform,
   isLocalDevelopmentRuntime,
@@ -302,11 +285,6 @@ function initializeBusinessRoot(port: MessagePort): void {
 
   // 初始化稳定的设备 ID，确保所有 hook 在首次渲染前就使用正确的值
   setStreamClientId(desktopPlatform.getDeviceId());
-
-  // React 错误边界捕获的异常不会冒泡到 window.onerror，RUM Browser SDK 默认收不到。
-  // 必须在 createRoot 之前注入 reporter：根级 AppErrorBoundary 的职责正是兜住 Root 自身
-  // 渲染崩溃，若依赖 Root 的 effect 注入，则 Root 首帧就崩时上报会丢失。
-  setReactErrorArmsReporter(desktopPlatform);
 
   appRoot?.render(
     <AppErrorBoundary isDesktop isMacDesktop={isMacDesktop} isWindowsDesktop={isWindowsDesktop}>

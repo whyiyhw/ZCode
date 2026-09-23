@@ -1,9 +1,7 @@
-import type { ZCodeRuntimeEnv } from "./runtimeEnv.js";
 
 export type ZCodeEnv = "test" | "production";
 /** 安装包身份：决定应用名、app id、Electron 数据目录与更新策略；与后端环境 `ZCodeEnv` 是两个轴。 */
 export type ZCodeProductFlavor = "production" | "preview";
-export type ArmsRumEnv = "local" | "prod";
 
 // 非构建环境（如 e2e 测试的 mocha）下 define 不存在，用 typeof 检查 + fallback 避免 ReferenceError
 declare const __ZCODE_ENV__: string;
@@ -45,20 +43,5 @@ export const ZCODE_BUILD_COMMIT_ID_ENV = "ZCODE_BUILD_COMMIT_ID" as const;
 export const RUNTIME_ZCODE_DEBUG =
   typeof process !== "undefined" ? process.env.ZCODE_DEBUG : undefined;
 
-// 本 fork 隐私基线：默认关闭，仅环境变量恰为 "true" 时显式开启（spec/telemetry-master-switch.md）。
-// 上游默认 true 且依赖端点未配置兜底；本仓库构建不注入端点，仍收紧为 opt-in，避免环境意外继承端点后静默上报。
-export const ZCODE_TELEMETRY_ENABLED: boolean =
-  typeof process !== "undefined" ? process.env.ZCODE_TELEMETRY_ENABLED === "true" : false;
-
-/** 数仓事件上报端点：由运行时环境变量提供，未配置即停用，构建产物不内嵌。 */
-export const ZCODE_TELEMETRY_REPORT_ENDPOINT =
-  typeof process !== "undefined" ? (process.env.ZCODE_TELEMETRY_REPORT_ENDPOINT ?? "") : "";
-
-/** ARMS RUM 接入端点：由运行时环境变量提供，未配置即停用，构建产物不内嵌。 */
-export const ZCODE_ARMS_RUM_ENDPOINT =
-  typeof process !== "undefined" ? (process.env.ZCODE_ARMS_RUM_ENDPOINT ?? "") : "";
-
-/** 将本地运行态与编译期 ZCODE_ENV 映射为 ARMS 控制台识别的上报环境标签 */
-export function mapZCodeEnvToArmsRumEnv(runtimeEnv: ZCodeRuntimeEnv): ArmsRumEnv {
-  return runtimeEnv !== "development" && ZCODE_ENV === "production" ? "prod" : "local";
-}
+// 遥测栈（数仓/ARMS/远程 crash）已于 2026-09-23 整体删除；相关 env 开关随之移除，
+// 环境变量若仍被设置会被直接忽略（见 PRIVACY-AUDIT.md §十五）。

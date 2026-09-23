@@ -94,7 +94,7 @@ import type {
 import type { NodeReplBrowserBroker } from "./node-repl-browser-broker.js";
 import type { SessionTranscriptMessage } from "../session-transcript.js";
 import type { WorkspaceHookReviewCommandResult } from "./workspace-hook-review-controller.js";
-import type { AgentTelemetryRuntimeOwner, WorkspaceHookPolicy } from "@zcode/contracts";
+import type { WorkspaceHookPolicy } from "@zcode/contracts";
 import type { ProviderRegistryModelSource } from "./provider-registry-model-runtime.js";
 
 export interface WorkspaceHookReviewHostContext {
@@ -143,7 +143,6 @@ export interface ZCodeAppOptions {
   configuredDefaultModelSelection?: ModelSelection;
   modelIoFullRetentionEnabled?: boolean;
   /** 同进程嵌入宿主可注入完整的 borrowed 进程级 Owner；Endpoint 配置不得覆盖它。 */
-  telemetryOwner?: AgentTelemetryRuntimeOwner;
   /**
    * provider runtime headers 端口：主 runtime 每次调用报自己的会话；child runtime 一律向父
    * runtime 取派生实例。
@@ -198,7 +197,6 @@ export interface SubmitPromptOptionsBase {
   inputId?: string;
   queryId?: QueryId;
   intent?: TurnInputIntentMetadata;
-  sharedContextRefs?: TurnInputIntentMetadata["sharedContextRefs"];
   onEvent?: (event: SessionEvent) => void | Promise<void>;
   /** 内部 admission 观察点：只表示 runtime sink 看见 TurnStarted，不代表 projection 已 apply。 */
   onTurnStartedObserved?: (event: SessionEvent) => void;

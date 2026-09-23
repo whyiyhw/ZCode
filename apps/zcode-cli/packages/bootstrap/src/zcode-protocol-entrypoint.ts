@@ -44,7 +44,6 @@ import {
   type ProtocolMaintenanceBeat,
 } from "./zcode-protocol/resource-sampler.js";
 import { acquireProtocolStartupResource } from "./zcode-protocol/startup-resource.js";
-import { prepareZCodeTelemetryEnv, shutdownZCodeTelemetry } from "./telemetry-bootstrap.js";
 
 function applyProtocolPresentationSurface(
   options: Omit<ZCodeAppOptions, "providerRegistry">,
@@ -163,18 +162,8 @@ export async function runZCodeProtocolAgent(
       providerCount: providerRegistryRuntime.snapshot.registry.providers.length,
     });
     const runtimeSurface = resolveProtocolRuntimeSurface(runtimeEnv);
-    const telemetryEnv = await acquireProtocolStartupResource({
-      signal: options.lifecycle?.signal,
-      logger,
-      disposeLate: () => shutdownZCodeTelemetry(),
-      create: () =>
-        prepareZCodeTelemetryEnv(runtimeEnv, {
-          cliVersion: options.version,
-          productVersion: options.env?.ZCODE_APP_VERSION,
-          runtimeSurface,
-        }),
-    });
-    const telemetryDeviceMid = telemetryEnv.ZCODE_TELEMETRY_DEVICE_MID;
+    // 遥测出网链已于 2026-09-23 删除（PRIVACY-AUDIT.md §十五）；这里不再准备 telemetry env。
+    const telemetryEnv = runtimeEnv as NodeJS.ProcessEnv;
     mcpTelemetryTracker =
       configResult.config.features.mcp === false
         ? undefined
@@ -256,7 +245,6 @@ export async function runZCodeProtocolAgent(
           env: {
             ...telemetryEnv,
             ...appOptions.env,
-            ...(telemetryDeviceMid ? { ZCODE_TELEMETRY_DEVICE_MID: telemetryDeviceMid } : {}),
           },
           ...(nodeReplBrowserBroker ? { nodeReplBrowserBroker } : {}),
           ...(mcpConnectionPool

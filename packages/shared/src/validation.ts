@@ -1,10 +1,6 @@
 import { databaseStartupControlSchema, databaseStartupStateSchema } from "./database-startup.js";
-import {
-  automationSessionCreateTelemetrySchema,
-} from "./sessionCreateTelemetry.js";
 /* eslint-disable max-lines -- 运行时 schema 当前集中在共享包入口，外部 relay payload 校验加入后先保持单一导出面。 */
 import { z } from "zod";
-import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
 import { browserCommandSchema } from "./browser-use/commands.js";
 import { browserCommandResultSchema } from "./browser-use/result.js";
 import { REMOTE_ASSET_INSTALL_MODES } from "./remoteAssetInstallMode.js";
@@ -121,33 +117,6 @@ export const taskNotificationPayloadSchema = z.object({
   body: z.string(),
 });
 
-export const telemetryRendererContextSchema = z.object({
-  clientTimezone: nonEmptyStringSchema,
-  clientLanguage: nonEmptyStringSchema,
-  screenResolution: nonEmptyStringSchema,
-});
-
-export const rendererTelemetryEventPayloadSchema = z.object({
-  context: telemetryRendererContextSchema,
-  elementName: nonEmptyStringSchema,
-  eventRegion: nonEmptyStringSchema,
-  eventType: nonEmptyStringSchema,
-  eventText: z.string().optional(),
-  eventExtraDetail: z.record(z.string(), z.string()),
-  userId: z.string().optional(),
-  talkId: z.string().optional(),
-  messageId: z.string().optional(),
-});
-
-export const armsCustomEventPayloadSchema = z.object({
-  name: nonEmptyStringSchema,
-  group: nonEmptyStringSchema,
-  value: z.number().finite().optional(),
-  properties: z
-    .record(z.string(), z.union([z.string(), z.number().finite(), z.boolean(), z.undefined()]))
-    .optional(),
-});
-
 export const broadcastMessageSchema = z.object({
   channel: nonEmptyStringSchema,
   payload: z.unknown(),
@@ -172,7 +141,6 @@ export const hostInitLocalMessageSchema = z.object({
   hostId: nonEmptyStringSchema.optional(),
   deliveryKind: taskRealtimeHostDeliveryKindSchema.optional(),
   deviceMid: z.string().optional(),
-  feedbackApiBase: z.string().url().optional(),
   workspacePath: nonEmptyStringSchema.optional(),
   workspaceIdentity: nonEmptyStringSchema.optional(),
   agentWarmupTargets: z.array(hostAgentWarmupTargetSchema).max(3).optional(),
@@ -342,15 +310,6 @@ export const hostSessionMessageDeliveryResultMessageSchema = z.object({
   result: sessionMessageDeliveryResultSchema,
 });
 
-export const hostFeedbackLogArchiveResultMessageSchema = z.object({
-  type: z.literal("feedback-log-archive-result"),
-  requestId: nonEmptyStringSchema,
-  ok: z.boolean(),
-  path: z.string().optional(),
-  size: z.number().int().nonnegative().optional(),
-  error: z.string().optional(),
-});
-
 // main → host：定时任务到点派发。会话内 cron 带 targetTaskId 时直接 sendPrompt 到当前会话；
 // 历史未绑定任务才 fallback createTask + sendPrompt 建 session。
 export const hostCronRunMessageSchema = z.object({
@@ -457,7 +416,6 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostTaskOwnerCommandResultMessageSchema,
   hostSessionMessageDeliverMessageSchema,
   hostSessionMessageDeliveryResultMessageSchema,
-  hostFeedbackLogArchiveResultMessageSchema,
   hostCronRunMessageSchema,
   hostOffPeakRunMessageSchema,
   hostBrowserExecuteResultMessageSchema,
@@ -512,104 +470,6 @@ export const hostLogResponseSchema = z.object({
 export { zcodeProviderSchema };
 
 export const zcodeTaskMigrationSourceSchema = z.enum(["claudeCode"]);
-
-export const hostAgentProcessSpawnedResponseSchema = z.object({
-  type: z.literal("agent-process-spawned"),
-  /** 进程泳道（mcp-status 等），旧 Host 不带该字段。 */
-  lane: nonEmptyStringSchema.optional(),
-  pid: z.number().int().positive(),
-  provider: zcodeProviderSchema,
-  workspacePath: nonEmptyStringSchema,
-  command: z.string(),
-  args: z.array(z.string()),
-  startedAt: z.number().int().nonnegative(),
-  runtimeGeneration: z.number().int().positive().optional(),
-  runtimeInstanceId: nonEmptyStringSchema.optional(),
-});
-export type HostAgentProcessSpawnedResponse = z.infer<typeof hostAgentProcessSpawnedResponseSchema>;
-
-export const hostAgentProcessReadyResponseSchema = z.object({
-  type: z.literal("agent-process-ready"),
-  /** 进程泳道（mcp-status 等），旧 Host 不带该字段。 */
-  lane: nonEmptyStringSchema.optional(),
-  pid: z.number().int().positive(),
-  provider: zcodeProviderSchema,
-  workspacePath: nonEmptyStringSchema,
-  readyAt: z.number().int().nonnegative(),
-  startupDurationMs: z.number().int().nonnegative(),
-  runtimeGeneration: z.number().int().positive(),
-  runtimeInstanceId: nonEmptyStringSchema,
-});
-export type HostAgentProcessReadyResponse = z.infer<typeof hostAgentProcessReadyResponseSchema>;
-
-export const hostAgentProcessExitedResponseSchema = z.object({
-  type: z.literal("agent-process-exited"),
-  /** 进程泳道（mcp-status 等），旧 Host 不带该字段。 */
-  lane: nonEmptyStringSchema.optional(),
-  pid: z.number().int().positive(),
-  provider: zcodeProviderSchema,
-  workspacePath: nonEmptyStringSchema,
-  exitCode: z.number().int().nullable(),
-  signal: z.string().nullable(),
-  endedAt: z.number().int().nonnegative(),
-  terminationKind: z.enum(["expected", "unexpected", "watchdog_recycle"]),
-  terminationReason: z.string().optional(),
-  /** rolling-upgrade 兼容：旧 Host 缺字段时 desktop 映射 crash_phase=unknown。 */
-  runtimeReady: z.boolean().optional(),
-  runtimeGeneration: z.number().int().positive(),
-  runtimeInstanceId: nonEmptyStringSchema.optional(),
-  uptimeMs: z.number().int().nonnegative(),
-  stderrLineCount: z.number().int().nonnegative(),
-  stderrTail: z.array(z.string().max(1_100)).max(20).optional(),
-});
-
-export type HostAgentProcessExitedResponse = z.infer<typeof hostAgentProcessExitedResponseSchema>;
-
-export const hostAgentProcessErrorResponseSchema = z.object({
-  type: z.literal("agent-process-error"),
-  /** 进程泳道（mcp-status 等），旧 Host 不带该字段。 */
-  lane: nonEmptyStringSchema.optional(),
-  pid: z.number().int().positive().nullable(),
-  provider: zcodeProviderSchema,
-  workspacePath: nonEmptyStringSchema,
-  command: z.string(),
-  args: z.array(z.string()),
-  errorName: nonEmptyStringSchema,
-  errorCode: z.string().optional(),
-  errorMessage: z.string(),
-  errorStack: z.string().optional(),
-  runtimeGeneration: z.number().int().positive(),
-  runtimeInstanceId: nonEmptyStringSchema.optional(),
-  occurredAt: z.number().int().nonnegative(),
-});
-
-export type HostAgentProcessErrorResponse = z.infer<typeof hostAgentProcessErrorResponseSchema>;
-
-export const hostAgentProcessExceptionResponseSchema = z
-  .object({
-    type: z.literal("agent-process-exception"),
-    lane: nonEmptyStringSchema.optional(),
-    pid: z.number().int().positive(),
-    provider: zcodeProviderSchema,
-    workspacePath: nonEmptyStringSchema,
-    runtimeGeneration: z.number().int().positive(),
-    runtimeInstanceId: nonEmptyStringSchema,
-    diagnostic: zcodeProcessDiagnosticSchema,
-  })
-  .strict();
-export type HostAgentProcessExceptionResponse = z.infer<
-  typeof hostAgentProcessExceptionResponseSchema
->;
-
-export const hostSessionCreateTelemetryResponseSchema = z
-  .object({
-    type: z.literal("session-create-telemetry"),
-    event: automationSessionCreateTelemetrySchema,
-  })
-  .strict();
-export type HostSessionCreateTelemetryResponse = z.infer<
-  typeof hostSessionCreateTelemetryResponseSchema
->;
 
 export const hostAgentRunningTaskCountChangedResponseSchema = z.object({
   type: z.literal("agent-running-task-count-changed"),
@@ -698,12 +558,6 @@ export const hostSessionRouteAnnounceResponseSchema = z.object({
 export const hostSessionMessageDeliverResultResponseSchema = z.object({
   type: z.literal("session-message-deliver-result"),
   result: sessionMessageDeliveryResultSchema,
-});
-
-export const hostFeedbackLogArchiveRequestResponseSchema = z.object({
-  type: z.literal("feedback-log-archive-request"),
-  requestId: nonEmptyStringSchema,
-  sourceDir: nonEmptyStringSchema,
 });
 
 // host → main：定时任务派发结果。ok=已成功创建 session 且 prompt 已发出。
@@ -817,12 +671,6 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostRemoteWorkspaceConnectFailedResponseSchema,
   hostRemoteWorkspaceClosedResponseSchema,
   hostLogResponseSchema,
-  hostAgentProcessSpawnedResponseSchema,
-  hostAgentProcessReadyResponseSchema,
-  hostAgentProcessExitedResponseSchema,
-  hostAgentProcessErrorResponseSchema,
-  hostAgentProcessExceptionResponseSchema,
-  hostSessionCreateTelemetryResponseSchema,
   hostAgentRunningTaskCountChangedResponseSchema,
   hostWorkspaceRunningTaskCountChangedResponseSchema,
   hostCuaOperationStateResponseSchema,
@@ -839,7 +687,6 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostSessionMessageSendRequestedResponseSchema,
   hostSessionRouteAnnounceResponseSchema,
   hostSessionMessageDeliverResultResponseSchema,
-  hostFeedbackLogArchiveRequestResponseSchema,
   hostBrowserExecuteRequestResponseSchema,
   hostLocalMediaPreviewPathAuthorizeRequestResponseSchema,
   hostProviderProvisioningSourceChangedResponseSchema,

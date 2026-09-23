@@ -14,7 +14,6 @@ import type {
 } from "./mcp.js";
 import type { OAuthStateRegistration } from "./oauth.js";
 import type { AppSettings, Locale } from "./protocol.js";
-import type { ArmsCustomEventPayload, RendererTelemetryEventPayload } from "./telemetry.js";
 import type {
   RendererActionTraceBatchV1,
   RendererActionTraceConfigV1,
@@ -439,7 +438,7 @@ export interface ConnectRemoteRequest {
   requestId?: string;
   workspacePath?: string;
   workspaceIdentity?: string;
-  connectTrigger?: import("./remoteUsageTelemetry.js").RemoteWorkspaceConnectTrigger;
+  connectTrigger?: "new" | "reconnect" | "restore";
 }
 
 export interface CancelPendingRemoteConnectionRequest {
@@ -467,8 +466,6 @@ export const DesktopCommandIds = {
   ShowAbout: "showAbout",
   OpenChangelog: "openChangelog",
   RelaunchApp: "relaunchApp",
-  OpenFeedback: "openFeedback",
-  OpenCommunity: "openCommunity",
   ExportLogs: "exportLogs",
   ToggleDevTools: "toggleDevTools",
   OpenResourceManager: "openResourceManager",
@@ -562,7 +559,7 @@ export interface IPlatformService {
     context?: {
       workspacePath: string;
       workspaceIdentity?: string;
-      connectTrigger?: import("./remoteUsageTelemetry.js").RemoteWorkspaceConnectTrigger;
+      connectTrigger?: "new" | "reconnect" | "restore";
     },
   ): Promise<{ success: boolean; error?: string; sessionId?: string }>;
 
@@ -612,21 +609,6 @@ export interface IPlatformService {
     request: string | ApplicationIconRequest,
   ): Promise<ApplicationIconInfo | null>;
 
-  /** 打开反馈入口，由平台自行解析最终地址 */
-  openFeedback(): Promise<void>;
-
-  /** 订阅 main 进程打开内置反馈对话框事件（Desktop） */
-  onOpenFeedbackDialog?(handler: () => void): () => void;
-
-  /** 订阅 main 进程打开我的工单面板事件（Desktop） */
-  onOpenTicketsPanel?(handler: () => void): () => void;
-
-  /** 打开用户社群入口，由平台自行解析当前语言对应渠道 */
-  openCommunity(): Promise<void>;
-
-  /** 查询当前语言下是否存在可用的用户社群入口 */
-  canOpenCommunity(locale: Locale): Promise<boolean>;
-
   /** 在系统文件管理器中打开指定路径 */
   openInFileManager(path: string): Promise<{ success: boolean; error?: string }>;
 
@@ -663,20 +645,11 @@ export interface IPlatformService {
    */
   onPaymentCallback(callback: (url: string) => void): () => void;
 
-  /** 注册 `zcode://share/import?code=...` 导入意图。 */
-  onShareImport?(callback: (payload: { shareCode: string }) => void): () => void;
-
   /** 通知 main process renderer 已就绪，触发缓存的冷启动 deep link 转发 */
   notifyRendererReady(): void;
 
   /** 触发任务状态对应的系统通知，由宿主环境决定是否真正展示 */
   showTaskNotification(payload: TaskNotificationPayload): void;
-
-  /** 通过宿主环境统一上报 UI 侧 telemetry 事件 */
-  reportTelemetryEvent(payload: RendererTelemetryEventPayload): Promise<void>;
-
-  /** 通过宿主环境上报 ARMS 自定义事件；Web 端当前为空实现 */
-  reportArmsCustomEvent(payload: ArmsCustomEventPayload): Promise<void>;
 
   /** 读取 Desktop Renderer 用户操作 Trace 的当前灰度配置；Web/手机不实现。 */
   getRendererActionTraceConfig?(): Promise<RendererActionTraceConfigV1>;
@@ -686,7 +659,6 @@ export interface IPlatformService {
   ): () => void;
   /** Renderer → Main：发送已结束的 ui_action batch；严格旁路、fire-and-forget。 */
   reportRendererActionTraceBatch?(batch: RendererActionTraceBatchV1): void;
-  reportLocalTtftBatch?(batch: import("./localTtft.js").LocalTtftBatch): void;
 
   /**
    * Renderer → Main：主窗口 renderer 每 60 秒的 heap 读数，进 `renderer_main` 角色事件。单向 send、fire-and-forget；

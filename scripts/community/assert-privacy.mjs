@@ -26,13 +26,14 @@ const CONTRACT_HEADER_NAMES = ["X-Client-Timezone", "X-Os-Version"];
 const CONTRACT_SCOPED_PROOF = ["/api/v1/zcode-plan/", "ZCODE_BILLING_CONTRACT_HEADERS"];
 
 /** app.asar 中必须存在的 opt-in 开关（证明收口逻辑已编入产物）。 */
-const ASAR_REQUIRED = ["ZCODE_SEND_DEVICE_MID", "ZCODE_TELEMETRY_ENABLED"];
+// 遥测栈已于 2026-09-23 整体删除（PRIVACY-AUDIT.md §十五），ZCODE_TELEMETRY_ENABLED 不再存在。
+const ASAR_REQUIRED = ["ZCODE_SEND_DEVICE_MID"];
 
 /** 内置 agent（resources/glm/zcode.cjs）中必须存在的 opt-in 开关。 */
 const AGENT_REQUIRED = ["ZCODE_MODEL_IO_ENABLED", "ZCODE_SEND_CLIENT_HEADERS"];
 
-/** 休眠 SDK 死代码特征：仅报告不判失败（总闸默认 false 使其不可达；物理摘除见 P1=E1）。 */
-const DORMANT_INFO = ["sdk.rum.aliyuncs", "rum/web/v2"];
+/** 遥测栈删除（2026-09-23，原 P1=E1）后应为零命中；保留为回归探针。 */
+const TELEMETRY_REMOVED_PROBES = ["sdk.rum.aliyuncs", "rum/web/v2"];
 
 function countOccurrences(buffer, needle) {
   const needleBuffer = Buffer.from(needle, "utf-8");
@@ -178,14 +179,17 @@ for (const pattern of AGENT_REQUIRED) {
   check(count > 0, `agent 含 opt-in 开关 "${pattern}"（实际 ${count}）`);
 }
 
-for (const pattern of DORMANT_INFO) {
-  console.log(
-    `[INFO] 休眠 SDK 字符串 "${pattern}"：asar ${countOccurrences(asar, pattern)} 处 / agent ${countOccurrences(agent, pattern)} 处（总闸默认关，不可达；物理摘除 = P1/E1）`,
+for (const pattern of TELEMETRY_REMOVED_PROBES) {
+  const asarCount = countOccurrences(asar, pattern);
+  const agentCount = countOccurrences(agent, pattern);
+  check(
+    asarCount === 0 && agentCount === 0,
+    `遥测已删除，残留字符串 "${pattern}" 应为零命中（asar ${asarCount} / agent ${agentCount}）`,
   );
 }
 const aliyunUrls = [...listUniqueUrls(asar), ...listUniqueUrls(agent)];
 if (aliyunUrls.length > 0) {
-  console.log(`[INFO] aliyuncs URL 清单（人工复核，应仅剩 provider 功能端点与休眠 SDK 模板）：`);
+  console.log(`[INFO] aliyuncs URL 清单（人工复核，应仅剩 provider 功能端点）：`);
   for (const url of aliyunUrls) {
     console.log(`       ${url}`);
   }

@@ -10,35 +10,21 @@ import {
 } from "electron";
 import type { MessagePortMain, UtilityProcess as ElectronUtilityProcess } from "electron";
 import {
-  type HostAgentProcessErrorResponse,
-  type HostAgentProcessExceptionResponse,
-  type HostAgentProcessExitedResponse,
-  type HostAgentProcessReadyResponse,
-  type HostAgentProcessSpawnedResponse,
   type HostCuaOperationStateResponse,
-  type HostSessionCreateTelemetryResponse,
   type TaskRealtimeHostDeliveryKind,
   formatZCodeHostProcessName,
   HostMessageTypes,
   HostResponseTypes,
   hostResponseMessageSchema,
   InternalChannels,
-  LAUNCH_MARKS_QUERY_KEY,
   RUNTIME_ZCODE_DEBUG,
-  serializeLaunchMarks,
   type WorkspacePurpose,
   ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV,
 } from "@zcode/shared";
-import { getMainLaunchPartialMarks } from "./desktopLaunchMarks.js";
 import { BroadcastHub } from "./broadcastHub.js";
 import type { TaskRealtimeBus } from "./taskRealtimeBus.js";
 import { createHostLogRelay } from "./hostLogRelay.js";
-import {
-  registerHostAgentProcess,
-  registerHostProcess,
-  unregisterHostAgentProcess,
-  unregisterHostProcess,
-} from "./resourceManagerWindow.js";
+import { registerHostProcess, unregisterHostProcess } from "./resourceManagerWindow.js";
 import { resolveHostResourceUsageResult } from "./resourceManagerHostSampling.js";
 import {
   buildHostProcessEnv,
@@ -62,7 +48,6 @@ export interface HostInitMessage {
   databaseStartupId?: string;
   deliveryKind?: TaskRealtimeHostDeliveryKind;
   deviceMid?: string;
-  feedbackApiBase?: string;
   workspacePath?: string;
   workspaceIdentity?: string;
   agentWarmupTargets?: Array<{
@@ -115,14 +100,6 @@ export function loadWindow(
     }).filter((entry): entry is [string, string] => entry[1] != null),
   );
 
-  if (page === "index") {
-    const partial = getMainLaunchPartialMarks();
-    query[LAUNCH_MARKS_QUERY_KEY] = serializeLaunchMarks({
-      ...partial,
-      loadUrl: Date.now(), // T3
-    });
-  }
-
   // 生产包不能信任继承环境中的开发服务器地址，否则会被本机开发会话劫持为空白页。
   if (!app.isPackaged && process.env["ELECTRON_RENDERER_URL"]) {
     const base = process.env["ELECTRON_RENDERER_URL"];
@@ -160,12 +137,6 @@ export function spawnHostProcess(
         runningTaskCount: number;
       },
     ) => void;
-    onAgentProcessExited?: (event: HostAgentProcessExitedResponse) => void;
-    onAgentProcessError?: (event: HostAgentProcessErrorResponse) => void;
-    onAgentProcessException?: (event: HostAgentProcessExceptionResponse) => void;
-    onAgentProcessReady?: (event: HostAgentProcessReadyResponse) => void;
-    onAgentProcessSpawned?: (event: HostAgentProcessSpawnedResponse) => void;
-    onSessionCreateTelemetry?: (event: HostSessionCreateTelemetryResponse) => void;
     onCuaOperationStateChanged?: (
       source: ElectronUtilityProcess,
       event: HostCuaOperationStateResponse,
@@ -286,11 +257,6 @@ export function spawnHostProcess(
       return;
     }
 
-    if (result.data.type === HostResponseTypes.SessionCreateTelemetry) {
-      dependencies.onSessionCreateTelemetry?.(result.data);
-      return;
-    }
-
     if (result.data.type === HostResponseTypes.LocalMediaPreviewPathAuthorizeRequest) {
       const request = result.data;
       const authorize = dependencies.authorizeLocalMediaPreviewPath;
@@ -374,40 +340,6 @@ export function spawnHostProcess(
           result: commandResult,
         });
       });
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.AgentProcessSpawned) {
-      registerHostAgentProcess(label, {
-        pid: result.data.pid,
-        provider: result.data.provider,
-        workspacePath: result.data.workspacePath,
-        command: result.data.command,
-        args: result.data.args,
-        startedAt: result.data.startedAt,
-      });
-      dependencies.onAgentProcessSpawned?.(result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.AgentProcessReady) {
-      dependencies.onAgentProcessReady?.(result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.AgentProcessExited) {
-      unregisterHostAgentProcess(label, result.data.pid);
-      dependencies.onAgentProcessExited?.(result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.AgentProcessError) {
-      dependencies.onAgentProcessError?.(result.data);
-      return;
-    }
-
-    if (result.data.type === HostResponseTypes.AgentProcessException) {
-      dependencies.onAgentProcessException?.(result.data);
       return;
     }
 
