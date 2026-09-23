@@ -18,7 +18,7 @@
 
 `packages/<pkg>/spec/*.md`。规则（见 AGENTS.md 核心原则）：**新增或修改行为前先更新对应 spec；目录不存在时按需创建**；spec 写行为、所有权、接口与验收场景。删除功能时同步清理说明与技能中的引用。
 
-当前存量：`packages/desktop/spec/`（auto-update-removal、client-config-rollout-removal、resource-telemetry-removal）、`packages/server/spec/local-exposure-hardening.md`、`packages/shared/spec/telemetry-master-switch.md`、`packages/zcode-cua/spec/computer-use-restore.md`（Computer Use 恢复：线协议契约、本地运行时边界与验收）。
+当前存量：`packages/desktop/spec/`（auto-update-removal、client-config-rollout-removal、resource-telemetry-removal）、`packages/server/spec/local-exposure-hardening.md`、`packages/zcode-cua/spec/computer-use-restore.md`（Computer Use 恢复：线协议契约、本地运行时边界与验收）。
 
 ### 3. 架构契约层（文档与工具联动）
 
@@ -31,7 +31,7 @@
 
 ### 4. Skills 层（按需加载）
 
-`.agents/skills/` 下每个技能一个目录：`SKILL.md`（frontmatter 声明触发条件）+ `references/` 细节参考。主文档薄、参考厚，按需展开。现有：agent-browser、ai-elements、architecture-governance、dep-refs、dogfood、electron、feature-boundary-planner、react-best-practices。
+`.agents/skills/` 下每个技能一个目录：`SKILL.md`（frontmatter 声明触发条件）+ `references/` 细节参考。主文档薄、参考厚，按需展开。现有：agent-browser、ai-elements、architecture-governance、check-doc-sync、dep-refs、dogfood、electron、feature-boundary-planner、react-best-practices。
 
 ### 5. 人工说明层（仓库根）
 

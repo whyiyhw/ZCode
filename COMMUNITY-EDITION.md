@@ -101,7 +101,6 @@
 
 | 环境变量                       | 语义                                        | 默认                   |
 | ------------------------------ | ------------------------------------------- | ---------------------- |
-
 | `ZCODE_BILLING_CONTRACT_HEADERS=0` | 计费契约三头（时区/OS 版本/设备标识，仅 `/api/v1/zcode-plan/` 路径）紧急关闭闸 | 开（该路径族默认携带） |
 | `ZCODE_SEND_DEVICE_MID=true`   | 全局 `X-Device-Mid` 指纹头（历史逃生口；计费路径已由上一行覆盖） | 关                     |
 | `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点收全集） |
@@ -122,7 +121,7 @@
 本 fork 不预期上游合并这些改动（上游有自身的发布节奏与合规约束），因此采取独立维护策略：
 
 - 上游历史被 squash 为单提交、无可考古演进史，**每次同步上游都按全新代码审**：重点盯网络端点、权限默认值、遥测门控；
-- `packages/shared/src/env.ts` 等已知冲突点在合并时保留 opt-in 语义（spec：`packages/shared/spec/telemetry-master-switch.md`）；
+- 上游 `packages/shared/src/env.ts` 曾硬编码遥测总闸，本 fork 已随遥测整栈物理删除该开关（见 §2.2 与 PRIVACY-AUDIT.md §十五）；合并上游时此文件按删除面还原，不恢复开关语义；
 - P1/P2 路线图（ARMS SDK 摘除、凭据接入 OS keychain、CI 构建断言、`zcode doctor --privacy` 等）见 PRIVACY-AUDIT.md §七；第二批性能瘦身的边界与红线（CLI 60s 维护节拍、MCP 进程登记表保留）见 §十一与 `packages/desktop/spec/resource-telemetry-removal.md`。
 
 ## 六、Computer Use 能力恢复（2026-09-22）

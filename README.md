@@ -234,7 +234,7 @@ node dist/zcode/debug/zcode/bin/zcode.mjs --web \
 | `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现                  |
 | `packages/model-option-map`                          | 模型选项映射的受限 CEL 表达式编译与求值        |
 | `packages/formal-proof`                              | 产品行为状态空间枚举器（compact/fork/goal 等） |
-| `packages/zcode-cua`                                 | Computer Use 占位包（不可用即失败关闭）        |
+| `packages/zcode-cua`                                 | Computer Use 客户端与运行时（Helper 二进制仅本地暂存） |
 | `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具                   |
 | `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料         |
 

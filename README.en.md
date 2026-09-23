@@ -41,8 +41,6 @@ Additional setup and build commands:
 
 The default `bootstrap` skips remote asset preparation and is suitable for local desktop development. Run the corresponding preparation command when working with remote workspaces or validating remote distribution assets.
 
-The default `bootstrap` skips remote asset preparation and is suitable for local desktop development. Run the corresponding preparation command when working with remote workspaces or validating remote distribution assets.
-
 ### Building on Windows
 
 The following pipeline has been verified on Windows 10 x64 (Git Bash, Node 24.14.0, pnpm 10.33.2):
@@ -220,6 +218,9 @@ Open `http://127.0.0.1:3030` to validate the complete flow, with one backend ser
 | `packages/services`                                  | Business services and persistence                                                       |
 | `packages/shared`, `packages/rpc`, `packages/client` | Shared protocols and types, RPC framework, and Agent client SDK                         |
 | `packages/provider`, `packages/provider-node`        | Common provider capabilities and Node implementations                                   |
+| `packages/model-option-map`                          | Restricted CEL expression compilation and evaluation for the model option map            |
+| `packages/formal-proof`                              | Product behavior state-space enumerator (compact/fork/goal, etc.)                       |
+| `packages/zcode-cua`                                 | Computer Use client and runtime (Helper binaries staged locally only)                    |
 | `apps/zcode-cli`                                     | Agent CLI, TUI, runtime, and tools                                                      |
 | `scripts`, `config`, `third-party`                   | Build and maintenance scripts, built-in configuration, and third-party notice materials |
 
