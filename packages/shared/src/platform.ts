@@ -433,13 +433,23 @@ export interface EmbeddedBrowserOpenUrlRequest {
   sourceTabId?: string;
 }
 
+export interface BotRemoteWorkspaceReconnectedEvent {
+  sessionId: string;
+  workspacePath: string;
+  workspaceIdentity: string;
+  target: RemoteTarget;
+}
+
 export interface ConnectRemoteRequest {
   target: RemoteTarget;
   requestId?: string;
   workspacePath?: string;
   workspaceIdentity?: string;
-  connectTrigger?: "new" | "reconnect" | "restore";
+  connectTrigger?: RemoteWorkspaceConnectTrigger;
 }
+
+/** 远程连接的打开入口标签（历史 telemetry 命名；功能层仍用于连接时序）。 */
+export type RemoteWorkspaceConnectTrigger = "new" | "reconnect" | "restore";
 
 export interface CancelPendingRemoteConnectionRequest {
   requestId?: string;
@@ -549,6 +559,11 @@ export interface IPlatformService {
   /** 订阅远程 workspace session 关闭事件，返回 disposer */
   onRemoteSessionClosed(handler: (event: RemoteSessionClosedEvent) => void): () => void;
 
+  /** 订阅 Bot 触发的远程 workspace 重连成功事件，返回 disposer */
+  onBotRemoteWorkspaceReconnected(
+    handler: (event: BotRemoteWorkspaceReconnectedEvent) => void,
+  ): () => void;
+
   /** 检查目录是否已在其他窗口打开；如果是则激活该窗口并切到对应 tab */
   activateOrSetWorkspace(path: string): Promise<{ activated: boolean }>;
 
@@ -559,7 +574,7 @@ export interface IPlatformService {
     context?: {
       workspacePath: string;
       workspaceIdentity?: string;
-      connectTrigger?: "new" | "reconnect" | "restore";
+      connectTrigger?: RemoteWorkspaceConnectTrigger;
     },
   ): Promise<{ success: boolean; error?: string; sessionId?: string }>;
 

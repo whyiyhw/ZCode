@@ -272,6 +272,7 @@ async function sendText(
       ...(preempted && !attachments?.length ? { inputPresentation: "user_steer" as const } : {}),
       intent,
       ...turnBackgroundAttributionOf(payload),
+      ...(payload.botDeliveryTarget ? { botDeliveryTarget: payload.botDeliveryTarget } : {}),
       toolDisallowlist: payload.toolDisallowlist,
       ...(payload.modelExecution
         ? { modelExecution: createModelExecutionContext(payload.modelExecution) }

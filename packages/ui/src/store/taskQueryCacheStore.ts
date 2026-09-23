@@ -16,7 +16,7 @@ import {
 } from "@/lib/taskQueryCache.js";
 import { notifyTaskLifecycle } from "@/lib/taskLifecycleEvents.js";
 
-interface TaskListMembershipState {
+export interface TaskListMembershipState {
   pinned: boolean;
   archived: boolean;
 }
@@ -947,6 +947,14 @@ export function markTaskQueryCacheScopesStale(
     buildTaskWorkspaceKey(scope.workspacePath, scope.workspaceIdentity),
   );
   useTaskQueryCacheStore.getState().markWorkspaceKeysStale(workspaceKeys);
+}
+
+export function upsertTaskQueryCacheTaskMeta(task: ZCodeTaskMeta): void {
+  useTaskQueryCacheStore.getState().upsertTaskMeta(task);
+}
+
+export function updateTaskQueryCacheTaskMetaPreservingMembership(task: ZCodeTaskMeta): void {
+  useTaskQueryCacheStore.getState().updateTaskMetaPreservingMembership(task);
 }
 
 export function applyTaskQueryCacheMutation(params: {
