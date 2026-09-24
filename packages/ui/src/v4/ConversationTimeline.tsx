@@ -23,6 +23,7 @@ import type {
   CommandAck,
   ConversationRow,
   ConversationRowTarget,
+  ConversationTurnDirectoryItem,
   QueueItem,
   SessionPhase,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -275,8 +276,12 @@ interface ConversationTimelineProps {
   loadingOlder?: boolean;
   /** 拉取更早一窗历史（接近顶部时自动预取）。 */
   onLoadOlder?: () => Promise<void> | void;
+  /** 服务端全分支回合导航目录（store.turnNavigatorDirectory）。 */
+  turnNavigatorItems?: readonly ConversationTurnDirectoryItem[] | null;
+  /** 目录查询在途标记。 */
+  directoryLoading?: boolean;
   /** 宽屏问题目录挂载后一次补齐当前有效分支的全部历史。 */
-  onLoadAllOlder?: () => Promise<ConversationTurnNavigatorHydrationResult>;
+  onRefreshDirectory?: () => Promise<ConversationTurnNavigatorHydrationResult>;
   /**
    * 问题导航目录失效代际（store turnNavigatorDirectoryRevision）。
    * real-user query 增删后终态必须失效重探测；组件 hydration key
@@ -343,7 +348,9 @@ function ConversationTimelineImpl({
   canLoadOlder = false,
   loadingOlder = false,
   onLoadOlder,
-  onLoadAllOlder,
+  turnNavigatorItems = null,
+  directoryLoading = false,
+  onRefreshDirectory,
   turnNavigatorDirectoryRevision = 0,
   bottomDock,
   emptyState,
@@ -403,16 +410,20 @@ function ConversationTimelineImpl({
   );
   const hasRunningUnit = useMemo(() => renderUnits.some((unit) => unit.isRunning), [renderUnits]);
   const turnNavigatorQueryRowIds = useMemo(
-    () =>
-      new Set(
-        renderUnits.flatMap((unit) =>
-          unit.visibleUserInputs.filter((row) => row.origin === "realUser").map((row) => row.rowId),
-        ),
-      ),
-    [renderUnits],
+    () => new Set((turnNavigatorItems ?? []).map((item) => item.rowId)),
+    [turnNavigatorItems],
   );
   const turnNavigatorQueryRowIdsRef = useRef(turnNavigatorQueryRowIds);
   turnNavigatorQueryRowIdsRef.current = turnNavigatorQueryRowIds;
+  const turnNavigatorUnitIndexByRowId = useMemo(() => {
+    const byRowId = new Map<number, number>();
+    renderUnits.forEach((unit, unitIndex) => {
+      for (const row of unit.renderRows) {
+        byRowId.set(row.rowId, unitIndex);
+      }
+    });
+    return byRowId;
+  }, [renderUnits]);
   const centeredEmptyLayout = centerEmptyStateWithDock && renderUnits.length === 0;
   const responsiveCenteredEmptyLayout = centeredEmptyLayout && !compactEmptyStateWithDock;
   // 高频值经 ref 供稳定回调读取（不进依赖数组）。
@@ -545,10 +556,8 @@ function ConversationTimelineImpl({
   useEffect(() => {
     if (
       !shouldHydrateConversationTurnNavigatorDirectory({
-        canLoadOlder,
         containerWidthPx: turnNavigatorContainerWidthPx,
-        hasLoadHandler: Boolean(onLoadAllOlder),
-        loadingOlder,
+        hasLoadHandler: Boolean(onRefreshDirectory),
       })
     ) {
       return;
@@ -567,17 +576,17 @@ function ConversationTimelineImpl({
         status: "idle" as const,
       });
     }
-    if (attempt.status !== "idle" || !onLoadAllOlder) return;
+    if (attempt.status !== "idle" || !onRefreshDirectory) return;
     attempt.status = "in-flight";
-    logger.debug("[v4-turn-navigator] 目录请求补齐完整历史", {
+    logger.debug("[v4-turn-navigator] 拉取服务端回合导航目录", {
       attempt: attempt.attemptCount + 1,
       loadedRows: rows.length,
       sessionKey,
       totalRows: totalCount,
     });
-    void onLoadAllOlder().then((result) => {
+    void onRefreshDirectory().then((result) => {
       if (attempt.key !== hydrationKey) return;
-      if (result.status === "hydrated" || result.status === "not-enough-queries") {
+      if (result.status === "hydrated") {
         attempt.status = "terminal";
         return;
       }
@@ -602,11 +611,8 @@ function ConversationTimelineImpl({
       }, retryDelayMs);
     });
   }, [
-    canLoadOlder,
-    loadingOlder,
-    onLoadAllOlder,
+    onRefreshDirectory,
     rowContext.logEpoch,
-    rows,
     sessionKey,
     totalCount,
     turnNavigatorContainerWidthPx,
@@ -1212,6 +1218,14 @@ function ConversationTimelineImpl({
 
   const scrollToQuery = useCallback(
     (target: { unitIndex: number; rowId: number }, behavior: ScrollBehavior = "auto") => {
+      if (target.unitIndex < 0) {
+        // 窗口外目录条目（行窗口按需化后存在）：阶段 2 由 aroundRowId 区间拉取
+        // 接管；阶段 1 显式放弃并留痕，不落入 scrollToIndex(-1) 的未定义行为。
+        logger.debug("[v4-turn-navigator] 目标 query 不在当前行窗口，等待阶段 2 跳转拉取", {
+          rowId: target.rowId,
+        });
+        return;
+      }
       clearUserScrollIntent();
       commitFollowing(false);
       if (turnNavigatorJumpFrameRef.current !== null) {
@@ -1635,8 +1649,9 @@ function ConversationTimelineImpl({
         commit={commitCapturedScrollMemory}
       />
       <ConversationTurnNavigator
-        renderUnits={renderUnits}
-        isHydratingDirectory={loadingOlder}
+        directoryItems={turnNavigatorItems ?? []}
+        unitIndexByRowId={turnNavigatorUnitIndexByRowId}
+        isHydratingDirectory={directoryLoading}
         scrollOffsetPx={virtualizer.scrollOffset ?? turnNavigatorViewport.scrollOffsetPx}
         viewportHeightPx={virtualizer.scrollRect?.height ?? turnNavigatorViewport.viewportHeightPx}
         virtualItems={turnNavigatorVirtualItems}

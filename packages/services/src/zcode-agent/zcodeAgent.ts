@@ -84,6 +84,7 @@ import type {
   V4ConversationFileChangesResult,
   V4ConversationFileRewindPreviewResult,
   V4ConversationPlansResult,
+  V4ConversationTurnDirectoryResult,
   V4ConversationWorkflowRunEventsResult,
   V4ConversationWorkflowRunArtifactDataResult,
   V4ConversationWorkflowRunArtifactReadResult,
@@ -374,6 +375,7 @@ export interface ZCodeAgentConversationRowsRangeParams extends ZCodeAgentSession
 
 /** 当前有效分支里的终态 ExitPlanMode 目录。 */
 export type ZCodeAgentConversationPlansParams = ZCodeAgentSessionTarget;
+export type ZCodeAgentConversationTurnDirectoryParams = ZCodeAgentSessionTarget;
 
 /** workflow run 的事件日志分页（详情页审计面）；cursor = journal sequence。 */
 export interface ZCodeAgentConversationWorkflowRunEventsParams extends ZCodeAgentSessionTarget {
@@ -745,6 +747,10 @@ export interface IZCodeAgentService {
   conversationPlansV4(
     params: ZCodeAgentConversationPlansParams,
   ): Promise<V4ConversationPlansResult>;
+  /** v4/conversation/turnDirectory：全分支 real-user query 的回合导航目录（只读透传）。 */
+  conversationTurnDirectoryV4(
+    params: ZCodeAgentConversationTurnDirectoryParams,
+  ): Promise<V4ConversationTurnDirectoryResult>;
   /** workflow run 事件日志分页；与 plans 同族（只读、无状态、超时重发安全）。 */
   conversationWorkflowRunEventsV4(
     params: ZCodeAgentConversationWorkflowRunEventsParams,

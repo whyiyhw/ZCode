@@ -1,7 +1,5 @@
 import { requestPluginReferenceCatalog } from "#src/zcode-agent/pluginReferenceCatalogRequest.js";
-import {
-  sessionDebugSnapshotSchema,
-} from "@zcode/shared";
+import { sessionDebugSnapshotSchema } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
 import { randomUUID } from "node:crypto";
 import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
@@ -200,6 +198,7 @@ import type {
   ZCodeAgentConversationFileRewindPreviewParams,
   ZCodeAgentConversationRowsRangeParams,
   ZCodeAgentConversationPlansParams,
+  ZCodeAgentConversationTurnDirectoryParams,
   ZCodeAgentConversationWorkflowRunEventsParams,
   ZCodeAgentConversationWorkflowRunArtifactDataParams,
   ZCodeAgentConversationWorkflowRunArtifactReadParams,
@@ -250,6 +249,7 @@ import {
   v4ConversationFileRewindPreviewResultSchema,
   v4ConversationRowsRangeResultSchema,
   v4ConversationPlansResultSchema,
+  v4ConversationTurnDirectoryResultSchema,
   v4ConversationWorkflowRunEventsResultSchema,
   v4ConversationWorkflowRunArtifactDataResultSchema,
   v4ConversationWorkflowRunArtifactReadResultSchema,
@@ -5217,6 +5217,17 @@ export function createZCodeAgentService(
         V4_METHODS.conversationPlans,
         { sessionId: params.sessionId },
         v4ConversationPlansResultSchema,
+      );
+    },
+
+    // 回合导航目录：同样是只读 query（renderer 尾窗推导不出全史目录），沿现有
+    // workspace attachment 透传，不建立新 runtime。
+    async conversationTurnDirectoryV4(params: ZCodeAgentConversationTurnDirectoryParams) {
+      const client = await getReadOnlyClient(params);
+      return client.request(
+        V4_METHODS.conversationTurnDirectory,
+        { sessionId: params.sessionId },
+        v4ConversationTurnDirectoryResultSchema,
       );
     },
 

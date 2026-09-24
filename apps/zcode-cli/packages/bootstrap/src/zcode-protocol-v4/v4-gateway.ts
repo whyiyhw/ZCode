@@ -55,6 +55,7 @@ import type {
   V4ConversationFileChangesResult,
   V4ConversationFileRewindPreviewResult,
   V4ConversationPlansResult,
+  V4ConversationTurnDirectoryResult,
   V4ConversationWorkflowRunArtifactDataResult,
   V4ConversationWorkflowRunArtifactReadResult,
   V4ConversationWorkflowRunArtifactsResult,
@@ -98,6 +99,7 @@ import {
   v4ConversationFileChangesParamsSchema,
   v4ConversationFileRewindPreviewParamsSchema,
   v4ConversationPlansParamsSchema,
+  v4ConversationTurnDirectoryParamsSchema,
   WORKFLOW_ARTIFACT_LIMITS,
   v4ConversationWorkflowRunArtifactDataParamsSchema,
   v4ConversationWorkflowRunArtifactDataResultSchema,
@@ -1553,6 +1555,25 @@ export class ConversationV4Gateway {
         ? await this.ensureColdReadyPublisher(params.sessionId)
         : await this.hydratePublisher(params.sessionId);
     return publisher.getPlans();
+  }
+
+  /**
+   * v4/conversation/turnDirectory：全分支 real-user query 的回合导航目录。
+   * 只读 query，不建订阅；数据源 = 投影全量行（冷会话复用 hydration 管线）。
+   * renderer 的有界尾窗推导不出全史目录（loadAllOlder 全量常驻已按 B2 方案退役）。
+   */
+  async turnDirectory(rawParams: unknown): Promise<V4ConversationTurnDirectoryResult> {
+    const params = v4ConversationTurnDirectoryParamsSchema.parse(rawParams);
+    const existingReady = this.readyFlights.get(params.sessionId);
+    const publisher = existingReady
+      ? await existingReady
+      : !this.hasLiveConversation(params.sessionId)
+        ? await this.ensureColdReadyPublisher(params.sessionId)
+        : await this.hydratePublisher(params.sessionId);
+    return publisher.getTurnNavigatorDirectory(
+      // clientMode 决定行可见性过滤档位（与 rowsRange 同口径）。
+      params.clientMode === "desktop-continuous" ? "continuous" : "replayable",
+    );
   }
 
   /**

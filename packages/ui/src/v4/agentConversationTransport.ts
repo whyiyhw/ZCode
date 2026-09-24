@@ -26,6 +26,8 @@ import {
   type V4ConversationFileRewindPreviewResult,
   type V4ConversationPlansParams,
   type V4ConversationPlansResult,
+  type V4ConversationTurnDirectoryParams,
+  type V4ConversationTurnDirectoryResult,
   type V4ConversationRowsRangeParams,
   type V4ConversationRowsRangeResult,
   type V4ConversationSubscribeResult,
@@ -60,6 +62,7 @@ type ConversationV4AgentService = Pick<
   | "queryConversationCommandsV4"
   | "conversationRowsRangeV4"
   | "conversationPlansV4"
+  | "conversationTurnDirectoryV4"
   | "conversationWorkflowRunEventsV4"
   | "conversationWorkflowRunsV4"
   | "conversationWorkflowRunArtifactsV4"
@@ -344,6 +347,15 @@ export function createAgentConversationTransport(
     async plans(params: V4ConversationPlansParams): Promise<V4ConversationPlansResult> {
       await ensureHandshake();
       return agentService.conversationPlansV4({
+        ...workspace,
+        sessionId: params.sessionId,
+      });
+    },
+    async turnDirectory(
+      params: V4ConversationTurnDirectoryParams,
+    ): Promise<V4ConversationTurnDirectoryResult> {
+      await ensureHandshake();
+      return agentService.conversationTurnDirectoryV4({
         ...workspace,
         sessionId: params.sessionId,
       });

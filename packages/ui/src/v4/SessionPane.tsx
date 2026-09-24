@@ -143,10 +143,7 @@ import {
   resolveLatestCompletedAssistantPreviewTurn,
   type AssistantPreviewPptxAutoOpenTarget,
 } from "@/v4/assistantPreviewPptxAutoOpen.js";
-import {
-  hasPluginReferenceUserRows,
-  isSessionPluginCatalogReady,
-} from "@/v4/pluginReferenceIconProjection.js";
+import { isSessionPluginCatalogReady } from "@/v4/pluginReferenceIconProjection.js";
 import { shouldResyncForStaleAuthority } from "@/v4/staleAuthorityRecovery.js";
 import { createCommandEnvelope } from "@/v4/commandFactory.js";
 import { createConfigCommandBarrier } from "@/v4/configCommandBarrier.js";
@@ -518,7 +515,7 @@ export function SessionPane({
   }, [lease, sessionId]);
   const pluginReferenceIconsEnabled =
     isSessionPluginCatalogReady(state.status, sessionId, snapshot?.sessionId) &&
-    hasPluginReferenceUserRows(snapshot?.rows.window ?? []);
+    state.directoryHasPluginReference;
   // send_result 的落定信号：用户消息真正画进对话历史。z-code 没有乐观渲染，
   // 气泡必须等投影回流出 userInput row 才出现，所以 ACK accepted 不能算发送完成。
   // 取 useEffect 而非 store 订阅回调 —— effect 在 DOM commit 之后跑，此刻气泡已在屏幕上。
@@ -3003,9 +3000,9 @@ export function SessionPane({
     return lease?.store.loadOlder();
   }, [lease]);
 
-  const handleLoadAllOlder = useCallback(() => {
+  const handleRefreshDirectory = useCallback(() => {
     return lease
-      ? lease.store.loadAllOlder()
+      ? lease.store.refreshTurnNavigatorDirectory()
       : Promise.resolve({
           status: "stale" as const,
           logEpoch: snapshot?.logEpoch ?? "unknown",
@@ -3633,7 +3630,9 @@ export function SessionPane({
               canLoadOlder={timelineSnapshot ? hasOlderRows(timelineSnapshot) : false}
               loadingOlder={timelineSnapshot ? state.loadingOlder : false}
               onLoadOlder={handleLoadOlder}
-              onLoadAllOlder={handleLoadAllOlder}
+              onRefreshDirectory={handleRefreshDirectory}
+              turnNavigatorItems={state.turnNavigatorDirectory}
+              directoryLoading={state.directoryLoading}
               turnNavigatorDirectoryRevision={state.turnNavigatorDirectoryRevision}
               bottomDock={conversationBottomDock}
               headerSlot={null}

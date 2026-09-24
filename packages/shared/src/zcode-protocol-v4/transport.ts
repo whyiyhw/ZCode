@@ -190,12 +190,11 @@ type Timestamp = z.infer<typeof timestampSchema>;
 export const conversationTopicFrameSchema = createTopicFrameSchema(
   conversationSnapshotSchema,
   conversationDeltaSchema,
-)
-  .superRefine((frame, context) => {
-    if (!frame.topic.startsWith("conversation/") || frame.topic.length === "conversation/".length) {
-      context.addIssue({ code: "custom", message: "invalid conversation topic", path: ["topic"] });
-    }
-  });
+).superRefine((frame, context) => {
+  if (!frame.topic.startsWith("conversation/") || frame.topic.length === "conversation/".length) {
+    context.addIssue({ code: "custom", message: "invalid conversation topic", path: ["topic"] });
+  }
+});
 export type ConversationTopicFrame = z.infer<typeof conversationTopicFrameSchema>;
 export const conversationTopicWireFrameSchema = createTopicWireFrameSchema(
   conversationTopicFrameSchema,
@@ -336,6 +335,9 @@ export const V4_METHODS = {
   conversationRowsRange: "v4/conversation/rowsRange",
   // 当前有效分支的终态 ExitPlanMode 目录；只读、无状态、超时重发安全。
   conversationPlans: "v4/conversation/plans",
+  // 全分支 real-user query 的回合导航目录；只读、无状态、超时重发安全。
+  // renderer 尾窗推导不出全史目录，schema 与纯推导在 turn-directory.ts。
+  conversationTurnDirectory: "v4/conversation/turnDirectory",
   conversationFileChanges: "v4/conversation/fileChanges",
   backgroundBashOutput: "v4/conversation/backgroundBashOutput",
   conversationFileRewindPreview: "v4/conversation/fileRewindPreview",

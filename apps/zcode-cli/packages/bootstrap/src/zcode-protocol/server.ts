@@ -483,6 +483,8 @@ export class ZCodeProtocolAgentServer {
         return await this.requireV4Gateway().rowsRange(request.params);
       case V4_METHODS.conversationPlans:
         return await this.requireV4Gateway().plans(request.params);
+      case V4_METHODS.conversationTurnDirectory:
+        return await this.requireV4Gateway().turnDirectory(request.params);
       case V4_METHODS.backgroundBashOutput:
         return await this.requireV4Gateway().backgroundBashOutput(request.params);
       case V4_METHODS.conversationFileChanges:

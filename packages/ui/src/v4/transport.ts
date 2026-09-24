@@ -18,6 +18,8 @@ import type {
   V4ConversationFileRewindPreviewResult,
   V4ConversationPlansParams,
   V4ConversationPlansResult,
+  V4ConversationTurnDirectoryParams,
+  V4ConversationTurnDirectoryResult,
   V4ConversationRowsRangeParams,
   V4ConversationRowsRangeResult,
   V4ConversationWorkflowRunArtifactDataParams,
@@ -62,6 +64,10 @@ export interface ConversationTransport {
   rowsRange(params: V4ConversationRowsRangeParams): Promise<V4ConversationRowsRangeResult>;
   /** v4/conversation/plans：当前有效分支里的全部终态计划。 */
   plans(params: V4ConversationPlansParams): Promise<V4ConversationPlansResult>;
+  /** v4/conversation/turnDirectory：全分支 real-user query 的回合导航目录。 */
+  turnDirectory(
+    params: V4ConversationTurnDirectoryParams,
+  ): Promise<V4ConversationTurnDirectoryResult>;
   /** v4/conversation/workflowRunEvents：workflow run 的事件日志分页（cursor = journal sequence）。 */
   workflowRunEvents(
     params: V4ConversationWorkflowRunEventsParams,

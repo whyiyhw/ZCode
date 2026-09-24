@@ -10,16 +10,18 @@ import { cn } from "@/components/lib/utils.js";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
-  buildConversationTurnNavigatorItems,
   resolveConversationTurnNavigatorActiveUnitIndex,
   resolveConversationTurnNavigatorBarVisualState,
   resolveConversationTurnNavigatorVisualFocusItemIndex,
   type ConversationTurnNavigatorVirtualItem,
 } from "@/v4/conversationTurnNavigatorHelpers.js";
-import type { ConversationTurnRenderUnit } from "@/v4/conversationTurnRenderUnits.js";
+import type { ConversationTurnDirectoryItem } from "@zcode/shared/zcode-protocol-v4";
 
 interface ConversationTurnNavigatorProps {
-  renderUnits: readonly ConversationTurnRenderUnit[];
+  /** 服务端全分支目录（store.turnNavigatorDirectory）。 */
+  directoryItems: readonly ConversationTurnDirectoryItem[];
+  /** 当前行窗口内 rowId → renderUnit 下标；窗口外条目映射为 -1（阶段 2 接跳转拉取）。 */
+  unitIndexByRowId: ReadonlyMap<number, number>;
   scrollOffsetPx: number;
   viewportHeightPx: number;
   virtualItems: readonly ConversationTurnNavigatorVirtualItem[];
@@ -46,7 +48,8 @@ function usePrefersReducedMotion() {
 }
 
 function ConversationTurnNavigatorImpl({
-  renderUnits,
+  directoryItems,
+  unitIndexByRowId,
   scrollOffsetPx,
   viewportHeightPx,
   virtualItems,
@@ -57,21 +60,30 @@ function ConversationTurnNavigatorImpl({
   const { intl } = useZCodeIntl();
   const prefersReducedMotion = usePrefersReducedMotion();
   const [interactionItemIndex, setInteractionItemIndex] = useState<number | undefined>(undefined);
-  const items = useMemo(
-    () =>
-      buildConversationTurnNavigatorItems(renderUnits, {
-        assistantEmptyPreview: intl.formatMessage({
-          id: "chat.turnNavigator.emptyAssistant",
-        }),
-        assistantRunningPreview: intl.formatMessage({
-          id: "chat.turnNavigator.runningAssistant",
-        }),
-        userFallbackPreview: intl.formatMessage({
-          id: "chat.turnNavigator.userFallback",
-        }),
-      }),
-    [intl, renderUnits],
-  );
+  // 服务端目录只带协议事实（截断预览/running/kind）；本地化兜底文案与窗口内
+  // unitIndex 在此组装。空预览由 UI 兜底——协议不承载 locale。
+  const items = useMemo(() => {
+    const assistantEmptyPreview = intl.formatMessage({ id: "chat.turnNavigator.emptyAssistant" });
+    const assistantRunningPreview = intl.formatMessage({
+      id: "chat.turnNavigator.runningAssistant",
+    });
+    const userFallbackPreview = intl.formatMessage({ id: "chat.turnNavigator.userFallback" });
+    return directoryItems.map((item) => ({
+      key: `${item.turnId}:query:${item.rowId}`,
+      turnId: item.turnId,
+      unitIndex: unitIndexByRowId.get(item.rowId) ?? -1,
+      rowId: item.rowId,
+      userPreview: item.userPreview || userFallbackPreview,
+      assistantPreview:
+        item.assistantPreviewKind === "text"
+          ? item.assistantPreview
+          : item.assistantPreviewKind === "running"
+            ? assistantRunningPreview
+            : assistantEmptyPreview,
+      assistantPreviewKind: item.assistantPreviewKind,
+      isRunning: item.isRunning,
+    }));
+  }, [directoryItems, intl, unitIndexByRowId]);
 
   const activeUnitIndex = useMemo(
     () =>

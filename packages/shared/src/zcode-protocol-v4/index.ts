@@ -28,6 +28,8 @@ export * from "./workflow-workspace.js";
 export * from "./attachment-ref.js";
 export * from "./attachment-faults.js";
 export * from "./delta.js";
+// 回合导航目录（turn navigator directory）：schema + 全量行纯推导。
+export * from "./turn-directory.js";
 export * from "./coalesce.js";
 export * from "./profiles.js";
 export * from "./apply.js";
@@ -57,4 +59,3 @@ export {
 
 export { bashOutputDisplaySchema } from "../bash-output-display.js";
 export { modelSelectionSchema, type ModelSelection } from "../model-selection.js";
-

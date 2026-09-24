@@ -26,6 +26,9 @@ import type {
   ToolCallRow,
   V4ConversationPlansResult,
   V4ConversationRowsRangeResult,
+  V4ConversationTurnDirectoryResult,
+  buildConversationTurnDirectoryItems,
+  conversationRowsHavePluginReference,
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   DELIVERY_PROFILES,
@@ -473,6 +476,28 @@ export class ConversationTopicPublisher {
       .toSorted((left, right) => right.rowId - left.rowId);
     return {
       plans,
+      atSeq: snapshot.seq,
+      atLogEpoch: this.logEpoch,
+    };
+  }
+
+  /**
+   * 全分支 real-user query 的回合导航目录。数据源 = 投影全量行（与 rowsRange 同源），
+   * 推导是 shared 的纯函数 buildConversationTurnDirectoryItems（UI 侧退役的
+   * renderUnits 派生语义在函数注释里逐点对齐）。wire snapshot 只保留 tail window，
+   * renderer 永远推导不出全史目录——这是目录必须服务端化的根因。
+   */
+  getTurnNavigatorDirectory(
+    deliveryProfile: DeliveryProfileName = "replayable",
+  ): V4ConversationTurnDirectoryResult {
+    const snapshot = this.projection.getSnapshot();
+    const visibleRows = filterConversationRowsForProfile(
+      snapshot.rows.window,
+      DELIVERY_PROFILES[deliveryProfile],
+    );
+    return {
+      items: buildConversationTurnDirectoryItems(visibleRows),
+      hasPluginReference: conversationRowsHavePluginReference(visibleRows),
       atSeq: snapshot.seq,
       atLogEpoch: this.logEpoch,
     };

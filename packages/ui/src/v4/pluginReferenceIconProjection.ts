@@ -10,12 +10,6 @@ export function isSessionPluginCatalogReady(
   return Boolean(projectionStatus === "live" && sessionId && snapshotSessionId === sessionId);
 }
 
-export function hasPluginReferenceUserRows(
-  rows: readonly { kind: string; text?: string }[],
-): boolean {
-  return rows.some((row) => row.kind === "userInput" && row.text?.includes("(plugin://"));
-}
-
 /**
  * 已发送 Plugin chip 的 display-only 投影。
  *
