@@ -30,3 +30,4 @@
 
 - 旧安装遗留的 `userData/zcode-data-size-telemetry.json` 成为孤儿文件，无消费方，不做启动期清理（避免为删除引入新代码路径）。
 - 旧 setting.json 与本族无耦合字段，无迁移动作。
+- 会话 fact 遥测（`v4/telemetry/event`）不在本族删除面，但其无消费的 8 种 fact 生产分支已于 2026-09-24 裁剪，CLI 只生产 turn.started/turn.terminal（taskActivityTracker 心跳依赖的 turn 链保持不变）；见 `docs/plans/conversation-telemetry-fact-trim-design.md`。

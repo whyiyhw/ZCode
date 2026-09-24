@@ -258,7 +258,7 @@
 - env 开关 `ZCODE_TELEMETRY_ENABLED`/`ZCODE_TELEMETRY_REPORT_ENDPOINT`/`ZCODE_ARMS_RUM_ENDPOINT`/`mapZCodeEnvToArmsRumEnv` 从 `shared/env.ts` 移除，被设置时直接忽略。
 - 远程 crash：ARMS crash collector 消失；本地 `crashReporter`（`uploadToServer:false`）回落为常开取证通道（C5 本地 dump 归档保留）。
 
-**保留红线**（功能性依赖，非遥测）：deviceMid（`~/.zcode/v2/telemetry-state.json`，计费契约头 C7）、renderer action-trace 调试链（本地 OTLP 逃生口）、`v4/telemetry/event` conversationTelemetryFact 流与 CLI facts normalizer（zcode-server-cli `taskActivityTracker` 用 turn.started/turn.terminal 统计运行任务数——纯本地 IPC，无出网；其余 fact 种类暂留待后续裁剪）、`adapters/src/mcp/telemetry.ts`（进程登记表）、`runner-telemetry.ts`（模型失败分类）、model-io 记录（`ZCODE_MODEL_IO_ENABLED`，独立开关）。
+**保留红线**（功能性依赖，非遥测）：deviceMid（`~/.zcode/v2/telemetry-state.json`，计费契约头 C7）、renderer action-trace 调试链（本地 OTLP 逃生口）、`v4/telemetry/event` conversationTelemetryFact 流与 CLI facts normalizer（zcode-server-cli `taskActivityTracker` 用 turn.started/turn.terminal 统计运行任务数——纯本地 IPC，无出网；其余 8 种 fact 的生产分支已于 2026-09-24 裁剪，CLI 生产侧仅 turn.started/turn.terminal；**上游 merge 带回的任何新 fact kind 同样不落地**，由 `scripts/check-doc-sync.mjs` 检查 D 常驻断言把关——生产白名单 ⊆ turn 两种 + shared schema kind 登记清单。shared schema 暂保留 10 分支作旧版 CLI 上行事实的 strict 校验面，解析后由 taskActivityTracker 忽略非 turn kind，无害；见 `docs/plans/conversation-telemetry-fact-trim-design.md`）、`adapters/src/mcp/telemetry.ts`（进程登记表）、`runner-telemetry.ts`（模型失败分类）、model-io 记录（`ZCODE_MODEL_IO_ENABLED`，独立开关）。
 
 **断言门禁同步（§9.5 口径修订）**：`scripts/community/assert-privacy.mjs` 的 `ASAR_REQUIRED` 移除 `ZCODE_TELEMETRY_ENABLED`（保留 `ZCODE_SEND_DEVICE_MID`，计费）；原 `DORMANT_INFO` 两条（`sdk.rum.aliyuncs`/`rum/web/v2`）从 INFO 升级为零命中硬断言（遥测已物理删除，再出现即回归）。CI workflow 不再清空 `ZCODE_TELEMETRY_*` env（OTLP 清空保留为 CLI 调试链防回归兜底）。
 

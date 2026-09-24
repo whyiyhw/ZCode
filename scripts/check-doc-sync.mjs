@@ -6,13 +6,17 @@
 //   node scripts/check-doc-sync.mjs --push         额外覆盖 @{u}...HEAD 已提交未推送范围（pre-push 用）
 //   node scripts/check-doc-sync.mjs --base <ref>   额外覆盖 <ref>...HEAD
 //
-// 三类检查（2026-09-22 事故驱动：billing 契约头修复落地时文档与隐私断言脱节，门禁全绿但
+// 四类检查（2026-09-22 事故驱动：billing 契约头修复落地时文档与隐私断言脱节，门禁全绿但
 // CI 断言脚本会在下一次构建误挂——机械可提取的口径必须机械校验，不能依赖会话自觉）：
 //   A 新增 ZCODE_* 环境开关未见于任何跟踪文档（.md，排除 .zcode/）或隐私断言脚本 → 违规
 //   B 隐私口径三文件 diff 触及敏感头名，但 assert-privacy.mjs / PRIVACY-AUDIT /
 //     COMMUNITY-EDITION 均无同步 → 违规
 //   C 行为代码有改动而本 diff 无任何 .md 伴随 → 违规
 //     （确属无需文档——纯重构/样式等——用 DOCSYNC_ALLOW_NO_DOCS="<原因>" 豁免，仅此一项）
+//   D 会话遥测 fact 生产/接收口径（常驻状态断言，非 diff 驱动）：CLI 生产侧 fact kind ⊆
+//     白名单（turn.started/turn.terminal），shared schema fact kind 集合 == 登记清单。
+//     上游 merge 给 schema 加新分支会零冲突自动合并（2026-09-24 三方 merge 模拟实锤），
+//     唯一能抓住该静默回潮的关口就是这里。
 //
 // 退出码：0 通过 / 1 违规 / 2 用法错误。fail-open：git 不可用或非仓库时按通过处理并告警。
 
@@ -243,6 +247,109 @@ if (behaviorFiles.length > 0 && docFiles.length === 0) {
         `    ${behaviorFiles.slice(0, 6).join("\n    ")}${behaviorFiles.length > 6 ? "\n    ..." : ""}\n` +
         `    处置：按 AGENTS.md「先更新对应 spec」同步文档；确属无需文档（纯重构/样式）时，\n` +
         `    用 DOCSYNC_ALLOW_NO_DOCS="<原因>" 豁免本项（其余检查不受影响）。`,
+    );
+  }
+}
+
+// ── 检查 D：会话遥测 fact 生产/接收口径（常驻状态断言，非 diff 驱动）──
+// 2026-09-24 fact 裁剪第一步（docs/plans/conversation-telemetry-fact-trim-design.md）后，
+// CLI 生产侧只允许 turn.started / turn.terminal（taskActivityTracker 心跳依赖的 turn 链）；
+// shared schema 暂保留 10 分支作旧版 CLI 上行事实的 strict 校验面（解析后无人订阅，无害）。
+// 上游 merge 是两条口径的主要回潮通道，固化为常驻断言：
+//   D1 生产侧：引用 conversationTelemetryFactSchema 的源码里构造的 fact kind ⊆ 生产白名单
+//   D2 接收侧：shared telemetry schema 的 fact kind 集合 == 登记清单（新增/消失都须显式登记）
+const TELEMETRY_FACT_PRODUCED_ALLOW = new Set(["turn.started", "turn.terminal"]);
+const TELEMETRY_FACT_SCHEMA_REGISTRY = new Set([
+  "turn.started",
+  "model.request.status",
+  "stream.chunk",
+  "tool.lifecycle",
+  "permission.lifecycle",
+  "usage.delta",
+  "subagent.lifecycle",
+  "workflow.lifecycle",
+  "turn.terminal",
+  "compaction.terminal",
+]);
+const TELEMETRY_FACT_SCHEMA_PATH = "packages/shared/src/zcode-protocol-v4/telemetry.ts";
+
+// 生产侧扫描面 = 含 fact 构造咽喉（conversationTelemetryFactSchema.parse）的文件：
+// 已跟踪（git grep）+ 工作区未跟踪 ts（git grep 看不见）。不能用裸 schema 符号名或
+// emit 函数名圈文件——接收方 safeParse 文件与 emit 转发层（v4-bridge/gateway）同文件内
+// 有其他子系统的 kind: 字面量，会误报（2026-09-24 首次运行实锤）；kind 提取必须锚定在
+// parse 调用点 1000 字符窗口内，防止同文件无关 kind 混入。
+const TELEMETRY_FACT_PARSE_RE =
+  /conversationTelemetryFactSchema\.parse\([\s\S]{0,1000}?kind:\s*"([^"]+)"/g;
+const telemetryProducerFiles = (
+  gitOk([
+    "grep",
+    "-l",
+    "-F",
+    "conversationTelemetryFactSchema.parse",
+    "--",
+    "apps",
+    "packages",
+  ]) ?? ""
+)
+  .split("\n")
+  .map((line) => line.trim())
+  .filter((line) => line && !isTestPath.test(line) && !isBuildPath.test(line));
+for (const line of gitOk(["status", "--porcelain=v1", "-uall"])?.split("\n") ?? []) {
+  if (!line.startsWith("??")) continue;
+  const path = line.slice(3).trim();
+  if (!/^(apps|packages)\//.test(path) || !/\.tsx?$/.test(path)) continue;
+  if (isTestPath.test(path) || isBuildPath.test(`/${path}/`)) continue;
+  try {
+    if (readFileSync(join(ROOT, path), "utf-8").includes("conversationTelemetryFactSchema.parse")) {
+      telemetryProducerFiles.push(path);
+    }
+  } catch {
+    // 不可读 → 跳过（不作为生产面证据）
+  }
+}
+
+const producedViolations = [];
+for (const file of telemetryProducerFiles) {
+  let content;
+  try {
+    content = readFileSync(join(ROOT, file), "utf-8");
+  } catch {
+    continue;
+  }
+  for (const match of content.matchAll(TELEMETRY_FACT_PARSE_RE)) {
+    if (!TELEMETRY_FACT_PRODUCED_ALLOW.has(match[1])) {
+      producedViolations.push(`${file}: kind "${match[1]}"`);
+    }
+  }
+}
+if (producedViolations.length) {
+  violations.push(
+    `【D1】会话遥测 fact 生产白名单越界（仅允许 turn.started / turn.terminal）：\n` +
+      `    ${producedViolations.slice(0, 6).join("\n    ")}${producedViolations.length > 6 ? "\n    ..." : ""}\n` +
+      `    处置：上游 merge 带回/新增的 fact 生产分支一律不落地（口径见 docs/plans/conversation-telemetry-fact-trim-design.md\n` +
+      `    与 PRIVACY-AUDIT 保留红线）；确需恢复生产时，先更新方案与红线口径，再扩本文件 TELEMETRY_FACT_PRODUCED_ALLOW。`,
+  );
+}
+
+// 接收侧：schema 文件被整删（第二步裁剪完成态）时跳过；存在则集合必须与登记清单一致。
+const telemetrySchemaAbsolute = join(ROOT, TELEMETRY_FACT_SCHEMA_PATH);
+if (existsSync(telemetrySchemaAbsolute)) {
+  const schemaKinds = new Set(
+    [
+      ...readFileSync(telemetrySchemaAbsolute, "utf-8").matchAll(
+        /kind:\s*z\.literal\("([^"]+)"\)/g,
+      ),
+    ].map((match) => match[1]),
+  );
+  const kindAdded = [...schemaKinds].filter((kind) => !TELEMETRY_FACT_SCHEMA_REGISTRY.has(kind));
+  const kindRemoved = [...TELEMETRY_FACT_SCHEMA_REGISTRY].filter((kind) => !schemaKinds.has(kind));
+  if (kindAdded.length > 0 || kindRemoved.length > 0) {
+    violations.push(
+      `【D2】shared telemetry schema 的 fact kind 集合与登记清单不一致：` +
+        `新增 ${JSON.stringify(kindAdded)} / 消失 ${JSON.stringify(kindRemoved)}\n` +
+        `    处置：上游 merge 给 packages/shared/src/zcode-protocol-v4/telemetry.ts 加了新 fact 分支时，\n` +
+      `    生产侧不落地（D1 已断），在此显式登记（第二步裁剪候选）；kind 被上游删除或第二步裁剪\n` +
+      `    收缩 schema 时，同步收缩本清单。`,
     );
   }
 }

@@ -49,9 +49,10 @@
 
 各包自带：`config/README.md`（随客户端发布的内置默认配置）、`harness/remote/README.md`、`apps/zcode-cli/README.md` 及其下 browser-use-plugin `docs/`、`packages/formal-proof`、`packages/zcode-cua`、dynamic-workflow 系列等。不集中索引，随包演进。
 
-### 7. 本地计划层（不入库）
+### 7. 计划层（分两档）
 
-`.zcode/plans/*.md`（gitignore）：会话产出的一次性实施方案暂存，不进版本库、不共享。
+- `docs/plans/*.md`（入库）：跨回合生效的工程实施方案——含 merge 操作预案、被 spec/审计引用的口径依据（如 `conversation-telemetry-fact-trim-design.md` 被 PRIVACY-AUDIT 保留红线引用）。实施完成不删除，作为后续 merge 裁决与裁剪批次的依据存档。
+- `.zcode/plans/*.md`（gitignore）：会话产出的一次性实施方案暂存，不进版本库、不共享。
 
 ### 8. 构建产物镜像（不手改）
 

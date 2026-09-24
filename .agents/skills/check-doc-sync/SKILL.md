@@ -26,11 +26,12 @@ description: 回合结束前检查代码改动与文档/断言口径同步。当
 node scripts/check-doc-sync.mjs
 ```
 
-三类检查（退出码 1 = 有违规，输出自带处置指引）：
+四类检查（退出码 1 = 有违规，输出自带处置指引）：
 
 - **A** 新增 `ZCODE_*` 环境开关未见于任何跟踪文档或 assert-privacy.mjs；
 - **B** 隐私口径三文件（`zcode-source-headers.ts` / `sourceHeaders.ts` / `nodeApiClient.ts`）diff 触及敏感头名，但断言脚本与审计文档均未同步；
-- **C** 行为代码有改动而 diff 无任何 .md 伴随（纯重构可 `DOCSYNC_ALLOW_NO_DOCS="<原因>"` 豁免，仅此一项）。
+- **C** 行为代码有改动而 diff 无任何 .md 伴随（纯重构可 `DOCSYNC_ALLOW_NO_DOCS="<原因>"` 豁免，仅此一项）；
+- **D** 会话遥测 fact 口径（常驻状态断言，非 diff 驱动）：CLI 生产侧 fact kind ⊆ 白名单（turn.started/turn.terminal），shared telemetry schema 的 fact kind 集合 == 登记清单。上游 merge 是主要回潮通道（schema 加分支会零冲突自动合并），新增/消失 kind 都须在脚本内显式登记。
 
 违规处置：按输出指引修——**不是加豁免绕过**。A/B 属于口径债务，修复是本回合任务的一部分。
 
