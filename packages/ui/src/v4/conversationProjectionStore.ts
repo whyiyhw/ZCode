@@ -322,6 +322,10 @@ export class ConversationProjectionStore {
   private directoryQueryInFlight: Promise<ConversationTurnNavigatorHydrationResult> | null = null;
   /** 查询期间目录 revision 失效时挂起重查（与 refreshPlans 的 pending 同族）。 */
   private directoryQueryPending = false;
+  /** 闭环重查失败的退避重试（250ms/1s×2，成功即重置；组件退避机器观察不到
+   * store 内部发起的重查，失败若 void 丢弃会让安静会话的目录静默停摆——攻击实测 F1）。 */
+  private directoryRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private directoryRetryAttempt = 0;
   private planQueryPending = false;
   /** accepted input 的 projection confirmation watchdog；不承载命令，也不生成本地事实。 */
   private readonly acceptedInputProjectionTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -538,6 +542,10 @@ export class ConversationProjectionStore {
     if (delayMs === undefined) return false;
     this.runtimeRecycleRetryAttempt += 1;
     this.clearRuntimeRecycleRetry();
+    if (this.directoryRetryTimer !== null) {
+      clearTimeout(this.directoryRetryTimer);
+      this.directoryRetryTimer = null;
+    }
     // 保留旧 snapshot：换代期间投影未被污染，重连成功会原子替换。
     this.setState({ status: "connecting" });
     this.runtimeRecycleRetryTimer = setTimeout(() => {
@@ -552,6 +560,10 @@ export class ConversationProjectionStore {
   private handleRuntimeUnavailable(): void {
     if (this.closed) return;
     this.clearRuntimeRecycleRetry();
+    if (this.directoryRetryTimer !== null) {
+      clearTimeout(this.directoryRetryTimer);
+      this.directoryRetryTimer = null;
+    }
     this.discardRecovery();
     this.awaitingInitial = null;
     this.subscriptionHasAppliedBase = false;
@@ -570,6 +582,10 @@ export class ConversationProjectionStore {
   private handleRuntimeAvailable(): void {
     if (this.closed) return;
     this.clearRuntimeRecycleRetry();
+    if (this.directoryRetryTimer !== null) {
+      clearTimeout(this.directoryRetryTimer);
+      this.directoryRetryTimer = null;
+    }
     this.runtimeRecycleRetryAttempt = 0;
     if (this.connectInFlight > 0) {
       // 冷启动 spawn 会在首次 subscribe ACK
@@ -584,6 +600,10 @@ export class ConversationProjectionStore {
   /** 订阅失败后的手动重试入口（pane 层「重新连接」按钮落点）。 */
   retry(): Promise<void> {
     this.clearRuntimeRecycleRetry();
+    if (this.directoryRetryTimer !== null) {
+      clearTimeout(this.directoryRetryTimer);
+      this.directoryRetryTimer = null;
+    }
     this.runtimeRecycleRetryAttempt = 0;
     return this.connect();
   }
@@ -1065,6 +1085,7 @@ export class ConversationProjectionStore {
           this.directoryQueryPending = true;
           return stale();
         }
+        this.directoryRetryAttempt = 0;
         this.setState({
           turnNavigatorDirectory: result.items,
           directoryHasPluginReference: result.hasPluginReference,
@@ -1080,12 +1101,32 @@ export class ConversationProjectionStore {
         if (!this.closed) this.setState({ directoryLoading: false });
         if (this.directoryQueryPending && !this.closed) {
           this.directoryQueryPending = false;
-          void this.refreshTurnNavigatorDirectory();
+          void this.refreshTurnNavigatorDirectory().then((retry) => {
+            if (retry.status === "retryable-failure") {
+              this.scheduleDirectoryRetry();
+            }
+          });
         }
       }
     })();
     this.directoryQueryInFlight = run;
     return run;
+  }
+
+  private scheduleDirectoryRetry(): void {
+    if (this.closed || this.directoryRetryTimer !== null || this.directoryRetryAttempt >= 2) {
+      return;
+    }
+    const delayMs = this.directoryRetryAttempt === 0 ? 250 : 1_000;
+    this.directoryRetryAttempt += 1;
+    this.directoryRetryTimer = setTimeout(() => {
+      this.directoryRetryTimer = null;
+      void this.refreshTurnNavigatorDirectory().then((result) => {
+        if (result.status === "retryable-failure") {
+          this.scheduleDirectoryRetry();
+        }
+      });
+    }, delayMs);
   }
 
   /**
@@ -1253,6 +1294,10 @@ export class ConversationProjectionStore {
     this.offRuntimeRestart?.();
     this.offRuntimeLifecycle?.();
     this.clearRuntimeRecycleRetry();
+    if (this.directoryRetryTimer !== null) {
+      clearTimeout(this.directoryRetryTimer);
+      this.directoryRetryTimer = null;
+    }
     for (const timer of this.acceptedInputProjectionTimers.values()) clearTimeout(timer);
     this.acceptedInputProjectionTimers.clear();
     this.modelTransitionListeners.clear();

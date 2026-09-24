@@ -72,6 +72,7 @@ function createHarness() {
     (frame: ConversationTopicFrame, context?: { deliveryKind: "initial" | "online" }) => void
   > = [];
   const directoryCalls: DirectoryCall[] = [];
+  const failAtCallIndexes = new Set<number>();
   let directoryCallCount = 0;
   const transport = {
     subscribe: async () => ({
@@ -94,6 +95,9 @@ function createHarness() {
     unsubscribe: async () => {},
     turnDirectory: (params: unknown) => {
       directoryCallCount += 1;
+      if (failAtCallIndexes.has(directoryCallCount)) {
+        return Promise.reject(new Error(`injected failure #${directoryCallCount}`));
+      }
       return new Promise((resolve) => {
         directoryCalls.push({ params, resolve });
       });
@@ -118,6 +122,9 @@ function createHarness() {
   frameListeners.push((frame, context) => store.handleFrame(frame, context));
   return {
     store,
+    failAtCall(index: number) {
+      failAtCallIndexes.add(index);
+    },
     get directoryCallCount() {
       return directoryCallCount;
     },
@@ -283,6 +290,49 @@ test("turnHeader 终态 upsert 递增目录 revision（isRunning 熄灭驱动）
     h.store.getState().turnNavigatorDirectoryRevision > revisionBefore,
     "turnHeader upsert 应递增目录 revision",
   );
+});
+
+test("闭环重查失败不再被丢弃：退避后自动重试直至成功（攻击实测 F1 回归）", async () => {
+  const h = createHarness();
+  await connectStore(h.store);
+  // 第 2 次调用（闭环 P2）注入失败；第 3 次（退避重试）成功。
+  h.failAtCall(2);
+
+  const first = h.store.refreshTurnNavigatorDirectory();
+  h.emitOnline({
+    topic: TOPIC,
+    subscriptionId: "sub-1",
+    fromSeq: 100,
+    toSeq: 101,
+    payload: {
+      kind: "deltas",
+      deltas: [
+        {
+          op: "row.appended",
+          row: {
+            rowId: 900,
+            turnId: "t9",
+            createdAt: 1,
+            createdAtSeq: 1,
+            kind: "userInput",
+            text: "新 query",
+            origin: "realUser",
+          },
+        },
+      ],
+    },
+  } as ConversationTopicFrame);
+  h.settleCall(1, { items: ITEMS, hasPluginReference: false, atSeq: 101, atLogEpoch: "epoch-1" });
+  assert.equal((await first).status, "stale");
+  // P1 settle 后 finally 闭环发起 P2 并立即失败；退避 250ms 后应自动发起第 3 次。
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(h.directoryCallCount, 2, "闭环 P2 已发起");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.ok(h.directoryCallCount >= 3, "退避后必须自动重试（F1：void 丢弃会让目录停摆）");
+  // 失败调用被拒、不进 directoryCalls 槽位：第 3 次传输调用是数组第 2 项。
+  h.settleCall(2, { items: ITEMS, hasPluginReference: false, atSeq: 101, atLogEpoch: "epoch-1" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(h.store.getState().turnNavigatorDirectory, ITEMS);
 });
 
 test("并发刷新单飞：共享同一 in-flight 查询，transport 只被调用一次", async () => {
