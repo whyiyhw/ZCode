@@ -435,7 +435,7 @@ export class ConversationTopicPublisher {
    * 只读、无状态、超时重发安全；atLogEpoch 供客户端陈旧读整体丢弃。
    */
   getRowsRange(
-    params: { beforeRowId?: number; limit: number },
+    params: { beforeRowId?: number; aroundRowId?: number; limit: number },
     deliveryProfile: DeliveryProfileName = "replayable",
   ): V4ConversationRowsRangeResult {
     const snapshot = this.projection.getSnapshot();
@@ -444,6 +444,21 @@ export class ConversationTopicPublisher {
       snapshot.rows.window,
       DELIVERY_PROFILES[deliveryProfile],
     );
+    if (params.aroundRowId !== undefined) {
+      // 跳转拉取：窗口 = 从「目标前 back 行」起的连续 limit 行。目标不在全序
+      // （被 rewind/淘汰）时贴其前侧，天然钳制到首尾。
+      const upToTarget = visibleRows.filter((row) => row.rowId <= params.aroundRowId);
+      const back = Math.max(1, Math.ceil(limit / 2));
+      const startIndex = Math.max(0, upToTarget.length - back);
+      const rows = visibleRows.slice(startIndex, startIndex + limit);
+      return {
+        rows,
+        atSeq: snapshot.seq,
+        atRevision: snapshot.revision,
+        atLogEpoch: this.logEpoch,
+        hasMore: startIndex > 0,
+      };
+    }
     const eligible =
       params.beforeRowId === undefined
         ? visibleRows

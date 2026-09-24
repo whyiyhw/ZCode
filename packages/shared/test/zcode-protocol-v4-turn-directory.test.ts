@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildConversationTurnDirectoryItems,
+  v4ConversationRowsRangeParamsSchema,
   buildConversationTurnDirectoryPreviewText,
   conversationRowsHavePluginReference,
   conversationTurnDirectoryItemSchema,
@@ -192,5 +193,28 @@ test("条目按行序输出；跨 turn 保持 rowId 升序", () => {
   assert.deepEqual(
     items.map((item) => item.rowId),
     [2, 6],
+  );
+});
+
+test("rowsRange 参数：aroundRowId 与 beforeRowId 互斥（跳转拉取语义）", () => {
+  assert.equal(
+    v4ConversationRowsRangeParamsSchema.parse({ sessionId: "s1", aroundRowId: 42, limit: 200 })
+      .aroundRowId,
+    42,
+  );
+  assert.throws(() =>
+    v4ConversationRowsRangeParamsSchema.parse({
+      sessionId: "s1",
+      beforeRowId: 100,
+      aroundRowId: 42,
+      limit: 200,
+    }),
+  );
+  // 两个游标都缺省（从尾部向前）与仅 beforeRowId 仍是合法形状。
+  assert.equal(v4ConversationRowsRangeParamsSchema.parse({ sessionId: "s1", limit: 60 }).limit, 60);
+  assert.equal(
+    v4ConversationRowsRangeParamsSchema.parse({ sessionId: "s1", beforeRowId: 100, limit: 60 })
+      .beforeRowId,
+    100,
   );
 });

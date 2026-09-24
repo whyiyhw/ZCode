@@ -3015,6 +3015,16 @@ export function SessionPane({
     state.turnNavigatorDirectory ??
     (snapshot ? buildConversationTurnDirectoryItems(snapshot.rows.window) : null);
 
+  const handleJumpToRow = useCallback(
+    (rowId: number) => lease?.store.jumpToRow(rowId) ?? Promise.resolve(false),
+    [lease],
+  );
+
+  const handleJumpToTail = useCallback(
+    () => lease?.store.jumpToTail() ?? Promise.resolve(false),
+    [lease],
+  );
+
   const handleRefreshDirectory = useCallback(() => {
     return lease
       ? lease.store.refreshTurnNavigatorDirectory()
@@ -3646,6 +3656,9 @@ export function SessionPane({
               loadingOlder={timelineSnapshot ? state.loadingOlder : false}
               onLoadOlder={handleLoadOlder}
               onRefreshDirectory={handleRefreshDirectory}
+              onJumpToRow={handleJumpToRow}
+              onJumpToTail={handleJumpToTail}
+              detachedFromLiveTail={state.detachedFromLiveTail}
               turnNavigatorItems={turnNavigatorItems}
               directoryLoading={state.directoryLoading}
               turnNavigatorDirectoryRevision={state.turnNavigatorDirectoryRevision}

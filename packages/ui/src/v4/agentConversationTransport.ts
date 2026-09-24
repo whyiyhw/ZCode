@@ -341,6 +341,7 @@ export function createAgentConversationTransport(
         ...workspace,
         sessionId: params.sessionId,
         ...(params.beforeRowId !== undefined ? { beforeRowId: params.beforeRowId } : {}),
+        ...(params.aroundRowId !== undefined ? { aroundRowId: params.aroundRowId } : {}),
         limit: params.limit,
       });
     },

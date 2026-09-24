@@ -134,6 +134,12 @@ export interface ConversationStoreState {
   directoryHasPluginReference: boolean;
   /** 目录查询在途标记。 */
   directoryLoading: boolean;
+  /**
+   * 行窗口是否脱离实时尾部（跳转到历史区间后为 true）：窗口尾 < 实时高水位，
+   * 回底按钮须走 jumpToTail 区间拉取而非本地滚动。流式 append 追上高水位或
+   * snapshot 重置时自动回 false。
+   */
+  detachedFromLiveTail: boolean;
 }
 
 export interface SessionOpenRendererTiming {
@@ -147,6 +153,7 @@ const INITIAL_STATE: ConversationStoreState = {
   turnNavigatorDirectory: null,
   directoryHasPluginReference: false,
   directoryLoading: false,
+  detachedFromLiveTail: false,
   status: "connecting",
   snapshot: null,
   subscriptionId: null,
@@ -235,6 +242,29 @@ function logSubagentProjectionTransition(
  * 还有更早历史可拉 ⇔ 窗口首行不是全序首行（firstRowId 判定）。
  * 纯函数供 store/组件共用；快照缺失/空窗口/未知 firstRowId 一律 false。
  */
+/**
+ * 行窗口上限（B2 阶段 2，2026-09-25 拍板 K=2000）：窗口按 turn 边界对齐地从最旧端
+ * 淘汰；`firstRowId`/`totalCount` 是全序权威值，淘汰只裁 `window` 数组。
+ */
+export const CONVERSATION_WINDOW_MAX_ROWS = 2_000;
+
+/**
+ * 头部淘汰：裁到「首个 turnHeader 且剩余 ≤ 上限」；单个 turn 超过上限时允许残缺
+ * 头部（truncatedAtLimit，供首轮补拉抑制判定）。返回 null 表示无需淘汰。
+ */
+export function trimConversationWindowFromHead(
+  window: readonly ConversationRow[],
+): { window: ConversationRow[]; truncatedAtLimit: boolean } | null {
+  if (window.length <= CONVERSATION_WINDOW_MAX_ROWS) return null;
+  const minStart = window.length - CONVERSATION_WINDOW_MAX_ROWS;
+  for (let index = minStart; index < window.length; index += 1) {
+    if (window[index]?.kind === "turnHeader") {
+      return { window: window.slice(index), truncatedAtLimit: false };
+    }
+  }
+  return { window: window.slice(minStart), truncatedAtLimit: true };
+}
+
 export function hasOlderRows(snapshot: ConversationSnapshot | null): boolean {
   if (!snapshot) return false;
   const first = snapshot.rows.window[0];
@@ -251,6 +281,9 @@ export function shouldAutoLoadIncompleteLeadingTurn(
   loadingOlder: boolean,
 ): boolean {
   if (loadingOlder || !hasOlderRows(snapshot) || !snapshot) return false;
+  // 窗口已达淘汰上限的残缺头部是本地淘汰的结果（巨型单轮），不是冷快照截尾——
+  // 自动补拉会立刻被淘汰再触发，形成循环；真头部只能等用户上滚按需拉。
+  if (snapshot.rows.window.length >= CONVERSATION_WINDOW_MAX_ROWS) return false;
   const leadingTurnId = snapshot.rows.window[0]?.turnId;
   if (!leadingTurnId) return false;
   return !snapshot.rows.window.some(
@@ -322,6 +355,8 @@ export class ConversationProjectionStore {
   private directoryQueryInFlight: Promise<ConversationTurnNavigatorHydrationResult> | null = null;
   /** 查询期间目录 revision 失效时挂起重查（与 refreshPlans 的 pending 同族）。 */
   private directoryQueryPending = false;
+  /** 实时尾部高水位（见过的最大 rowId）：淘汰/跳转只裁窗口，不降低水位。 */
+  private liveTailHighWaterRowId: number | null = null;
   /** 闭环重查失败的退避重试（250ms/1s×2，成功即重置；组件退避机器观察不到
    * store 内部发起的重查，失败若 void 丢弃会让安静会话的目录静默停摆——攻击实测 F1）。 */
   private directoryRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -680,6 +715,8 @@ export class ConversationProjectionStore {
       // 规则 1：整体替换，扔掉手里的一切换新的。
       this.setState({
         snapshot: frame.payload.snapshot,
+        // snapshot 是权威当前态：尾部高水位重置，脱离标记清除。
+        detachedFromLiveTail: this.trackLiveTail(frame.payload.snapshot.rows.window),
         planDirectoryRevision: this.state.planDirectoryRevision + 1,
         // snapshot 整体替换后 real-user query 集合可能已变，终态缓存必须失效。
         turnNavigatorDirectoryRevision: this.state.turnNavigatorDirectoryRevision + 1,
@@ -739,7 +776,16 @@ export class ConversationProjectionStore {
     // batch 版帧内一次拷贝 + 二分定位，语义与逐条折叠逐字节一致（黄金测试背书）。
     const applied = applyConversationDeltasBatch(current, frame.payload.deltas);
     // seq 是快照对齐水位，delta 帧应用完推进到帧右端点。
-    const next = { ...applied, seq: frame.toSeq };
+    let next = { ...applied, seq: frame.toSeq };
+    // 窗口淘汰（B2 阶段 2）：流式追加也会把窗口顶过上限。loadOlder 在途时挂起
+    // （其合并点统一裁剪），保证「window[0] 飞行期间不变」的在途守卫不被本地
+    // 淘汰误伤。firstRowId/totalCount 是权威值，只裁 window。
+    if (!this.state.loadingOlder) {
+      const trimmed = trimConversationWindowFromHead(next.rows.window);
+      if (trimmed) {
+        next = { ...next, rows: { ...next.rows, window: trimmed.window } };
+      }
+    }
     logSubagentProjectionTransition(this.topic, current, next, "deltas");
     const removedFromRowId = frame.payload.deltas.reduce<number | null>(
       (earliest, delta) =>
@@ -750,6 +796,8 @@ export class ConversationProjectionStore {
     );
     this.setState({
       snapshot: next,
+      // 流式 append 追上高水位即脱离解除（跳转区间后的 append 就是实时尾部）。
+      detachedFromLiveTail: this.trackLiveTail(next.rows.window),
       // row.removed 已给出权威裁剪边界，可以同步删掉缓存目录中的旧分支计划；
       // 完整 query 继续负责补回 wire tail 之外、但仍属于当前分支的早期计划。
       ...(removedFromRowId === null
@@ -1028,8 +1076,11 @@ export class ConversationProjectionStore {
       // 在途期间游标失效（row.removed 截断 / snapshot resync 整体替换）→ 结果作废，
       // 防止把权威侧已移除的历史行复活；下次触发按新窗口重新拉。
       if (current.rows.window[0]?.rowId !== beforeRowId) return;
-      const window = mergeOlderRows(current.rows.window, result.rows);
-      if (window === null) return;
+      const merged = mergeOlderRows(current.rows.window, result.rows);
+      if (merged === null) return;
+      // 合并点统一执行头部淘汰（含在途期间挂起的流式淘汰）。
+      const trimmed = trimConversationWindowFromHead(merged);
+      const window = trimmed?.window ?? merged;
       this.setState({
         snapshot: { ...current, rows: { ...current.rows, window } },
       });
@@ -1113,6 +1164,65 @@ export class ConversationProjectionStore {
     return run;
   }
 
+  /**
+   * 区间替换跳转（B2 阶段 2）：窗口整体替换为 rowsRange 结果（≤200 行），
+   * firstRowId/totalCount 保持权威值不动。跳转期间在途 delta 应用在旧窗口后随替换
+   * 丢弃（其内容在新区间外）——seq 水位保持本地连续，后续帧照常衔接；running 会话
+   * 的旧尾行 row.delta 因此为 no-op，回底（jumpToTail）后恢复实时视图。
+   * 与 loadOlder 共用 loadingOlder 在途标记：互斥防游标/区间并发错乱。
+   */
+  private async replaceWindowByRange(params: {
+    aroundRowId?: number;
+    limit: number;
+  }): Promise<boolean> {
+    if (this.closed || this.state.loadingOlder) return false;
+    const snapshot = this.state.snapshot;
+    const sessionId = parseConversationTopic(this.topic);
+    if (!snapshot || !sessionId) return false;
+    const requestedGeneration = this.generation;
+    const requestedEpoch = snapshot.logEpoch;
+    this.setState({ loadingOlder: true });
+    try {
+      const result = await this.transport.rowsRange({ sessionId, ...params });
+      if (this.closed) return false;
+      if (this.generation !== requestedGeneration) return false;
+      const current = this.state.snapshot;
+      if (
+        !current ||
+        current.logEpoch !== requestedEpoch ||
+        result.atLogEpoch !== requestedEpoch
+      ) {
+        return false;
+      }
+      if (result.rows.length === 0) return false;
+      this.setState({
+        snapshot: { ...current, rows: { ...current.rows, window: result.rows } },
+        detachedFromLiveTail: this.trackLiveTail(result.rows),
+      });
+      return true;
+    } catch (error) {
+      logger.warn(
+        `[v4-store] rowsRange(jump) ${this.topic} 失败: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    } finally {
+      if (!this.closed) this.setState({ loadingOlder: false });
+    }
+  }
+
+  /** 跳到指定 rowId（目录窗口外条目）：以该行为中心向前的 200 行区间。 */
+  jumpToRow(rowId: number): Promise<boolean> {
+    return this.replaceWindowByRange({
+      aroundRowId: rowId,
+      limit: PROTOCOL_V4_LIMITS.rowsRangeMaxLimit,
+    });
+  }
+
+  /** 跳回实时尾部（回底按钮在脱离态的落点）：无游标 = 从当前尾部向前。 */
+  jumpToTail(): Promise<boolean> {
+    return this.replaceWindowByRange({ limit: PROTOCOL_V4_LIMITS.rowsRangeMaxLimit });
+  }
+
   private scheduleDirectoryRetry(): void {
     if (this.closed || this.directoryRetryTimer !== null || this.directoryRetryAttempt >= 2) {
       return;
@@ -1174,6 +1284,18 @@ export class ConversationProjectionStore {
         void this.refreshPlans();
       }
     }
+  }
+
+  /** 窗口尾跟踪：抬升高水位并返回是否脱离实时尾部。 */
+  private trackLiveTail(window: readonly ConversationRow[]): boolean {
+    const tailRowId = window.at(-1)?.rowId;
+    if (
+      tailRowId !== undefined &&
+      (this.liveTailHighWaterRowId === null || tailRowId > this.liveTailHighWaterRowId)
+    ) {
+      this.liveTailHighWaterRowId = tailRowId;
+    }
+    return (tailRowId ?? 0) < (this.liveTailHighWaterRowId ?? 0);
   }
 
   /** 命令上行前登记 overlay（pending/stopping 展示用）。 */

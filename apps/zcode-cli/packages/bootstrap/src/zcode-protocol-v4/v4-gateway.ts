@@ -1538,6 +1538,7 @@ export class ConversationV4Gateway {
     return publisher.getRowsRange(
       {
         ...(params.beforeRowId !== undefined ? { beforeRowId: params.beforeRowId } : {}),
+        ...(params.aroundRowId !== undefined ? { aroundRowId: params.aroundRowId } : {}),
         limit: params.limit,
       },
       // clientMode 决定行可见性过滤档位：桌面 continuous（默认）/ 断线恢复 replayable。

@@ -136,10 +136,16 @@
 | 2    | 窗口淘汰 + 在途互斥 + aroundRowId 协议/拉取 + 跳转接线 + 受影响消费方口径           | 2–3 天   |
 | 3    | 基准 B 模式 + 真机抽查 + spec/文档收尾                                              | 0.5–1 天 |
 
-## 7. 待拍板的决策点
+## 7. 决策点（2026-09-25 已批准，全部按推荐落定）
 
-1. **跳转语义**：区间替换（推荐——窗口永远连续、改动最小、流式并发有协议 no-op 兜底） vs 窗口开洞+gap 占位（UX 最完整但要动 window 模型/renderUnits/虚拟化三层，建议后续增强另立）。**需你拍板。**
-2. **窗口上限 K**：推荐 2000（memo ≈3ms/帧，预算余量 10 倍；理论预算上限 ~8000）。想给「狂翻历史」更多余量可取 3000–5000（memo 5–8ms，仍安全）。**不拍用 2000。**
-3. **老 workflow run 图/provenance 出窗降级**：接受（推荐） vs 按 rowsRange 补拉（+1 天，收益窄）。**需你拍板。**
-4. **loadAllOlder 删除 vs 保留**：推荐彻底删除防回流（全量常驻入口清零）；保守可保留为「诊断用」但切断所有自动触发。**不拍就删。**
-5. **目录预览截断常量的家**：搬到 shared（服务端/客户端单一口径，推荐）vs 两处各写。低风险，不拍按推荐。
+1. **跳转语义**：✅ 区间替换（窗口永远连续；开洞+gap 占位作为后续增强另立）。
+2. **窗口上限 K**：✅ 2000。
+3. **老 workflow run 图/provenance 出窗降级**：✅ 接受。
+4. **loadAllOlder**：✅ 彻底删除。
+5. **预览截断常量**：✅ 搬 shared 单一口径。
+
+## 8. 实施记录
+
+- **阶段 1（b90325a + 评审修复 fb2d3f8/9a33f5b/5ae3400）**：目录命令五层 + store 目录态 + 导航数据源切换 + loadAllOlder 退役。四轮 subagent 评审拦下并修复：isRunning 不随轮次终态熄灭（turnHeader upsert 纳入失效面）、在途失效后目录停摆（store pending 闭环 + 失败退避）、窄屏/失败/旧 CLI 下 rail 与 plugin 图标全灭（窗口行同函数兜底）、clientMode 三层断链（facade trusted carrier 注册）。
+- **阶段 2**：窗口淘汰（K=2000，turn 边界对齐，残缺头部抑制首轮补拉，loadOlder 在途互斥）+ `rowsRange({aroundRowId})` 区间跳转（窗口整体替换 ≤200 行——协议 rowsRange 上限，足够落点上下文；非方案原文的 K 行）+ `detachedFromLiveTail` 高水位回底。spec 同步于 packages/shared/spec/conversation-turn-directory.md。
+- **阶段 3（待做）**：基准 B 模式断言（n≤K 流式 p95 ≤ 30ms）+ 真机抽查。

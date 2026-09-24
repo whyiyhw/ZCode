@@ -369,6 +369,8 @@ export interface ZCodeAgentConversationResyncParams extends ZCodeAgentWorkspaceT
 export interface ZCodeAgentConversationRowsRangeParams extends ZCodeAgentSessionTarget {
   /** 取 rowId < beforeRowId 的行；缺省 = 从当前尾部向前。 */
   beforeRowId?: number;
+  /** 跳转拉取：以该 rowId 为中心向前取 limit 行；与 beforeRowId 互斥。 */
+  aroundRowId?: number;
   /** 1..rowsRangeMaxLimit（200）。 */
   limit: number;
 }

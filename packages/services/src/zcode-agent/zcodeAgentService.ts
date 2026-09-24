@@ -5204,6 +5204,7 @@ export function createZCodeAgentService(
           sessionId: params.sessionId,
           clientMode: trusted.clientMode,
           ...(params.beforeRowId !== undefined ? { beforeRowId: params.beforeRowId } : {}),
+          ...(params.aroundRowId !== undefined ? { aroundRowId: params.aroundRowId } : {}),
           limit: params.limit,
         },
         v4ConversationRowsRangeResultSchema,

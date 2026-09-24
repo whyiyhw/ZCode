@@ -16,6 +16,7 @@ const CLOSED_STATE: ConversationStoreState = {
   turnNavigatorDirectory: null,
   directoryHasPluginReference: false,
   directoryLoading: false,
+  detachedFromLiveTail: false,
 };
 
 /** 订阅 per-session projection store（useSyncExternalStore，row 级 selector 在组件内再做）。 */

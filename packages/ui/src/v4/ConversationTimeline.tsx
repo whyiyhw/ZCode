@@ -282,6 +282,12 @@ interface ConversationTimelineProps {
   directoryLoading?: boolean;
   /** 宽屏问题目录挂载后一次补齐当前有效分支的全部历史。 */
   onRefreshDirectory?: () => Promise<ConversationTurnNavigatorHydrationResult>;
+  /** 跳到窗口外 rowId：store.jumpToRow 区间替换后由 pendingJump 定位。 */
+  onJumpToRow?: (rowId: number) => Promise<boolean>;
+  /** 脱离实时尾部时的回底落点：store.jumpToTail 区间拉取。 */
+  onJumpToTail?: () => Promise<boolean>;
+  /** 行窗口是否脱离实时尾部（跳转历史区间后 true）。 */
+  detachedFromLiveTail?: boolean;
   /**
    * 问题导航目录失效代际（store turnNavigatorDirectoryRevision）。
    * real-user query 增删后终态必须失效重探测；组件 hydration key
@@ -351,6 +357,9 @@ function ConversationTimelineImpl({
   turnNavigatorItems = null,
   directoryLoading = false,
   onRefreshDirectory,
+  onJumpToRow,
+  onJumpToTail,
+  detachedFromLiveTail = false,
   turnNavigatorDirectoryRevision = 0,
   bottomDock,
   emptyState,
@@ -1199,6 +1208,12 @@ function ConversationTimelineImpl({
     pendingDetachedScrollRestoreRef.current = null;
     clearUserScrollIntent();
     commitFollowing(true);
+    // 跳转历史区间后本地滚动到不了实时尾（尾部行不在窗口）：区间拉取回尾，
+    // following 模式在替换后自动吸底。
+    if (detachedFromLiveTail && onJumpToTail) {
+      void onJumpToTail();
+      return;
+    }
     scrollToBottom();
     // scrollToBottom 只更新组件内 ref；若用户点击后立刻切任务，scope
     // cleanup/scroll 事件可能还没运行，旧 Map 会把下次恢复重新带回中部甚至顶部。
@@ -1216,14 +1231,22 @@ function ConversationTimelineImpl({
     };
   }, [handleBackToBottom, scrollToBottomActionRef]);
 
+  // 窗口外跳转的待定位条目：jumpToRow 区间替换后，unitIndex 映射重建时定位。
+  const pendingJumpQueryRef = useRef<{ rowId: number; behavior: ScrollBehavior } | null>(null);
+
   const scrollToQuery = useCallback(
     (target: { unitIndex: number; rowId: number }, behavior: ScrollBehavior = "auto") => {
       if (target.unitIndex < 0) {
-        // 窗口外目录条目（行窗口按需化后存在）：阶段 2 由 aroundRowId 区间拉取
-        // 接管；阶段 1 显式放弃并留痕，不落入 scrollToIndex(-1) 的未定义行为。
-        logger.debug("[v4-turn-navigator] 目标 query 不在当前行窗口，等待阶段 2 跳转拉取", {
-          rowId: target.rowId,
-        });
+        // 窗口外目录条目：aroundRowId 区间替换窗口（store.jumpToRow），成功后由
+        // pendingJump 布局效应在新 unitIndex 映射里定位。
+        if (!onJumpToRow) {
+          logger.debug("[v4-turn-navigator] 目标 query 不在当前行窗口且无跳转通道", {
+            rowId: target.rowId,
+          });
+          return;
+        }
+        pendingJumpQueryRef.current = { rowId: target.rowId, behavior };
+        void onJumpToRow(target.rowId);
         return;
       }
       clearUserScrollIntent();
@@ -1306,7 +1329,17 @@ function ConversationTimelineImpl({
         scrollToQueryActionRef.current = null;
       }
     };
-  }, [scrollToQuery, scrollToQueryActionRef]);
+  }, [scrollToQuery, scrollToQueryActionRef, onJumpToRow]);
+
+  // 窗口外跳转的收尾：jumpToRow 区间替换触发 unitIndex 映射重建，此刻定位目标条目。
+  useLayoutEffect(() => {
+    const pending = pendingJumpQueryRef.current;
+    if (!pending) return;
+    const unitIndex = turnNavigatorUnitIndexByRowId.get(pending.rowId);
+    if (unitIndex === undefined) return;
+    pendingJumpQueryRef.current = null;
+    scrollToQuery({ unitIndex, rowId: pending.rowId }, pending.behavior);
+  }, [turnNavigatorUnitIndexByRowId, scrollToQuery]);
 
   useEffect(
     () => () => {

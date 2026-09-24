@@ -502,16 +502,23 @@ export const v4ConversationUnsubscribeParamsSchema = z
   .strict();
 export type V4ConversationUnsubscribeParams = z.infer<typeof v4ConversationUnsubscribeParamsSchema>;
 
-// ── rows/range（游标制行分页，loadOlder）──
+// ── rows/range（游标制行分页，loadOlder / aroundRowId 跳转拉取）──
 // 无 index 语义：全序 = rowId 升序；客户端按 rowId 键控合并。
-export const v4ConversationRowsRangeParamsSchema = z.object({
-  sessionId: z.string(),
-  /** Host attachment injects this trusted value; renderer callers omit it. */
-  clientMode: z.enum(["desktop-continuous", "web-remote-replayable"]).optional(),
-  // 取 rowId < beforeRowId 的行；缺省 = 从当前尾部向前。
-  beforeRowId: z.number().optional(),
-  limit: z.number().min(1).max(PROTOCOL_V4_LIMITS.rowsRangeMaxLimit),
-});
+export const v4ConversationRowsRangeParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    /** Host attachment injects this trusted value; renderer callers omit it. */
+    clientMode: z.enum(["desktop-continuous", "web-remote-replayable"]).optional(),
+    // 取 rowId < beforeRowId 的行；缺省 = 从当前尾部向前。
+    beforeRowId: z.number().optional(),
+    // 跳转拉取：取「以该 rowId 为中心向前」的 limit 行（目标不在全序时贴其前侧）。
+    // 与 beforeRowId 游标语义互斥，二者同时出现是客户端错误。
+    aroundRowId: z.number().optional(),
+    limit: z.number().min(1).max(PROTOCOL_V4_LIMITS.rowsRangeMaxLimit),
+  })
+  .refine((params) => params.beforeRowId === undefined || params.aroundRowId === undefined, {
+    message: "beforeRowId 与 aroundRowId 互斥",
+  });
 export type V4ConversationRowsRangeParams = z.infer<typeof v4ConversationRowsRangeParamsSchema>;
 
 export const v4ConversationRowsRangeResultSchema = z.object({
