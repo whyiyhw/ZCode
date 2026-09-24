@@ -11,7 +11,9 @@
 >
 > v4（2026-09-24 攻击实测后修正）：P0——看门狗布尔锚会被「吞掉之前的旧 dom-ready」骗过，快恢复后 300ms 内二次真崩仍白屏挂死（改为吞没时刻时间戳锚）；B1——陈旧 backoff 定时器可多插一次 reload（改为新恢复决策作废旧定时器）。新增 monitor 接线单测（stub webContents + mock 时钟）复现 S1/S6 作回归。batch 经 6112 个对抗序列（含乱序窗口）零分歧、性能三档 11.6×–52.6× 占优后放行。
 >
-> v5（2026-09-24 真机手工矩阵）：crashed（CDP Page.crash）/ oom（分配循环）/ 外部强杀（TerminateProcess→crashed）三类均 3–4 秒自动恢复且 reattached to existing host（会话连续）；第 4 崩 give-up → markForceQuit + 干净退出（exit 0，未被 quit 确认弹窗挂住）；全程零 "Object has been destroyed"、dump 归档生效。**真机抓到并修复最后一个坑**：render-process-gone 回调内同步 reload() 撞 Chromium NOTREACHED（electron 上游 bug，PR #48715），主进程 exit 3——恢复动作改为 setImmediate 推迟后矩阵全绿。launch-failed 链与 killed 归类由单测覆盖（真机无法稳定构造）。B1 事故级端到端实测（≥5 万行 + 30ms 流式）仍待做，是 B2 立项判据。
+> v5（2026-09-24 真机手工矩阵）：crashed（CDP Page.crash）/ oom（分配循环）/ 外部强杀（TerminateProcess→crashed）三类均 3–4 秒自动恢复且 reattached to existing host（会话连续）；第 4 崩 give-up → markForceQuit + 干净退出（exit 0，未被 quit 确认弹窗挂住）；全程零 "Object has been destroyed"、dump 归档生效。**真机抓到并修复最后一个坑**：render-process-gone 回调内同步 reload() 撞 Chromium NOTREACHED（electron 上游 bug，PR #48715），主进程 exit 3——恢复动作改为 setImmediate 推迟后矩阵全绿。launch-failed 链与 killed 归类由单测覆盖（真机无法稳定构造）。
+>
+> v6（2026-09-24 B1 事故级实测完成，B2 立项判据**触发**）：新增 `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 ConversationProjectionStore + SessionDataLayer 接线 + 真实下游 memo 计算，5 万行常驻 + 30ms 节奏流式注入）。结果：**apply+notify p95=0.51ms**（B1 验收线 ≤1ms 达标，批处理把逐条不可变 apply 的事故根因消干净）；**每帧总成本 p95=122.03ms**（p50=76ms，其中 memo 重算占 75.87ms p50 / 121.24ms p95）——超 30ms 帧预算 4 倍，超支全部来自下游 O(n) memo 重算（renderUnits / workflowGraph）。堆 max 184MB 有界。**结论：B2（行窗口上限 + 回合导航目录分离 + memo 增量化）按决策点 3 的口径正式立项**，本基准即其验收基线（B2 落地后同规模 p95 须 ≤ 30ms）。
 
 ## 1. 要解决的问题
 
@@ -140,7 +142,7 @@ win.webContents.on("render-process-gone", (_e, details) => {
 
 核心矛盾：turn navigator（回合导航）依赖全量行，`loadAllOlder` 全量常驻正是为它；直接给 `rows.window` 设上限会砍掉导航。方向：**行内容有界 + 轻量目录全量常驻**（rowId/turn 元数据的小对象），回读走已有 `rowsRange`（200 行/页）；`buildConversationTurnRenderUnits` / `buildWorkflowGraphByToolCallId` 等改为目录 revision 门控或增量维护。涉及协议口径与交互边界，需先出独立 spec 再实施。
 
-**触发条件（v2 由验收强制供数）**：B1 验收中的事故级实测数据自动成为 B2 立项判据——p95 超预算或内存曲线不平稳即立项，不再依赖「有人记得去测」。次要放大器 sessions-index 链路（`sessionsIndexStore.ts:121` 每帧 new Map、`useWorkspaceSessionsIndexItems.ts:156-213` 每 tick 全量聚合排序，O(s log s)，s=会话数）量级远小于行数链路，不列根因，B2 实测时纳入测量。
+**触发条件（v2 由验收强制供数；v6 实测后已触发）**：B1 验收中的事故级实测数据自动成为 B2 立项判据——p95 超预算或内存曲线不平稳即立项，不再依赖「有人记得去测」。**2026-09-24 实测（packages/ui/test/v4-frame-load-benchmark.test.ts，5 万行 × 30ms 节奏）：每帧总成本 p95=122ms > 30ms 预算（超支全部来自下游 O(n) memo 重算；apply p95=0.51ms 已达标）→ B2 正式立项，该基准为 B2 验收基线。**次要放大器 sessions-index 链路（`sessionsIndexStore.ts:121` 每帧 new Map、`useWorkspaceSessionsIndexItems.ts:156-213` 每 tick 全量聚合排序，O(s log s)，s=会话数）量级远小于行数链路，不列根因，B2 实测时纳入测量。
 
 ## 4. 不做什么
 
@@ -166,7 +168,7 @@ win.webContents.on("render-process-gone", (_e, details) => {
 
 1. 黄金等价测试全绿（JSON.stringify 相等 + rowId 单调唯一生成器 + 无 row-op 帧引用恒等断言）。
 2. 性能基准记录在案（20k 行 × 8 delta/帧，前后对比）。
-3. **事故级端到端实测（v2，强制项）**：≥5 万行全量常驻（宽屏 loadAllOlder 后）+ 30ms 帧流式注入持续 ≥10 分钟，端到端帧成本 p95 ≤ 30ms、renderer 内存曲线斜率平稳（具体数值留档）；该数据同时是 B2 立项判据。负载构造用 dev 工具注入回放帧，不依赖真人 4 小时会话。
+3. **事故级端到端实测（v2 强制项；v6 已完成）**：✅ `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 store + 真实下游 memo，5 万行常驻 + 30ms 节奏流式注入，默认 2000 帧常规记录 / `ZCODE_BENCH_FRAMES=20000` 全量档）。实测：apply+notify p95=0.51ms（B1 验收线 ≤1ms 达标）；每帧总成本 p95=122ms、memo 重算占 121ms——超 30ms 帧预算，**B2 立项判据触发**（超支归因：下游 O(n) memo，非 apply）。堆 max 184MB 有界。
 4. 手工：超长会话流式追加期间 UI 保持响应（以第 3 条量化指标为准，不再只靠手感）。
 5. typecheck / lint / architecture 真实通过。
 
