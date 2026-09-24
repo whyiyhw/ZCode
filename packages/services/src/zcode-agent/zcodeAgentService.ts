@@ -5221,12 +5221,18 @@ export function createZCodeAgentService(
     },
 
     // 回合导航目录：同样是只读 query（renderer 尾窗推导不出全史目录），沿现有
-    // workspace attachment 透传，不建立新 runtime。
+    // workspace attachment 透传，不建立新 runtime。clientMode 与 rowsRange 同口径：
+    // 由 trusted host attachment 注入（renderer 不自报），决定行可见性档位。
     async conversationTurnDirectoryV4(params: ZCodeAgentConversationTurnDirectoryParams) {
+      const trusted = readTrustedZCodeAgentV4Connection(params);
+      if (!trusted) throw new Error("fault.conversation.turnDirectoryConnectionUntrusted");
       const client = await getReadOnlyClient(params);
       return client.request(
         V4_METHODS.conversationTurnDirectory,
-        { sessionId: params.sessionId },
+        {
+          sessionId: params.sessionId,
+          clientMode: trusted.clientMode,
+        },
         v4ConversationTurnDirectoryResultSchema,
       );
     },

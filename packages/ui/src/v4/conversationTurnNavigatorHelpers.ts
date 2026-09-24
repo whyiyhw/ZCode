@@ -96,7 +96,11 @@ export function resolveConversationTurnNavigatorActiveUnitIndex({
     return undefined;
   }
 
-  const itemByUnitIndex = new Map(items.map((item) => [item.unitIndex, item]));
+  // 窗口外条目 unitIndex = -1（目录全分支 > 行窗口），不参与几何锚定，
+  // 防止退化态下 fallback 命中最旧窗口外条目。
+  const itemByUnitIndex = new Map(
+    items.filter((item) => item.unitIndex >= 0).map((item) => [item.unitIndex, item]),
+  );
   const viewportStart = resolveFiniteNonNegative(scrollOffsetPx);
   const viewportEnd = viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
 

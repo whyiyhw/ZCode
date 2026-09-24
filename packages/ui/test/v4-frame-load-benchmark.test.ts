@@ -138,6 +138,7 @@ function createBenchTransport(topic: string, initialFrame: ConversationTopicFram
       ack: { subscriptionId: "sub-bench-r", mode: "snapshot", logEpoch: "bench-epoch" },
     }),
     unsubscribe: async () => {},
+    turnDirectory: unused,
     sendCommand: unused,
     queryCommands: unused,
     rowsRange: unused,

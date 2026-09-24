@@ -2,7 +2,7 @@
 //
 // 为什么存在：目录必须覆盖全分支 real-user query，而 renderer 的 rows.window 是
 // 有界尾窗（宽屏全量常驻 loadAllOlder 已按 B2 方案退役）——目录只能由持有全量
-// 投影的 CLI 侧推导，经 v4/conversation/directory 只读查询下发。本包纪律是
+// 投影的 CLI 侧推导，经 v4/conversation/turnDirectory 只读查询下发。本包纪律是
 // schema 类型 + 纯函数，推导放这里让 CLI handler 与单测共用同一实现。
 //
 // 语义与 UI 的 renderUnits 派生对齐（对齐点写在各函数注释）：

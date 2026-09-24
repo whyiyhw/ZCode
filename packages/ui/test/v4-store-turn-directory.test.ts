@@ -214,6 +214,77 @@ test("查询期间 revision 失效（新增 realUser query）→ stale 不写回
   assert.equal(h.store.getState().turnNavigatorDirectory, null, "失效结果不得写回");
 });
 
+test("在途失效后 store 侧 pending 重查闭环（不依赖组件层依赖变化）", async () => {
+  const h = createHarness();
+  await connectStore(h.store);
+
+  const first = h.store.refreshTurnNavigatorDirectory();
+  // 在途期间新增 realUser query：revision 失效，首查将 stale。
+  h.emitOnline({
+    topic: TOPIC,
+    subscriptionId: "sub-1",
+    fromSeq: 100,
+    toSeq: 101,
+    payload: {
+      kind: "deltas",
+      deltas: [
+        {
+          op: "row.appended",
+          row: {
+            rowId: 900,
+            turnId: "t9",
+            createdAt: 1,
+            createdAtSeq: 1,
+            kind: "userInput",
+            text: "新 query",
+            origin: "realUser",
+          },
+        },
+      ],
+    },
+  } as ConversationTopicFrame);
+  h.settleCall(1, { items: ITEMS, hasPluginReference: false, atSeq: 101, atLogEpoch: "epoch-1" });
+  assert.equal((await first).status, "stale");
+  // finally 闭环应已自动发起第二次查询。
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(h.directoryCallCount, 2, "stale 后 store 应自动重查");
+  h.settleCall(2, { items: ITEMS, hasPluginReference: false, atSeq: 101, atLogEpoch: "epoch-1" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(h.store.getState().turnNavigatorDirectory, ITEMS);
+});
+
+test("turnHeader 终态 upsert 递增目录 revision（isRunning 熄灭驱动）", async () => {
+  const h = createHarness();
+  await connectStore(h.store);
+  const revisionBefore = h.store.getState().turnNavigatorDirectoryRevision;
+  h.emitOnline({
+    topic: TOPIC,
+    subscriptionId: "sub-1",
+    fromSeq: 100,
+    toSeq: 101,
+    payload: {
+      kind: "deltas",
+      deltas: [
+        {
+          op: "row.upserted",
+          row: {
+            rowId: 800,
+            turnId: "t8",
+            createdAt: 1,
+            createdAtSeq: 1,
+            kind: "turnHeader",
+            state: "completedSuccess",
+          },
+        },
+      ],
+    },
+  } as ConversationTopicFrame);
+  assert.ok(
+    h.store.getState().turnNavigatorDirectoryRevision > revisionBefore,
+    "turnHeader upsert 应递增目录 revision",
+  );
+});
+
 test("并发刷新单飞：共享同一 in-flight 查询，transport 只被调用一次", async () => {
   const h = createHarness();
   await connectStore(h.store);

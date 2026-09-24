@@ -192,6 +192,10 @@ function shouldInvalidateTurnNavigatorDirectory(frame: ConversationTopicFrame): 
   if (frame.payload.kind === "snapshot") return true;
   return frame.payload.deltas.some((delta) => {
     if (delta.op === "row.removed") return true;
+    // turnHeader 终态迁移（running→completed）不新增 query，但目录条目的
+    // isRunning 强调与 running 预览必须熄灭——快照型目录若不随轮次边界失效，
+    // 单轮会话的 running 条目会亮到下一条 query（实施评审 M1）。
+    if (delta.op === "row.upserted" && delta.row.kind === "turnHeader") return true;
     if (delta.op !== "row.appended" && delta.op !== "row.upserted") return false;
     const row = delta.row;
     return row.kind === "userInput" && row.origin === "realUser";
@@ -316,6 +320,8 @@ export class ConversationProjectionStore {
   private planQueryInFlight = false;
   /** 回合导航目录查询单飞：并发调用共享同一 in-flight 结果。 */
   private directoryQueryInFlight: Promise<ConversationTurnNavigatorHydrationResult> | null = null;
+  /** 查询期间目录 revision 失效时挂起重查（与 refreshPlans 的 pending 同族）。 */
+  private directoryQueryPending = false;
   private planQueryPending = false;
   /** accepted input 的 projection confirmation watchdog；不承载命令，也不生成本地事实。 */
   private readonly acceptedInputProjectionTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1054,6 +1060,9 @@ export class ConversationProjectionStore {
           return stale();
         }
         if (this.state.turnNavigatorDirectoryRevision !== requestedRevision) {
+          // 在途失效：挂起重查（实施评审 M2——effect 依赖可能不再变化，组件层
+          // 「按新 key 自动重查」的承诺必须由 store 自己闭环）。
+          this.directoryQueryPending = true;
           return stale();
         }
         this.setState({
@@ -1069,6 +1078,10 @@ export class ConversationProjectionStore {
       } finally {
         this.directoryQueryInFlight = null;
         if (!this.closed) this.setState({ directoryLoading: false });
+        if (this.directoryQueryPending && !this.closed) {
+          this.directoryQueryPending = false;
+          void this.refreshTurnNavigatorDirectory();
+        }
       }
     })();
     this.directoryQueryInFlight = run;

@@ -143,6 +143,10 @@ import {
   resolveLatestCompletedAssistantPreviewTurn,
   type AssistantPreviewPptxAutoOpenTarget,
 } from "@/v4/assistantPreviewPptxAutoOpen.js";
+import {
+  buildConversationTurnDirectoryItems,
+  conversationRowsHavePluginReference,
+} from "@zcode/shared/zcode-protocol-v4";
 import { isSessionPluginCatalogReady } from "@/v4/pluginReferenceIconProjection.js";
 import { shouldResyncForStaleAuthority } from "@/v4/staleAuthorityRecovery.js";
 import { createCommandEnvelope } from "@/v4/commandFactory.js";
@@ -513,9 +517,14 @@ export function SessionPane({
       timers.clear();
     };
   }, [lease, sessionId]);
+  // plugin 引用图标：目录已拉取时用全史事实（尾窗扫描会漏历史引用）；目录未拉取
+  // （窄屏不触发目录查询、查询失败、旧 CLI 无此命令）退回窗口行谓词——与退役前
+  // 行为等价，能力不因目录链路故障而消失（实施评审 M4/集成 M1）。
   const pluginReferenceIconsEnabled =
     isSessionPluginCatalogReady(state.status, sessionId, snapshot?.sessionId) &&
-    state.directoryHasPluginReference;
+    (state.turnNavigatorDirectory !== null
+      ? state.directoryHasPluginReference
+      : conversationRowsHavePluginReference(snapshot?.rows.window ?? []));
   // send_result 的落定信号：用户消息真正画进对话历史。z-code 没有乐观渲染，
   // 气泡必须等投影回流出 userInput row 才出现，所以 ACK accepted 不能算发送完成。
   // 取 useEffect 而非 store 订阅回调 —— effect 在 DOM commit 之后跑，此刻气泡已在屏幕上。
@@ -3000,6 +3009,12 @@ export function SessionPane({
     return lease?.store.loadOlder();
   }, [lease]);
 
+  // rail 条目兜底：目录未拉取时从当前窗口行用同一 shared 纯函数推导——目录链路
+  // 故障（3 连败 terminal / 旧 CLI）下 rail 仍显示窗口内条目，等价退役前行为。
+  const turnNavigatorItems =
+    state.turnNavigatorDirectory ??
+    (snapshot ? buildConversationTurnDirectoryItems(snapshot.rows.window) : null);
+
   const handleRefreshDirectory = useCallback(() => {
     return lease
       ? lease.store.refreshTurnNavigatorDirectory()
@@ -3631,7 +3646,7 @@ export function SessionPane({
               loadingOlder={timelineSnapshot ? state.loadingOlder : false}
               onLoadOlder={handleLoadOlder}
               onRefreshDirectory={handleRefreshDirectory}
-              turnNavigatorItems={state.turnNavigatorDirectory}
+              turnNavigatorItems={turnNavigatorItems}
               directoryLoading={state.directoryLoading}
               turnNavigatorDirectoryRevision={state.turnNavigatorDirectoryRevision}
               bottomDock={conversationBottomDock}
