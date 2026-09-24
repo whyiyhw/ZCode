@@ -13,7 +13,7 @@
 >
 > v5（2026-09-24 真机手工矩阵）：crashed（CDP Page.crash）/ oom（分配循环）/ 外部强杀（TerminateProcess→crashed）三类均 3–4 秒自动恢复且 reattached to existing host（会话连续）；第 4 崩 give-up → markForceQuit + 干净退出（exit 0，未被 quit 确认弹窗挂住）；全程零 "Object has been destroyed"、dump 归档生效。**真机抓到并修复最后一个坑**：render-process-gone 回调内同步 reload() 撞 Chromium NOTREACHED（electron 上游 bug，PR #48715），主进程 exit 3——恢复动作改为 setImmediate 推迟后矩阵全绿。launch-failed 链与 killed 归类由单测覆盖（真机无法稳定构造）。
 >
-> v6（2026-09-24 B1 事故级实测完成，B2 立项判据**触发**）：新增 `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 ConversationProjectionStore + SessionDataLayer 接线 + 真实下游 memo 计算，5 万行常驻 + 30ms 节奏流式注入）。结果：**apply+notify p95=0.51ms**（B1 验收线 ≤1ms 达标，批处理把逐条不可变 apply 的事故根因消干净）；**每帧总成本 p95=122.03ms**（p50=76ms，其中 memo 重算占 75.87ms p50 / 121.24ms p95）——超 30ms 帧预算 4 倍，超支全部来自下游 O(n) memo 重算（renderUnits / workflowGraph）。堆 max 184MB 有界。**结论：B2（行窗口上限 + 回合导航目录分离 + memo 增量化）按决策点 3 的口径正式立项**，本基准即其验收基线（B2 落地后同规模 p95 须 ≤ 30ms）。
+> v6（2026-09-24 B1 事故级实测完成，B2 立项判据**触发**）：新增 `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 ConversationProjectionStore + SessionDataLayer 接线 + 真实下游 memo 计算，5 万行常驻 + 30ms 节奏流式注入）。结果：**apply+notify p95=0.51ms**（B1 验收线 ≤1ms 达标，批处理把逐条不可变 apply 的事故根因消干净）；**每帧总成本 p95=122.03ms**（p50=76ms，其中 memo 重算占 75.87ms p50 / 121.24ms p95）——超 30ms 帧预算 4 倍，超支全部来自下游 O(n) memo 重算（renderUnits / workflowGraph）。堆 max 184MB 有界。全量档复核（`ZCODE_BENCH_FRAMES=20000`，逻辑 10 分钟、墙钟 24 分钟）：apply p95=0.33ms、每帧总 p95=102.39ms（memo 占 102.17ms）、p99=129ms、max=196ms、堆 max 309MB——与默认档一致，结论稳健。**结论：B2（行窗口上限 + 回合导航目录分离 + memo 增量化）按决策点 3 的口径正式立项**，本基准即其验收基线（B2 落地后同规模 p95 须 ≤ 30ms）。
 
 ## 1. 要解决的问题
 
