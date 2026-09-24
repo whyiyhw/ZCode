@@ -17,14 +17,31 @@ import {
   registerMainApplicationWindow,
   unregisterMainApplicationWindow,
 } from "./resourceManagerWindow.js";
+import { attachRendererCrashRecoveryMonitor } from "./rendererCrashRecoveryMonitor.js";
 
 const DEFAULT_RUNTIME_PROCESS_ENV_WAIT_TIMEOUT_MS = 4_500;
 
 export function createWindow(options: {
   iconPath: string;
   preloadPath: string;
-  logger: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void };
+  logger: {
+    info: (...args: unknown[]) => void;
+    warn: (...args: unknown[]) => void;
+    error?: (...args: unknown[]) => void;
+  };
   forceQuitRef: { current: boolean };
+  /**
+   * 渲染进程崩溃自愈的退出守卫：forceQuit/explicitQuit 置位后 renderer 死亡属于
+   * 受控退出流程，不得自动 reload（口径见 packages/desktop/spec/renderer-crash-recovery.md）。
+   */
+  isAppQuitting?: () => boolean;
+  /**
+   * give-up 兜底（崩溃风暴预算耗尽）：由 index.ts 实现为 markForceQuit + app.quit()。
+   * 必须走注入回调而不是本模块直接 destroy——destroy 后 window-all-closed → app.quit()
+   * 会撞上 before-quit 的退出确认弹窗（生产版 + 会话运行中必弹、无父窗口、默认取消），
+   * 无人值守场景会被模态框挂死，spec 承诺的「直接退出」不成立。
+   */
+  onCrashRecoveryGiveUp?: () => void;
   handleBeforeClose?: (win: BrowserWindow, label: string) => boolean;
   windowHostProcessMap: Map<number, ElectronUtilityProcess>;
   spawnHostProcess: (
@@ -230,6 +247,15 @@ export function createWindow(options: {
       // 可能把 Main 的白屏转移成 Host 卡死。Main 路径始终传入预计算 fallback patch。
       completeWait(options.runtimeProcessEnvFallbackPatch);
     });
+  });
+
+  // 渲染进程崩溃自愈（2026-09-24 白屏事故；口径见 spec/renderer-crash-recovery.md）：
+  // reload 复用上面的 dom-ready 重挂路径，存活 host 与运行中会话不受影响；
+  // give-up 走注入的 onCrashRecoveryGiveUp 退出应用，崩溃风暴下宁可直接退出也不无限白屏。
+  attachRendererCrashRecoveryMonitor(win, label, {
+    logger: options.logger,
+    isAppQuitting: options.isAppQuitting,
+    onGiveUp: options.onCrashRecoveryGiveUp,
   });
 
   win.on("closed", () => {

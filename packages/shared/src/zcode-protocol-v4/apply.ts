@@ -1,7 +1,8 @@
 // Delta 应用语义的规范实现（纯函数）。
 // 这是协议语义的一部分：coalesce 的「语义保持」就以本函数为裁判——
 // applyAll(s, coalesce(ds)) 必须与 applyAll(s, ds) 逐字节一致（黄金测试）。
-// 客户端 store 的 apply 逻辑是本函数的宿主化改写，不得引入额外分支。
+// 渲染端 store 的帧应用入口是 applyConversationDeltasBatch（见文件尾）：帧内一次
+// 拷贝 + 有序二分定位原地应用，语义以本文件的不可变实现为裁判。
 import type { ConversationDelta } from "./delta.js";
 import type { ConversationSnapshot } from "./snapshot.js";
 import type { ConversationRow } from "./rows.js";
@@ -11,10 +12,12 @@ import { applyWorkflowRunRemoved, applyWorkflowRunUpdated } from "./workflow-run
 /**
  * 仅供服务端在未发布的候选快照内批量归约使用。
  *
- * 冷恢复逐条调用不可变 apply 时，每次 append/upsert 都复制随历史增长的
+ * 冷恢复/流式逐条调用不可变 apply 时，每次 append/upsert 都复制随历史增长的
  * rows.window，并再次线性查找 rowId，长会话因此退化为 O(N²)。候选快照尚未对外可见，
- * 可以在这条明确的隔离边界内复用同一份数组和增量索引；普通客户端仍使用上面的
- * 不可变语义，避免已发布快照被后续事件篡改。
+ * 可以在这条明确的隔离边界内复用同一份数组和增量索引。渲染端帧应用
+ * （applyConversationDeltasBatch）刻意不复用本路径：rowIndexById 的 n 次 Map.set
+ * 在流式帧的小 k（约 8）规模下常数高于逐条数组拷贝（性能基准实测过），自带
+ * 有序二分定位更划算。普通逐条消费者仍使用上面的不可变语义。
  */
 export interface MutableConversationSnapshotAccumulator {
   snapshot: ConversationSnapshot;
@@ -215,4 +218,119 @@ export function applyConversationDeltasMutable(
   deltas: readonly ConversationDelta[],
 ): void {
   for (const delta of deltas) applyConversationDeltaMutable(accumulator, delta);
+}
+
+const ROW_DELTA_OPS: ReadonlySet<string> = new Set([
+  "row.appended",
+  "row.upserted",
+  "row.removed",
+  "row.delta",
+]);
+
+/**
+ * 行定位（仅供 batch 帧内使用）：rows.window 按 rowId 升序是行日志窗口的结构
+ * 不变量（append 尾追、removed 截尾、upsert/delta 原位、loadOlder 前插更早行），
+ * 二分为主路径；万一上游破坏有序性，线性兜底保证语义只退化慢、不退化错。
+ */
+function locateRowIndex(window: readonly ConversationRow[], rowId: number): number {
+  let low = 0;
+  let high = window.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const midRowId = window[mid]?.rowId;
+    if (midRowId === undefined) {
+      break;
+    }
+    if (midRowId === rowId) {
+      return mid;
+    }
+    if (midRowId < rowId) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return window.findIndex((row) => row.rowId === rowId);
+}
+
+/**
+ * 把一帧 delta 批量应用到已发布快照，语义与 {@link applyConversationDeltas} 逐字节一致
+ * （黄金测试背书：packages/shared/test/zcode-protocol-v4-apply-batch.test.ts；
+ * 行为口径：packages/shared/spec/conversation-delta-batch-apply.md）。
+ *
+ * 为什么存在：渲染端逐条不可变 apply 让每条 delta 都复制随历史增长的 rows.window 并
+ * 线性查找 rowId（O(k·n)/帧），数万行的长会话在 30ms 流式帧下退化成 O(N²)，更新
+ * 队列风暴拖死渲染进程（2026-09-24 白屏事故，栈停在 react-virtual 的 useReducer
+ * 更新队列）。本函数帧内只拷贝一次 window，row 定位走有序二分（O(n + k·log n)），
+ * 帧结束时返回组装完毕的新对象，已发布快照不被篡改。刻意**不**走服务端的
+ * mutable accumulator：其 rowIndexById 需要 n 次 Map.set，在流式帧的 k≈8 规模下
+ * 常数反而高于逐条数组拷贝（性能基准实测过），只适合服务端大批量归约。
+ *
+ * 引用恒等保底：帧内不含任何 row 操作（只有 state.updated / workflowRun twin）时
+ * 复用原 snapshot.rows——下游 memo（SessionPane/ConversationTimeline）以
+ * rows.window 引用为缓存 key，workflow 节点进度 tick、turn 相位迁移这类纯状态帧
+ * 不得触发 O(n) 重算。纯状态帧走逐条不可变折叠：不触碰 rows，每条只是顶层浅合并。
+ */
+export function applyConversationDeltasBatch(
+  snapshot: ConversationSnapshot,
+  deltas: readonly ConversationDelta[],
+): ConversationSnapshot {
+  if (deltas.length === 0) {
+    return snapshot;
+  }
+  const touchesRows = deltas.some((delta) => ROW_DELTA_OPS.has(delta.op));
+  if (!touchesRows) {
+    return applyConversationDeltas(snapshot, deltas);
+  }
+  // 帧内工作集：一次性拷贝 window，row 操作原地应用，非 row 操作（state.updated /
+  // workflow twin）转调既有不可变纯函数——顶层结果对象随转调换新，rows 引用不变。
+  const window = [...snapshot.rows.window];
+  const rows = { ...snapshot.rows, window };
+  let next: ConversationSnapshot = { ...snapshot, rows };
+  for (const delta of deltas) {
+    switch (delta.op) {
+      case "row.appended":
+        window.push(delta.row);
+        rows.totalCount += 1;
+        rows.firstRowId ??= delta.row.rowId;
+        continue;
+      case "row.upserted": {
+        const index = locateRowIndex(window, delta.row.rowId);
+        // 未加载 rowId = no-op（协议：被逐出的行只能经 rows/range 取回）。
+        if (index !== -1) {
+          window[index] = delta.row;
+        }
+        continue;
+      }
+      case "row.removed": {
+        const removesEntireActiveBranch =
+          rows.firstRowId !== null && delta.fromRowId <= rows.firstRowId;
+        let writeIndex = 0;
+        for (const row of window) {
+          if (row.rowId >= delta.fromRowId) {
+            continue;
+          }
+          window[writeIndex] = row;
+          writeIndex += 1;
+        }
+        const removed = window.length - writeIndex;
+        window.length = writeIndex;
+        rows.totalCount = removesEntireActiveBranch ? 0 : Math.max(0, rows.totalCount - removed);
+        rows.firstRowId = removesEntireActiveBranch ? null : rows.firstRowId;
+        continue;
+      }
+      case "row.delta": {
+        const index = locateRowIndex(window, delta.rowId);
+        const target = index === -1 ? undefined : window[index];
+        if (target !== undefined) {
+          window[index] = appendToRow(target, delta.path, delta.append);
+        }
+        continue;
+      }
+      default:
+        next = applyConversationDelta(next, delta);
+        continue;
+    }
+  }
+  return next;
 }

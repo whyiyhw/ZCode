@@ -6,7 +6,7 @@
 //   3. base 与状态同生共死——断档时状态未被污染，携当前水位重订阅，由服务端裁决 resume/snapshot。
 // 除 optimistic overlay（pending 命令展示）外，本 store 不产生任何 conversation 事实。
 import {
-  applyConversationDeltas,
+  applyConversationDeltasBatch,
   isDeterministicContentFault,
   parseConversationTopic,
   PROTOCOL_V4_LIMITS,
@@ -707,7 +707,10 @@ export class ConversationProjectionStore {
       }
       return;
     }
-    const applied = applyConversationDeltas(current, frame.payload.deltas);
+    // 帧批量 apply：逐条不可变 apply 在长会话下每条 delta 复制整个 rows.window
+    // （O(k·n)/帧），数万行 + 30ms 流式帧会拖死渲染进程（2026-09-24 白屏事故）。
+    // batch 版帧内一次拷贝 + 二分定位，语义与逐条折叠逐字节一致（黄金测试背书）。
+    const applied = applyConversationDeltasBatch(current, frame.payload.deltas);
     // seq 是快照对齐水位，delta 帧应用完推进到帧右端点。
     const next = { ...applied, seq: frame.toSeq };
     logSubagentProjectionTransition(this.topic, current, next, "deltas");

@@ -408,6 +408,19 @@ function resolveProcessGoneLogLevel(reason: string): "info" | "warn" {
   return reason === "clean-exit" || reason === "killed" ? "info" : "warn";
 }
 
+// 退出收尾期（before-quit → 窗口关闭 → renderer 被杀）事件可能在 webContents 销毁后
+// 送达；index.ts 关窗收尾曾因现取 webContents.id 抛 "Object has been destroyed"
+// （同类教训）。本函数先防护再取字段，保证取证日志本身不成为退出路径的故障源。
+function describeWebContents(webContents: WebContents): Record<string, unknown> {
+  try {
+    return webContents.isDestroyed()
+      ? { webContentsId: "destroyed" }
+      : { webContentsId: webContents.id, name: webContents.getType(), url: webContents.getURL() };
+  } catch {
+    return { webContentsId: "destroyed" };
+  }
+}
+
 export function registerCrashEventMonitor(
   logger: CrashCaptureLogger,
   paths: CrashCapturePaths,
@@ -420,11 +433,9 @@ export function registerCrashEventMonitor(
 
   app.on("render-process-gone", (_event, webContents, details) => {
     logger[resolveProcessGoneLogLevel(details.reason)]("[crash-capture] render-process-gone:", {
-      webContentsId: webContents.id,
+      ...describeWebContents(webContents),
       reason: details.reason,
       exitCode: details.exitCode,
-      name: webContents.getType(),
-      url: webContents.getURL(),
     });
     hooks?.onRenderProcessGone?.(webContents, details);
     // 远端 crash SDK 可能会在处理后清理 live 目录里的原始 dmp。

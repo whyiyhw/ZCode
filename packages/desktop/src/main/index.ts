@@ -145,9 +145,7 @@ import {
 } from "./desktopDeepLinkUrl.js";
 import { createRemoteWorkspaceSessionManager } from "./desktopRemoteSessions.js";
 import { resolveCanonicalWslTarget } from "./desktopWslTargetResolver.js";
-import {
-  setBrowserUseGuestWebContentsIdsProvider,
-} from "./resourceManagerWindow.js";
+import { setBrowserUseGuestWebContentsIdsProvider } from "./resourceManagerWindow.js";
 import { registerPlatformIpcHandlers } from "./desktopMainIpcPlatform.js";
 
 import { registerRemoteIpcHandlers } from "./desktopMainIpcRemote.js";
@@ -994,6 +992,15 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
     preloadPath,
     logger,
     forceQuitRef,
+    // 渲染进程崩溃自愈的退出守卫：置位后 renderer 死亡属受控退出，不得自动 reload。
+    isAppQuitting: () => forceQuitRef.current || explicitQuitRef.current,
+    // give-up 兜底：与 last-window-close 确认后的退出同一先例（markForceQuit + app.quit()）。
+    // markForceQuit 让 before-quit 跳过「会话运行中」确认弹窗——崩溃风暴的无人值守
+    // 场景不能被无父窗口的模态框挂死（实施评审 M1）。
+    onCrashRecoveryGiveUp: () => {
+      markForceQuit("renderer-recovery:give-up");
+      app.quit();
+    },
     handleBeforeClose: (win, label) =>
       handleDesktopWindowCloseRequest({
         platform: process.platform,
