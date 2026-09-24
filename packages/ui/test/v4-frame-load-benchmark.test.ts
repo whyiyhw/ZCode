@@ -1,13 +1,15 @@
-// v4 事故级帧负载基准（B2 立项判据；方案 docs/plans/renderer-crash-recovery-and-long-session-design.md §5 批次 B1 验收 3）。
+// v4 帧负载基准（B2 验收基线；方案 renderer-crash-recovery §5 B1 验收 3 + 窗口按需化 §5 验收 8）。
 //
 // 用真实 ConversationProjectionStore + SessionDataLayer 接线（桩传输按真 ACK/initial/online
 // 帧语义回放）+ 真实下游 memo 计算（renderUnits / workflowGraph / workflowDraft，按 rows 引用
-// 变更才重算——与 React useMemo 依赖语义一致），构造 2026-09-24 白屏事故同构负载：
-// 5 万行全量常驻 + 30ms 节奏流式注入（20000 帧 = 逻辑时长 10 分钟）。
+// 变更才重算——与 React useMemo 依赖语义一致）。
 //
-// 裁判口径：每帧端到端同步成本（apply+通知+memo 重算）p95 ≤ 30ms（帧预算），
-// renderer 堆曲线平稳。覆盖声明：不含 DOM/react-virtual 的可见窗口渲染（与可见行数
-// 成正比、有界），本基准的裁判对象是「每帧同步成本是否超帧预算」这一事故根因。
+// 历史：2026-09-24 首跑时 loadAllOlder 全量常驻仍在，5 万行常驻下每帧总成本
+// p95=102–122ms（apply 已被 B1 消到 0.33ms，超支全在 memo 重算）——B2 立项判据。
+// B2 阶段 2 落地窗口淘汰（K=2000）后，本基准同时回归两件事：
+//   1. 首帧流式即触发淘汰，窗口回落 ≤ K（50k 常驻不再可能）；
+//   2. 稳态每帧端到端同步成本 p95 ≤ 30ms（B2 验收判据，硬断言）。
+// 覆盖声明：不含 DOM/react-virtual 可见窗口渲染（与可见行数成正比、有界）。
 //
 // 运行：npx tsx --test packages/ui/test/v4-frame-load-benchmark.test.ts
 // 规模可用 ZCODE_BENCH_ROWS / ZCODE_BENCH_FRAMES 缩减做快速校准。
@@ -288,23 +290,25 @@ test(`事故级帧负载基准：${BASE_ROWS} 行常驻 × ${FRAME_COUNT} 帧（
   ];
   console.log(summary.join("\n"));
 
-  // 裁判断言：
-  // 1) B1 的验收——批处理 apply+通知在事故规模下必须近零（p95 ≤ 1ms）；
-  // 2) 堆有界（< 1GB 摆动）。
-  // 每帧总成本 p95 ≤ 30ms 的帧预算判据**刻意不作为断言**：2026-09-24 实测
-  // （2 万行 p95=42ms、5 万行更高）证明剩余超支全部来自下游 O(n) memo 重算
-  // （renderUnits/workflowGraph），属 B2（行窗口上限 + 目录分离）的范围——本基准
-  // 的职责是把这个数字持续记录在案作为 B2 的验收基线，而不是让主干测试变红。
+  // 裁判断言（B2 阶段 2 后的验收口径）：
+  // 1) apply+notify p95 ≤ 1ms（B1 验收线不回退）；
+  // 2) 淘汰生效：流式后窗口 ≤ CONVERSATION_WINDOW_MAX_ROWS（全量常驻不再可能）；
+  // 3) 每帧总成本 p95 ≤ 30ms（B2 验收判据，硬断言——窗口有界后 memo 重算 O(K)，
+  //    2026-09-25 起该断言必须为绿；红 = 窗口淘汰或 memo 依赖被回退）。
   assert.ok(
     percentile(sortedApply, 95) <= 1,
     `apply+notify p95=${percentile(sortedApply, 95).toFixed(2)}ms 超出 B1 验收线（批处理 apply 应近零）`,
   );
+  const finalWindowLength = lease.store.getState().snapshot?.rows.window.length ?? 0;
+  assert.ok(
+    finalWindowLength <= 2_000,
+    `流式后窗口 ${finalWindowLength} 行未回落到淘汰上限内——窗口淘汰未生效`,
+  );
+  assert.ok(
+    percentile(sortedTotal, 95) <= 30,
+    `每帧总成本 p95=${percentile(sortedTotal, 95).toFixed(2)}ms > 30ms 帧预算——B2 验收判据失守`,
+  );
   assert.ok(heapMax - heapStart < 1_000 * 1048576, "堆增长超 1GB，内存曲线不平稳");
-  if (percentile(sortedTotal, 95) > 30) {
-    console.log(
-      `[bench] B2 立项判据持续成立：每帧总成本 p95=${percentile(sortedTotal, 95).toFixed(2)}ms > 30ms 帧预算（超支来自下游 O(n) memo 重算，非 apply）`,
-    );
-  }
   for (const unsubscribe of unsubscribers) unsubscribe();
   lease.release();
 });
