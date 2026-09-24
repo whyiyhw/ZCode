@@ -25,4 +25,4 @@
 - 旧 setting.json 中的 `receivePreviewUpdates`、`autoDownloadAndInstallUpdates`、`skippedElectronUpdateVersions`、`pendingPostUpdateReleaseNotes` 成为未知字段，必须被设置 schema strip（而非 reject），保证旧配置文件可继续加载。
 - 旧安装曾下载的更新缓存目录成为孤儿数据，不做主动清理。
 - `electron-updater` 依赖已从 `packages/desktop/package.json` 移除（lockfile 同步）。
-- 已知死链留待后续清理：`packages/shared/src/forceUpdate.ts` 及 `remoteAppConfig` 的 `ForceUpdateConfig` 类型链（0 消费者，行为无影响）。
+- 强更配置读取链已清理（无行为调用者，删除零行为影响）：`packages/shared/src/forceUpdate.ts`（semver 比较）、`ForceUpdateConfig` 类型（`coding-plan-subscription.ts`）与 coding-plan subscription 域的 `getForceUpdateConfig`（provider 方法/服务接口/service wiring）。`/api/v1/client/configs` 响应中的 `forceUpdate` 字段在类型层不再声明，客户端不拉取、不阻断。

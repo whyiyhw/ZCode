@@ -25,5 +25,5 @@
 
 ## 迁移边界
 
-- `/api/v1/client/configs` 端点仍有其他消费方（helpConfig、forceUpdate 相关残余不在此列、services clientConfigService、provider-node 内置配置刷新），本 spec 只移除 desktop main 的两个 rollout 实例。
+- `/api/v1/client/configs` 端点仍有其他消费方（helpConfig、services clientConfigService、provider-node 内置配置刷新），本 spec 只移除 desktop main 的两个 rollout 实例；forceUpdate 残余链已按 `auto-update-removal.md` 清理。
 - 上游同步时若 reintroduce 灰度，须保持"首 Host 前无阻塞等待"的本仓库约束。
