@@ -279,7 +279,7 @@ export async function callBrokerMethod(args) {
         socket.write(
           requestLineFor(0, "authenticate", {
             clientApiVersion: CUA_BROKER_IPC_VERSION,
-            ...(authenticateParams ?? {}),
+            ...authenticateParams,
           }),
         );
       } catch {

@@ -155,7 +155,8 @@ export class Emitter<T> implements IDisposable {
     if (this.disposed) {
       return;
     }
-    for (const listener of [...this.listeners]) {
+    // 快照迭代：listener 回调里可能退订（listeners.delete），快照保证本轮投递集合稳定。
+    for (const listener of Array.from(this.listeners)) {
       listener(event);
     }
   }

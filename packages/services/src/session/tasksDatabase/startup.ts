@@ -92,6 +92,9 @@ export async function prepareTasksIndexStorage(
     try {
       db.close();
     } catch (error) {
+      // 有意从 finally 抛出：failure 非空说明首因已在上层 catch 记录并重抛，
+      // 此处吞掉 close 错误；仅当主体成功时才让 close 错误浮出，不会掩盖原异常。
+      // oxlint-disable-next-line no-unsafe-finally
       if (!failure) throw error;
     }
   }
@@ -117,6 +120,9 @@ export async function prepareTasksIndexStorage(
         closeFailure ??= error;
       }
     }
+    // 有意从 finally 抛出：preparationFailure 非空时吞掉 close 错误以保首因，
+    // 仅当 ensureReady 全部成功时才让 close 错误浮出，不会掩盖原异常。
+    // oxlint-disable-next-line no-unsafe-finally
     if (!preparationFailure && closeFailure) throw closeFailure;
   }
   markTasksStoragePrepared(path);

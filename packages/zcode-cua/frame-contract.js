@@ -403,7 +403,11 @@ export async function preserveOfficialCuaFrameResult(result, options = {}) {
   if (rejectedReasons.length === 0) return result;
 
   const frameIds = new Set();
-  for (const reference of parsedReferences) reference?.frameId && frameIds.add(reference.frameId);
+  for (const reference of parsedReferences) {
+    if (reference?.frameId) {
+      frameIds.add(reference.frameId);
+    }
+  }
   for (const frameId of observedFrameIds) frameIds.add(frameId);
   const redactedReasons = redactFrameIds(rejectedReasons, frameIds);
   return {

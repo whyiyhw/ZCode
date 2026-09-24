@@ -832,7 +832,9 @@ export const v4AttachmentBeginParamsSchema = z
       .string()
       .min(1)
       .max(255)
-      .regex(/^[^\0\r\n]+$/),
+      // 有意匹配控制字符：附件文件名协议口径显式拒绝 NUL/CR/LF，此处不是疏忽。
+      // oxlint-disable-next-line no-control-regex
+      .regex(/^[^\u0000\r\n]+$/),
     mime: z
       .string()
       .min(3)

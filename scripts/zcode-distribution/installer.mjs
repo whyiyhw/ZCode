@@ -38,7 +38,7 @@ curl -fL "\${BASE_URL%/}/releases/$VERSION/$TARBALL" -o "$ARCHIVE"
 EXPECTED_SHA256="$(printf '%s' "$LATEST_JSON" | node -e "let data='';process.stdin.on('data',c=>data+=c);process.stdin.on('end',()=>{const v=JSON.parse(data).sha256;process.stdout.write(typeof v==='string'?v:'')})")"
 if [ -z "$EXPECTED_SHA256" ]; then
   curl -fsSL "\${BASE_URL%/}/releases/$VERSION/sha256.txt" -o "$TMP_DIR/sha256.txt"
-  EXPECTED_SHA256="$(grep "$TARBALL\$" "$TMP_DIR/sha256.txt" | head -n 1 | awk '{print $1}')"
+  EXPECTED_SHA256="$(grep "$TARBALL$" "$TMP_DIR/sha256.txt" | head -n 1 | awk '{print $1}')"
 fi
 if command -v sha256sum >/dev/null 2>&1; then
   ACTUAL_SHA256="$(sha256sum "$ARCHIVE" | awk '{print $1}')"

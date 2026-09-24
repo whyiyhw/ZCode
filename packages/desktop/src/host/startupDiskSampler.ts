@@ -104,7 +104,8 @@ export class StartupDiskSampler {
     if (this.busy || this.stopped) return;
     this.busy = true;
     try {
-      for (const scope of [...this.scopes.values()]) {
+      // 快照迭代：循环体内会增删 this.scopes（scope 迁移重挂），快照避免活迭代重复访问新键。
+      for (const scope of Array.from(this.scopes.values())) {
         if (this.stopped) break;
         try {
           const result = await this.probe(scope.path);
