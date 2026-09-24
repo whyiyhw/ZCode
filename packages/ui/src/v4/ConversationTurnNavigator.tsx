@@ -100,7 +100,8 @@ function ConversationTurnNavigatorImpl({
     const firstByUnitIndex = new Map<number, number>();
     items.forEach((item, index) => {
       byRowId.set(item.rowId, index);
-      if (!firstByUnitIndex.has(item.unitIndex)) {
+      // 窗口外条目 unitIndex=-1 不做 active 锚定（helpers 同口径）。
+      if (item.unitIndex >= 0 && !firstByUnitIndex.has(item.unitIndex)) {
         firstByUnitIndex.set(item.unitIndex, index);
       }
     });

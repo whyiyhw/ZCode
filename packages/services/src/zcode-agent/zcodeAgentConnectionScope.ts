@@ -744,6 +744,15 @@ export function createZCodeAgentConnectionScope(
         withTrustedConnection(params, forwardedConnection(params)),
       );
     },
+    // 回合导航目录与 rowsRange 同族的只读 query：trusted clientMode carrier
+    // 由 facade 注入（base 层的 readTrusted 检查依赖它，漏注册会让每次调用
+    // 必抛 untrusted——实施评审 M3 的修复曾落在 base 层而漏掉本处）。
+    async conversationTurnDirectoryV4(params) {
+      assertReady();
+      return base.conversationTurnDirectoryV4(
+        withTrustedConnection(params, forwardedConnection(params)),
+      );
+    },
     async attachmentBeginV4(params) {
       assertReady();
       const forwarded = forwardedConnection(params);

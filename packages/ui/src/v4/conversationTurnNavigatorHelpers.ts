@@ -96,11 +96,14 @@ export function resolveConversationTurnNavigatorActiveUnitIndex({
     return undefined;
   }
 
-  // 窗口外条目 unitIndex = -1（目录全分支 > 行窗口），不参与几何锚定，
-  // 防止退化态下 fallback 命中最旧窗口外条目。
-  const itemByUnitIndex = new Map(
-    items.filter((item) => item.unitIndex >= 0).map((item) => [item.unitIndex, item]),
-  );
+  // 窗口外条目 unitIndex = -1（目录全分支 > 行窗口），不参与几何锚定——
+  // 主循环与 fallback 都只用窗口内条目，防止退化态 fallback 命中最旧窗口外条目
+  // （修复的修复：只过滤主循环 map 是 no-op，fallback 遍历的是原数组）。
+  const windowItems = items.filter((item) => item.unitIndex >= 0);
+  if (windowItems.length === 0) {
+    return undefined;
+  }
+  const itemByUnitIndex = new Map(windowItems.map((item) => [item.unitIndex, item]));
   const viewportStart = resolveFiniteNonNegative(scrollOffsetPx);
   const viewportEnd = viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
 
@@ -133,13 +136,13 @@ export function resolveConversationTurnNavigatorActiveUnitIndex({
     return rowEnd >= viewportStart && rowStart <= viewportEnd;
   })?.index;
   if (topVirtualIndex === undefined) {
-    return items[0]?.unitIndex;
+    return windowItems[0]?.unitIndex;
   }
 
   return (
-    items.find((item) => item.unitIndex >= topVirtualIndex)?.unitIndex ??
-    items.findLast((item) => item.unitIndex <= topVirtualIndex)?.unitIndex ??
-    items[0]?.unitIndex
+    windowItems.find((item) => item.unitIndex >= topVirtualIndex)?.unitIndex ??
+    windowItems.findLast((item) => item.unitIndex <= topVirtualIndex)?.unitIndex ??
+    windowItems[0]?.unitIndex
   );
 }
 
