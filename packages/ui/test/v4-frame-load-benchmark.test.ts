@@ -21,6 +21,7 @@ import type {
   ConversationSnapshot,
   ConversationTopicFrame,
 } from "@zcode/shared/zcode-protocol-v4";
+import { CONVERSATION_WINDOW_MAX_ROWS } from "../src/v4/conversationProjectionStore.js";
 import { SessionDataLayer } from "../src/v4/sessionDataLayer.js";
 import { conversationTopic, type ConversationTransport } from "../src/v4/transport.js";
 import { buildConversationTurnRenderUnits } from "../src/v4/conversationTurnRenderUnits.js";
@@ -301,7 +302,7 @@ test(`事故级帧负载基准：${BASE_ROWS} 行常驻 × ${FRAME_COUNT} 帧（
   );
   const finalWindowLength = lease.store.getState().snapshot?.rows.window.length ?? 0;
   assert.ok(
-    finalWindowLength <= 2_000,
+    finalWindowLength <= CONVERSATION_WINDOW_MAX_ROWS,
     `流式后窗口 ${finalWindowLength} 行未回落到淘汰上限内——窗口淘汰未生效`,
   );
   assert.ok(

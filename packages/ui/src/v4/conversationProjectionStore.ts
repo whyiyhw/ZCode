@@ -247,6 +247,9 @@ function logSubagentProjectionTransition(
  * 淘汰；`firstRowId`/`totalCount` 是全序权威值，淘汰只裁 `window` 数组。
  */
 export const CONVERSATION_WINDOW_MAX_ROWS = 2_000;
+/** 淘汰目标线（迟滞下沿）：K - 一页余量，保证合并点永不裁掉新拉页。 */
+const CONVERSATION_WINDOW_TRIM_TARGET_ROWS =
+  CONVERSATION_WINDOW_MAX_ROWS - PROTOCOL_V4_LIMITS.rowsRangeMaxLimit;
 
 /**
  * 头部淘汰：裁到「首个 turnHeader 且剩余 ≤ 上限」；单个 turn 超过上限时允许残缺
@@ -255,8 +258,13 @@ export const CONVERSATION_WINDOW_MAX_ROWS = 2_000;
 export function trimConversationWindowFromHead(
   window: readonly ConversationRow[],
 ): { window: ConversationRow[]; truncatedAtLimit: boolean } | null {
+  // 迟滞（评审 M2 的修复的修复：预裁会在窗口中间挖洞——预裁掉的旧头不在下页
+  // 补齐范围内，破坏 rowId 连续不变量）：触发线 K，裁到 T1 = K - 一页余量。
+  // 合并 ≤ 一页（200 行）时 len ≤ T1 + 200 < K，合并点永不触发淘汰——新拉页
+  // 完整并入；仅巨型单轮（无 turn 边界可对齐）在饱和后以 3 进 1 退的节奏推进，
+  // 相比无迟滞版的 100% 丢页死路是严格改善。
   if (window.length <= CONVERSATION_WINDOW_MAX_ROWS) return null;
-  const minStart = window.length - CONVERSATION_WINDOW_MAX_ROWS;
+  const minStart = window.length - CONVERSATION_WINDOW_TRIM_TARGET_ROWS;
   for (let index = minStart; index < window.length; index += 1) {
     if (window[index]?.kind === "turnHeader") {
       return { window: window.slice(index), truncatedAtLimit: false };
@@ -357,6 +365,9 @@ export class ConversationProjectionStore {
   private directoryQueryPending = false;
   /** 实时尾部高水位（见过的最大 rowId）：淘汰/跳转只裁窗口，不降低水位。 */
   private liveTailHighWaterRowId: number | null = null;
+  /** 跳转窗口的一次性首轮补拉抑制（aroundRowId 区间几乎必然 mid-turn 开窗，
+   * 自动补拉会在落点链式拉到 turn 头或撞 K——评审 M2-b）。 */
+  private suppressLeadingTurnBackfillOnce = false;
   /** 闭环重查失败的退避重试（250ms/1s×2，成功即重置；组件退避机器观察不到
    * store 内部发起的重查，失败若 void 丢弃会让安静会话的目录静默停摆——攻击实测 F1）。 */
   private directoryRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -715,8 +726,8 @@ export class ConversationProjectionStore {
       // 规则 1：整体替换，扔掉手里的一切换新的。
       this.setState({
         snapshot: frame.payload.snapshot,
-        // snapshot 是权威当前态：尾部高水位重置，脱离标记清除。
-        detachedFromLiveTail: this.trackLiveTail(frame.payload.snapshot.rows.window),
+        // snapshot 是权威当前态：尾部高水位真重置（rewind 兼容），脱离标记清除。
+        detachedFromLiveTail: this.resetLiveTail(frame.payload.snapshot.rows.window),
         planDirectoryRevision: this.state.planDirectoryRevision + 1,
         // snapshot 整体替换后 real-user query 集合可能已变，终态缓存必须失效。
         turnNavigatorDirectoryRevision: this.state.turnNavigatorDirectoryRevision + 1,
@@ -771,10 +782,23 @@ export class ConversationProjectionStore {
       }
       return;
     }
+    // 脱离态的实时 append 丢弃（评审 C1b）：跳转历史区间后窗口尾与实时尾之间有
+    // 未加载空洞，row.appended 无条件尾追会把实时行拼进历史窗口——时间线把不连续
+    // 渲染成连续且 trackLiveTail 误判脱离解除。丢弃的行经 jumpToTail 区间拉取补回；
+    // row.upserted/row.delta 对窗口外行本就是协议 no-op。高水位仍从 append 抬升，
+    // 维持脱离判定；state.updated 等纯状态键照常应用。
+    const detachedNow = this.state.detachedFromLiveTail;
+    const effectiveDeltas = detachedNow
+      ? frame.payload.deltas.filter((delta) => {
+          if (delta.op !== "row.appended") return true;
+          this.noteLiveTailRowId(delta.row.rowId);
+          return false;
+        })
+      : frame.payload.deltas;
     // 帧批量 apply：逐条不可变 apply 在长会话下每条 delta 复制整个 rows.window
     // （O(k·n)/帧），数万行 + 30ms 流式帧会拖死渲染进程（2026-09-24 白屏事故）。
     // batch 版帧内一次拷贝 + 二分定位，语义与逐条折叠逐字节一致（黄金测试背书）。
-    const applied = applyConversationDeltasBatch(current, frame.payload.deltas);
+    const applied = applyConversationDeltasBatch(current, effectiveDeltas);
     // seq 是快照对齐水位，delta 帧应用完推进到帧右端点。
     let next = { ...applied, seq: frame.toSeq };
     // 窗口淘汰（B2 阶段 2）：流式追加也会把窗口顶过上限。loadOlder 在途时挂起
@@ -787,7 +811,7 @@ export class ConversationProjectionStore {
       }
     }
     logSubagentProjectionTransition(this.topic, current, next, "deltas");
-    const removedFromRowId = frame.payload.deltas.reduce<number | null>(
+    const removedFromRowId = effectiveDeltas.reduce<number | null>(
       (earliest, delta) =>
         delta.op === "row.removed"
           ? Math.min(earliest ?? delta.fromRowId, delta.fromRowId)
@@ -1078,7 +1102,8 @@ export class ConversationProjectionStore {
       if (current.rows.window[0]?.rowId !== beforeRowId) return;
       const merged = mergeOlderRows(current.rows.window, result.rows);
       if (merged === null) return;
-      // 合并点统一执行头部淘汰（含在途期间挂起的流式淘汰）。
+      // 合并点统一执行淘汰兜底（含在途期间挂起的流式流淘汰）：迟滞设计下
+      // len ≤ T1 + 一页 < K，正常路径此处不触发；只有饱和巨轮才裁。
       const trimmed = trimConversationWindowFromHead(merged);
       const window = trimmed?.window ?? merged;
       this.setState({
@@ -1090,7 +1115,24 @@ export class ConversationProjectionStore {
         `[v4-store] rowsRange ${this.topic} 失败: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
-      if (!this.closed) this.setState({ loadingOlder: false });
+      if (!this.closed) {
+        this.setState({ loadingOlder: false });
+        // 空合并/守卫失败路径也要补在途挂起的淘汰（评审 m1：否则空闲会话可长期
+        // 停在超限窗口）。applyFrame 的淘汰守卫随 loadingOlder 复位自行恢复，此处
+        // 兜底立即收敛一次。
+        const snapshotNow = this.state.snapshot;
+        const pendingTrim = snapshotNow
+          ? trimConversationWindowFromHead(snapshotNow.rows.window)
+          : null;
+        if (snapshotNow && pendingTrim) {
+          this.setState({
+            snapshot: {
+              ...snapshotNow,
+              rows: { ...snapshotNow.rows, window: pendingTrim.window },
+            },
+          });
+        }
+      }
     }
   }
 
@@ -1187,16 +1229,22 @@ export class ConversationProjectionStore {
       if (this.closed) return false;
       if (this.generation !== requestedGeneration) return false;
       const current = this.state.snapshot;
-      if (
-        !current ||
-        current.logEpoch !== requestedEpoch ||
-        result.atLogEpoch !== requestedEpoch
-      ) {
+      if (!current || current.logEpoch !== requestedEpoch || result.atLogEpoch !== requestedEpoch) {
         return false;
       }
       if (result.rows.length === 0) return false;
+      this.suppressLeadingTurnBackfillOnce = true;
       this.setState({
-        snapshot: { ...current, rows: { ...current.rows, window: result.rows } },
+        // seq 水位对齐窗口内容 vintage（评审 C1）：窗口 = 服务端 atSeq 时刻的状态，
+        // 保留落后的 current.seq 会让在途 (C, Q] 帧在新窗口上双重 apply（row.appended
+        // 无 rowId 去重 → 重复行/文本翻倍/totalCount 漂移）。取 max 后，重叠帧按
+        // 「迟到/重复 logical frame 静默丢弃」处理；跨界帧（fromSeq < Q < toSeq）走
+        // 既有断档 resync 收敛。
+        snapshot: {
+          ...current,
+          seq: Math.max(current.seq, result.atSeq),
+          rows: { ...current.rows, window: result.rows },
+        },
         detachedFromLiveTail: this.trackLiveTail(result.rows),
       });
       return true;
@@ -1221,6 +1269,13 @@ export class ConversationProjectionStore {
   /** 跳回实时尾部（回底按钮在脱离态的落点）：无游标 = 从当前尾部向前。 */
   jumpToTail(): Promise<boolean> {
     return this.replaceWindowByRange({ limit: PROTOCOL_V4_LIMITS.rowsRangeMaxLimit });
+  }
+
+  /** 消费「跳转窗口抑制首轮补拉」一次性标志；非跳转窗口返回 false。 */
+  consumeLeadingTurnBackfillSuppression(): boolean {
+    if (!this.suppressLeadingTurnBackfillOnce) return false;
+    this.suppressLeadingTurnBackfillOnce = false;
+    return true;
   }
 
   private scheduleDirectoryRetry(): void {
@@ -1286,16 +1341,30 @@ export class ConversationProjectionStore {
     }
   }
 
+  /** 高水位抬升：淘汰/跳转只裁窗口，不降低水位；脱离态丢弃的 append 也抬升。 */
+  private noteLiveTailRowId(rowId: number): void {
+    if (this.liveTailHighWaterRowId === null || rowId > this.liveTailHighWaterRowId) {
+      this.liveTailHighWaterRowId = rowId;
+    }
+  }
+
   /** 窗口尾跟踪：抬升高水位并返回是否脱离实时尾部。 */
   private trackLiveTail(window: readonly ConversationRow[]): boolean {
     const tailRowId = window.at(-1)?.rowId;
-    if (
-      tailRowId !== undefined &&
-      (this.liveTailHighWaterRowId === null || tailRowId > this.liveTailHighWaterRowId)
-    ) {
-      this.liveTailHighWaterRowId = tailRowId;
+    if (tailRowId !== undefined) {
+      this.noteLiveTailRowId(tailRowId);
     }
     return (tailRowId ?? 0) < (this.liveTailHighWaterRowId ?? 0);
+  }
+
+  /**
+   * snapshot 真重置高水位（评审 m2）：rewind 后 resync snapshot 的尾部 rowId 低于
+   * 旧高水位（rowId 单调但 rewind 清空计数）——沿用 max 会让用户身处尾部仍判脱离，
+   * 回底按钮常驻。snapshot 是权威当前态，高水位取快照尾。
+   */
+  private resetLiveTail(window: readonly ConversationRow[]): boolean {
+    this.liveTailHighWaterRowId = window.at(-1)?.rowId ?? null;
+    return false;
   }
 
   /** 命令上行前登记 overlay（pending/stopping 展示用）。 */

@@ -3038,6 +3038,9 @@ export function SessionPane({
     if (
       !sessionId ||
       !lease?.store ||
+      // 跳转窗口的一次性抑制：aroundRowId 区间几乎必然 mid-turn 开窗，自动补拉
+      // 会在落点链式拉到 turn 头或撞淘汰上限（评审 M2-b）。
+      lease.store.consumeLeadingTurnBackfillSuppression() ||
       !shouldAutoLoadIncompleteLeadingTurn(snapshot, state.loadingOlder)
     ) {
       return;

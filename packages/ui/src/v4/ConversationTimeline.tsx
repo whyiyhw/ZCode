@@ -725,7 +725,11 @@ function ConversationTimelineImpl({
   const commitFollowing = useCallback((following: boolean) => {
     if (followingRef.current === following) return;
     followingRef.current = following;
-    setBackToBottomVisible(shouldShowBackToBottom(following, unitsRef.current.length));
+    // 脱离实时尾部时一律显示：窗口底不是实时底，本地贴底会让用户失去唯一
+    // jumpToTail 入口（评审 M3）。
+    setBackToBottomVisible(
+      detachedFromLiveTail || shouldShowBackToBottom(following, unitsRef.current.length),
+    );
   }, []);
 
   const clearUserScrollIntent = useCallback(() => {
@@ -1198,6 +1202,7 @@ function ConversationTimelineImpl({
     }
   }, [
     commitFollowing,
+    detachedFromLiveTail,
     getActiveUserScrollIntent,
     saveCurrentScrollMemory,
     syncTurnNavigatorViewport,
@@ -1211,7 +1216,11 @@ function ConversationTimelineImpl({
     // 跳转历史区间后本地滚动到不了实时尾（尾部行不在窗口）：区间拉取回尾，
     // following 模式在替换后自动吸底。
     if (detachedFromLiveTail && onJumpToTail) {
-      void onJumpToTail();
+      void onJumpToTail().then((jumped) => {
+        // 失败回滚 following（评审 m1）：否则后续任何内容 commit 都把用户吸到
+        // 历史窗口尾，而那不是实时尾。
+        if (!jumped) commitFollowing(false);
+      });
       return;
     }
     scrollToBottom();
@@ -1246,7 +1255,20 @@ function ConversationTimelineImpl({
           return;
         }
         pendingJumpQueryRef.current = { rowId: target.rowId, behavior };
-        void onJumpToRow(target.rowId);
+        // 失败必须清 pending（评审 M1：互斥占用/epoch 漂移/空结果是静默 no-op，
+        // 悬挂的 pending 会在日后无关的窗口变化里突然消费——幽灵滚动）；成功但
+        // 目标不在返回区间（rewind/钳制）由超时兜底清理。
+        void onJumpToRow(target.rowId).then((jumped) => {
+          if (!jumped) {
+            pendingJumpQueryRef.current = null;
+            return;
+          }
+          window.setTimeout(() => {
+            if (pendingJumpQueryRef.current?.rowId === target.rowId) {
+              pendingJumpQueryRef.current = null;
+            }
+          }, 2_000);
+        });
         return;
       }
       clearUserScrollIntent();

@@ -20,7 +20,7 @@ import type { ConversationTurnDirectoryItem } from "@zcode/shared/zcode-protocol
 interface ConversationTurnNavigatorProps {
   /** 服务端全分支目录（store.turnNavigatorDirectory）。 */
   directoryItems: readonly ConversationTurnDirectoryItem[];
-  /** 当前行窗口内 rowId → renderUnit 下标；窗口外条目映射为 -1（阶段 2 接跳转拉取）。 */
+  /** 当前行窗口内 rowId → renderUnit 下标；窗口外条目映射为 -1（点击走 aroundRowId 区间跳转）。 */
   unitIndexByRowId: ReadonlyMap<number, number>;
   scrollOffsetPx: number;
   viewportHeightPx: number;
