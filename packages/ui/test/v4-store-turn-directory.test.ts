@@ -1,5 +1,5 @@
 // store 目录刷新单测（口径：packages/shared/spec/conversation-turn-directory.md）。
-// 运行：npx tsx --test packages/ui/test/v4-store-turn-directory.test.ts
+// 运行：cd packages/ui && npx tsx --test test/v4-store-turn-directory.test.ts（@/ 别名依赖包目录 cwd，根跑 ERR_MODULE_NOT_FOUND）
 import assert from "node:assert/strict";
 import test from "node:test";
 import type {

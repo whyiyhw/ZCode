@@ -58,7 +58,7 @@ CLI 投影 ──v4 wire 帧──▶ main(zcodeAgentService:1977) ──Message
 - 协议不变量：apply.ts:4「客户端 store 的 apply 逻辑是本函数的宿主化改写，不得引入额外分支」；`applyConversationDeltas(s, coalesce(ds)) ≡ applyAll(s, ds)` 黄金等价是裁判。不可变语义的意义在「已发布快照不被后续事件篡改」——帧内 mutable、帧间各持一份新数组不破坏它。
 - **memo 引用恒等性是隐式契约**（v2 评审确认）：不可变版对无 row 操作的帧（`state.updated`/workflow twin，apply.ts:121/124-133）原样保留 `rows.window` 引用，SessionPane/ConversationTimeline 的 memo（`SessionPane.tsx:1244-1247`、`ConversationTimeline.tsx:392-413`）以此为 key 免于重算——batch 版必须保住这条性质。
 - Main 不承载业务状态；恢复动作只属于窗口/进程层（本方案不违反）。
-- 测试基建（v2 修正）：现有 5 个测试均在 `packages/*/test/*.test.ts`（node:test），**用 `npx tsx --test` 跑**（root devDep tsx；Node 原生 strip types 不做 `.js`→`.ts` 改写，`node --test` 直跑 ERR_MODULE_NOT_FOUND）；CI（community-build.yml check job）只跑 typecheck+lint 不跑单测，本方案不改变 CI。
+- 测试基建（v2 修正）：现有 5 个测试均在 `packages/*/test/*.test.ts`（node:test），**用 `npx tsx --test` 跑**（root devDep tsx；Node 原生 strip types 不做 `.js`→`.ts` 改写，`node --test` 直跑 ERR_MODULE_NOT_FOUND）；**ui 包测试须先 `cd packages/ui`**——ui 源码用 `@/` 别名，tsx 按 cwd 解析 tsconfig paths，从仓库根跑报 ERR_MODULE_NOT_FOUND（desktop/shared 无别名，根跑正常）；CI（community-build.yml check job）只跑 typecheck+lint 不跑单测，本方案不改变 CI。
 
 ## 3. 方案设计
 

@@ -82,13 +82,18 @@ export function assertProductionGraphs(lockedProjects, installedProjects) {
 
 export async function readWorkspaceProductionGraph(root) {
   root = await realpath(root);
-  // 修复：pnpm ls 默认读取安装快照，不能把旧图与当前锁文件哈希拼成有效声明。
-  const [locked, actual] = await Promise.all(
-    [true, false].map(async (lockfileOnly) => {
+  // 修复 1：pnpm ls 默认读取安装快照，不能把旧图与当前锁文件哈希拼成有效声明。
+  // 修复 2：`pnpm -r ls --depth Infinity` 让单个 pnpm 进程递归打开 node_modules 里
+  // 全部 package.json（本机 2052 个），撞 Node.js/libuv 在 Windows 上的 ~8190 句柄
+  // 硬限制（EMFILE）——不可通过 ulimit/环境变量调整。改为逐 workspace 项目独立
+  // spawn `pnpm ls`，每个进程只解析单项目的依赖树，峰值句柄远低于限制；lockfile
+  // 与 installed 两个变体也串行执行防叠加。
+  async function listProject(lockfileOnly) {
+    const projects = [];
+    for (const dir of await workspaceProjectDirs(root)) {
       const { stdout } = await exec(
         "pnpm",
         [
-          "-r",
           "ls",
           "--prod",
           "--json",
@@ -97,16 +102,39 @@ export async function readWorkspaceProductionGraph(root) {
           ...(lockfileOnly ? ["--lockfile-only"] : []),
         ],
         {
-          cwd: root,
+          cwd: dir,
           maxBuffer: 256 * 1024 * 1024,
           ...resolveSpawnRuntimeOptions("pnpm"),
         },
       );
-      return JSON.parse(stdout);
-    }),
-  );
+      const parsed = JSON.parse(stdout);
+      // 单项目 pnpm ls --json 输出 [{...}]；-r 模式输出是多项目的平铺数组。
+      projects.push(...(Array.isArray(parsed) ? parsed : [parsed]));
+    }
+    return projects;
+  }
+  const locked = await listProject(true);
+  const actual = await listProject(false);
   const required = assertProductionGraphs(locked, actual);
   return { required, projects: actual };
+}
+
+async function workspaceProjectDirs(root) {
+  const dirs = [root];
+  const workspaces = [
+    ...(await globDirs(root, "packages/*")),
+    ...(await globDirs(root, "apps/zcode-cli/packages/*")),
+  ];
+  dirs.push(...workspaces);
+  return dirs;
+}
+
+async function globDirs(root, pattern) {
+  const prefix = pattern.replace(/\/\*$/, "");
+  const entries = await readdir(join(root, prefix), { withFileTypes: true }).catch(() => []);
+  return entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .map((e) => join(root, prefix, e.name));
 }
 
 export async function scanInstalledPackages(root, projects) {

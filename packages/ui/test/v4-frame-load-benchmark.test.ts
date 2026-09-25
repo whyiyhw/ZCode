@@ -11,7 +11,9 @@
 //   2. 稳态每帧端到端同步成本 p95 ≤ 30ms（B2 验收判据，硬断言）。
 // 覆盖声明：不含 DOM/react-virtual 可见窗口渲染（与可见行数成正比、有界）。
 //
-// 运行：npx tsx --test packages/ui/test/v4-frame-load-benchmark.test.ts
+// 运行：cd packages/ui && npx tsx --test test/v4-frame-load-benchmark.test.ts
+//   （ui 源码用 @/ 别名，tsx 按 cwd 解析 tsconfig paths，从仓库根跑会 ERR_MODULE_NOT_FOUND；
+//     desktop/shared 测试无别名，根跑正常。）
 // 规模可用 ZCODE_BENCH_ROWS / ZCODE_BENCH_FRAMES 缩减做快速校准。
 import assert from "node:assert/strict";
 import test from "node:test";
