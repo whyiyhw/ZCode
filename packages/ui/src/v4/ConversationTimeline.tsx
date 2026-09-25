@@ -737,10 +737,13 @@ function ConversationTimelineImpl({
   );
 
   useLayoutEffect(() => {
-    // 脱离态翻转时立即重算回底按钮可见性（回到底部贴底时 following=true 会隐藏
-    // 按钮，脱离态必须夺回显示——否则唯一 jumpToTail 入口消失）。
-    if (!detachedFromLiveTail) return;
-    setBackToBottomVisible(true);
+    // 脱离态翻转时重算回底按钮可见性：置位时夺回显示（贴底隐藏会失去唯一
+    // jumpToTail 入口）；解除时按当前 following 收回（攻击 B1：无人收回则常驻）。
+    if (detachedFromLiveTail) {
+      setBackToBottomVisible(true);
+      return;
+    }
+    setBackToBottomVisible(shouldShowBackToBottom(followingRef.current, unitsRef.current.length));
   }, [detachedFromLiveTail]);
 
   const clearUserScrollIntent = useCallback(() => {

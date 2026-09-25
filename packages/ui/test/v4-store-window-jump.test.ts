@@ -452,3 +452,62 @@ test("评审 M2-a：迟滞淘汰保证满窗翻页不进死路（饱和巨轮 3 
   );
   assert.ok(afterSecond.length <= 2000, "合并后仍在触发线内");
 });
+
+test("攻击 P1：edit/retry 截断重锚水位——贴底用户新 turn 不冻结", async () => {
+  const rows: ConversationRow[] = [];
+  for (let i = 1; i <= 500; i++) {
+    rows.push(i % 10 === 1 ? row(i, "turnHeader") : row(i));
+  }
+  const h = createJumpHarness(rows.slice(440), 1);
+  await connectJumpStore(h.store);
+  assert.equal(h.store.getState().detachedFromLiveTail, false);
+
+  // 用户 edit 一条 query：row.removed 截断 470 起的行。
+  h.emitOnline([{ op: "row.removed", fromRowId: 470 }]);
+  assert.equal(
+    h.store.getState().snapshot?.rows.window.length,
+    29,
+    "截断后窗口=441..469（row.removed 含边界）",
+  );
+  assert.equal(
+    h.store.getState().detachedFromLiveTail,
+    false,
+    "截断后窗口尾=新实时尾，不得误判脱离（水位须重锚）",
+  );
+
+  // editRerun 新 turn 流式追加：必须正常拼入（P1 修复前全被丢弃）。
+  for (let i = 501; i <= 510; i++) {
+    h.emitOnline([{ op: "row.appended", row: row(i) }]);
+  }
+  const window = h.store.getState().snapshot?.rows.window ?? [];
+  assert.ok(
+    window.some((r) => r.rowId === 510),
+    "新 turn 的 append 必须可见",
+  );
+  assert.equal(h.store.getState().detachedFromLiveTail, false);
+});
+
+test("攻击 P2：atSeq 落后于客户端的区间被丢弃（vintage 不倒退）", async () => {
+  const tail = Array.from({ length: 60 }, (_, i) => row(i + 4941));
+  const h = createJumpHarness(tail, 1);
+  await connectJumpStore(h.store);
+  // 先推一条帧使 current.seq 超过 snapshot 的初始 seq。
+  const seqBefore = h.store.getState().snapshot?.seq ?? 0;
+  h.emitOnlineAt(seqBefore, seqBefore + 1, [{ op: "row.appended", row: row(5001) }]);
+  const currentSeq = h.store.getState().snapshot?.seq ?? 0;
+  assert.ok(currentSeq > seqBefore);
+
+  // atSeq 落后（= 快照初始 seq）：区间整体丢弃，窗口不动、seq 不回退。
+  const jump = h.store.jumpToRow(300);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  h.resolveRowsRangeAt(
+    Array.from({ length: 200 }, (_, i) => row(i + 201)),
+    seqBefore,
+  );
+  assert.equal(await jump, false, "陈旧读必须丢弃");
+  assert.equal(h.store.getState().snapshot?.seq, currentSeq, "seq 不得回退");
+  assert.ok(
+    (h.store.getState().snapshot?.rows.window ?? []).some((r) => r.rowId === 5001),
+    "已应用的 append 不得被回滚",
+  );
+});

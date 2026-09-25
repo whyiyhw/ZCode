@@ -799,6 +799,20 @@ export class ConversationProjectionStore {
     // （O(k·n)/帧），数万行 + 30ms 流式帧会拖死渲染进程（2026-09-24 白屏事故）。
     // batch 版帧内一次拷贝 + 二分定位，语义与逐条折叠逐字节一致（黄金测试背书）。
     const applied = applyConversationDeltasBatch(current, effectiveDeltas);
+    // row.removed 重锚水位（攻击 P1）：edit/retry 的权威截断后窗口尾是新的实时尾，
+    // 但高水位只升不降会让贴底跟随的用户被误判脱离——后续新 turn 的 append 全被
+    // C1b 过滤器丢弃，时间线永久冻结（editRerun 新 turn 恰好全走 append 路径）。
+    // 截断边界即新实时尾：水位重锚到截断后窗口尾，脱离语义恢复「只描述跳转」。
+    if (frame.payload.deltas.some((delta) => delta.op === "row.removed")) {
+      const tailAfterRemoval = applied.rows.window.at(-1)?.rowId;
+      if (
+        this.liveTailHighWaterRowId !== null &&
+        tailAfterRemoval !== undefined &&
+        tailAfterRemoval < this.liveTailHighWaterRowId
+      ) {
+        this.liveTailHighWaterRowId = tailAfterRemoval;
+      }
+    }
     // seq 是快照对齐水位，delta 帧应用完推进到帧右端点。
     let next = { ...applied, seq: frame.toSeq };
     // 窗口淘汰（B2 阶段 2）：流式追加也会把窗口顶过上限。loadOlder 在途时挂起
@@ -1232,6 +1246,11 @@ export class ConversationProjectionStore {
       if (!current || current.logEpoch !== requestedEpoch || result.atLogEpoch !== requestedEpoch) {
         return false;
       }
+      // vintage 倒退防护（攻击 P2）：atSeq < current.seq 说明区间捕获早于客户端
+      // 已应用的帧——max() 吸收会把已应用效果静默回滚（upserted/delta 内容回退、
+      // removed 行复活），且 seq 不回退使断档 resync 永不触发。陈旧读整体丢弃，
+      // 与 atLogEpoch 守卫同族。
+      if (result.atSeq < current.seq) return false;
       if (result.rows.length === 0) return false;
       this.suppressLeadingTurnBackfillOnce = true;
       this.setState({
