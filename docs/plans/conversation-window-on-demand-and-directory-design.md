@@ -147,5 +147,5 @@
 ## 8. 实施记录
 
 - **阶段 1（b90325a + 评审修复 fb2d3f8/9a33f5b/5ae3400）**：目录命令五层 + store 目录态 + 导航数据源切换 + loadAllOlder 退役。四轮 subagent 评审拦下并修复：isRunning 不随轮次终态熄灭（turnHeader upsert 纳入失效面）、在途失效后目录停摆（store pending 闭环 + 失败退避）、窄屏/失败/旧 CLI 下 rail 与 plugin 图标全灭（窗口行同函数兜底）、clientMode 三层断链（facade trusted carrier 注册）。
-- **阶段 2**：窗口淘汰（K=2000，turn 边界对齐，残缺头部抑制首轮补拉，loadOlder 在途互斥）+ `rowsRange({aroundRowId})` 区间跳转（窗口整体替换 ≤200 行——协议 rowsRange 上限，足够落点上下文；非方案原文的 K 行）+ `detachedFromLiveTail` 高水位回底。spec 同步于 packages/shared/spec/conversation-turn-directory.md。
-- **阶段 3（待做）**：基准 B 模式断言（n≤K 流式 p95 ≤ 30ms）+ 真机抽查。
+- **阶段 2（8a73f54 + 评审修复 7c19dba/d866738/6300a54）**：窗口淘汰（迟滞：触发线 K=2000 / 目标线 T1=1800，turn 边界对齐，残缺头部抑制首轮补拉，loadOlder 在途互斥）+ `rowsRange({aroundRowId})` 区间跳转（窗口整体替换 ≤200 行，seq 水位对齐 atSeq + vintage 倒退防护）+ `detachedFromLiveTail` 高水位回底（脱离态回底一律显示、失败回滚 following、rewind 水位重锚）。三轮 subagent 评审 + 攻击实测拦下并修复：seq 双重 apply（跳转保留落后水位 → 在途帧重复行）、脱离态 append 击穿窗口连续性、满窗翻页死路（预裁否决→迟滞）、pendingJump 幽灵滚动、脱离态回底按钮消失（闭包冻结）、edit/retry rewind 后新 turn 永久冻结（水位重锚）。spec 同步于 packages/shared/spec/conversation-turn-directory.md。
+- **阶段 3（c7cf20f + 真机 e81ce4e）**：✅ 基准 B 模式硬断言落地——p95 = 5.40ms（30ms 预算的 1/6，B2 立项时 122ms 的 23× 改善），窗口回落 ≤2000 硬断言，红 = 淘汰或 memo 依赖被回退。真机抽查（2026-09-25）：宽屏打开 1912 行会话零全量补拉日志、`conversationTurnDirectoryV4 OK` 端到端、rail 57 条、上滚加载 840→1140→1912；跳转/淘汰上限由 17 个 store 单测锁住（真机会话不够长）。真机额外抓到 CLI publisher 的 import type 误用（单元测试走 shared 入口全绿，agent 打包才暴露——e81ce4e）。
