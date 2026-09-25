@@ -722,15 +722,26 @@ function ConversationTimelineImpl({
     });
   }, []);
 
-  const commitFollowing = useCallback((following: boolean) => {
-    if (followingRef.current === following) return;
-    followingRef.current = following;
-    // 脱离实时尾部时一律显示：窗口底不是实时底，本地贴底会让用户失去唯一
-    // jumpToTail 入口（评审 M3）。
-    setBackToBottomVisible(
-      detachedFromLiveTail || shouldShowBackToBottom(following, unitsRef.current.length),
-    );
-  }, []);
+  const commitFollowing = useCallback(
+    (following: boolean) => {
+      if (followingRef.current === following) return;
+      followingRef.current = following;
+      // 脱离实时尾部时一律显示：窗口底不是实时底，本地贴底会让用户失去唯一
+      // jumpToTail 入口（评审 M3）。detached 变化本身也要补算（deps 修复——
+      // 验证员二轮：[] deps 闭包冻结在首渲染 false，跳历史后按钮仍会被隐藏）。
+      setBackToBottomVisible(
+        detachedFromLiveTail || shouldShowBackToBottom(following, unitsRef.current.length),
+      );
+    },
+    [detachedFromLiveTail],
+  );
+
+  useLayoutEffect(() => {
+    // 脱离态翻转时立即重算回底按钮可见性（回到底部贴底时 following=true 会隐藏
+    // 按钮，脱离态必须夺回显示——否则唯一 jumpToTail 入口消失）。
+    if (!detachedFromLiveTail) return;
+    setBackToBottomVisible(true);
+  }, [detachedFromLiveTail]);
 
   const clearUserScrollIntent = useCallback(() => {
     userScrollIntentRef.current = { intent: "none", observedAt: 0 };
@@ -1202,7 +1213,6 @@ function ConversationTimelineImpl({
     }
   }, [
     commitFollowing,
-    detachedFromLiveTail,
     getActiveUserScrollIntent,
     saveCurrentScrollMemory,
     syncTurnNavigatorViewport,
@@ -1227,7 +1237,14 @@ function ConversationTimelineImpl({
     // scrollToBottom 只更新组件内 ref；若用户点击后立刻切任务，scope
     // cleanup/scroll 事件可能还没运行，旧 Map 会把下次恢复重新带回中部甚至顶部。
     saveCurrentScrollMemory();
-  }, [clearUserScrollIntent, commitFollowing, saveCurrentScrollMemory, scrollToBottom]);
+  }, [
+    clearUserScrollIntent,
+    commitFollowing,
+    detachedFromLiveTail,
+    onJumpToTail,
+    saveCurrentScrollMemory,
+    scrollToBottom,
+  ]);
 
   useLayoutEffect(() => {
     if (!scrollToBottomActionRef) return;
@@ -1239,6 +1256,11 @@ function ConversationTimelineImpl({
       }
     };
   }, [handleBackToBottom, scrollToBottomActionRef]);
+
+  // rowId 跨会话可碰撞：旧会话悬挂的跳转意图不得泄漏进新会话（验证员二轮 M1）。
+  useLayoutEffect(() => {
+    pendingJumpQueryRef.current = null;
+  }, [sessionKey]);
 
   // 窗口外跳转的待定位条目：jumpToRow 区间替换后，unitIndex 映射重建时定位。
   const pendingJumpQueryRef = useRef<{ rowId: number; behavior: ScrollBehavior } | null>(null);
@@ -1337,7 +1359,14 @@ function ConversationTimelineImpl({
       };
       turnNavigatorJumpFrameRef.current = window.requestAnimationFrame(alignMountedQuery);
     },
-    [clearUserScrollIntent, commitFollowing, liveUnitIndex, syncTurnNavigatorViewport, virtualizer],
+    [
+      clearUserScrollIntent,
+      commitFollowing,
+      liveUnitIndex,
+      onJumpToRow,
+      syncTurnNavigatorViewport,
+      virtualizer,
+    ],
   );
 
   useLayoutEffect(() => {
@@ -1351,7 +1380,7 @@ function ConversationTimelineImpl({
         scrollToQueryActionRef.current = null;
       }
     };
-  }, [scrollToQuery, scrollToQueryActionRef, onJumpToRow]);
+  }, [scrollToQuery, scrollToQueryActionRef]);
 
   // 窗口外跳转的收尾：jumpToRow 区间替换触发 unitIndex 映射重建，此刻定位目标条目。
   useLayoutEffect(() => {
@@ -1396,7 +1425,14 @@ function ConversationTimelineImpl({
       }
       virtualizer.scrollToIndex(unitIndex, { align: "start", behavior });
     },
-    [clearUserScrollIntent, commitFollowing, liveUnitIndex, syncTurnNavigatorViewport, virtualizer],
+    [
+      clearUserScrollIntent,
+      commitFollowing,
+      liveUnitIndex,
+      onJumpToRow,
+      syncTurnNavigatorViewport,
+      virtualizer,
+    ],
   );
 
   useConversationTimelineFind({
