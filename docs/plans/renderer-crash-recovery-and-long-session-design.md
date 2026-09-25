@@ -138,9 +138,11 @@ win.webContents.on("render-process-gone", (_e, details) => {
 - 性能基准（记录型，宽松阈值防 CI 抖动）：20k 行 window × 8 delta/帧，对比 batch 前后耗时，期望一个数量级差。
 - **效果上界（诚实，v2 强化）**：B1 消掉 O(k·n) 的 k 乘子与每帧 k 次大数组分配，但每帧仍剩 O(n) 项（batch 自身的拷贝+Map 重建、renderUnits/workflowGraph 等 memo 群、react reconciliation），内存仍无界——「不再被拖死」**由验收里的事故级实测裁决**（见下），不以 B1 落地为默认成立。
 
-### 3.3 批次 B2：行窗口上限 + memo 增量化（方向，不随本轮实施）
+### 3.3 批次 B2：行窗口上限 + 目录分离（✅ 已实施，详见独立方案）
 
-核心矛盾：turn navigator（回合导航）依赖全量行，`loadAllOlder` 全量常驻正是为它；直接给 `rows.window` 设上限会砍掉导航。方向：**行内容有界 + 轻量目录全量常驻**（rowId/turn 元数据的小对象），回读走已有 `rowsRange`（200 行/页）；`buildConversationTurnRenderUnits` / `buildWorkflowGraphByToolCallId` 等改为目录 revision 门控或增量维护。涉及协议口径与交互边界，需先出独立 spec 再实施。
+> **2026-09-25 更新**：B2 已由独立方案 `conversation-window-on-demand-and-directory-design.md` 落地（阶段 1 目录命令五层 + loadAllOlder 退役 → 阶段 2 窗口淘汰 + aroundRowId 跳转）。实施路径与本节原方向的差异：memo 增量化**未做**——窗口有界（n≤2000）后 renderUnits O(2000)≈3ms/帧已够预算，增量维护的正确性风险不值得承担；实际方案是「目录服务端化 + 窗口迟滞淘汰 + 区间跳转」。验收：同基准 p95 从 122ms → **5.40ms**（c7cf20f 硬断言）。
+
+核心矛盾：turn navigator（回合导航）依赖全量行，`loadAllOlder` 全量常驻正是为它；直接给 `rows.window` 设上限会砍掉导航。方向：**行内容有界 + 轻量目录全量常驻**（rowId/turn 元数据的小对象），回读走已有 `rowsRange`（200 行/页）。
 
 **触发条件（v2 由验收强制供数；v6 实测后已触发）**：B1 验收中的事故级实测数据自动成为 B2 立项判据——p95 超预算或内存曲线不平稳即立项，不再依赖「有人记得去测」。**2026-09-24 实测（packages/ui/test/v4-frame-load-benchmark.test.ts，5 万行 × 30ms 节奏）：每帧总成本 p95=122ms > 30ms 预算（超支全部来自下游 O(n) memo 重算；apply p95=0.51ms 已达标）→ B2 正式立项，该基准为 B2 验收基线。**次要放大器 sessions-index 链路（`sessionsIndexStore.ts:121` 每帧 new Map、`useWorkspaceSessionsIndexItems.ts:156-213` 每 tick 全量聚合排序，O(s log s)，s=会话数）量级远小于行数链路，不列根因，B2 实测时纳入测量。
 
@@ -168,8 +170,8 @@ win.webContents.on("render-process-gone", (_e, details) => {
 
 1. 黄金等价测试全绿（JSON.stringify 相等 + rowId 单调唯一生成器 + 无 row-op 帧引用恒等断言）。
 2. 性能基准记录在案（20k 行 × 8 delta/帧，前后对比）。
-3. **事故级端到端实测（v2 强制项；v6 已完成）**：✅ `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 store + 真实下游 memo，5 万行常驻 + 30ms 节奏流式注入，默认 2000 帧常规记录 / `ZCODE_BENCH_FRAMES=20000` 全量档）。实测：apply+notify p95=0.51ms（B1 验收线 ≤1ms 达标）；每帧总成本 p95=122ms、memo 重算占 121ms——超 30ms 帧预算，**B2 立项判据触发**（超支归因：下游 O(n) memo，非 apply）。堆 max 184MB 有界。
-4. 手工：超长会话流式追加期间 UI 保持响应（以第 3 条量化指标为准，不再只靠手感）。
+3. **事故级端到端实测（v2 强制项；v6 已完成）**：✅ `packages/ui/test/v4-frame-load-benchmark.test.ts`（真实 store + 真实下游 memo，5 万行常驻 + 30ms 节奏流式注入，默认 2000 帧常规记录 / `ZCODE_BENCH_FRAMES=20000` 全量档）。实测：apply+notify p95=0.51ms（B1 验收线 ≤1ms 达标）；每帧总成本 p95=122ms、memo 重算占 121ms——超 30ms 帧预算，**B2 立项判据触发**（超支归因：下游 O(n) memo，非 apply）。堆 max 184MB 有界。**B2 落地后同基准复测：p95 = 5.40ms（30ms 预算的 1/6），验收基线转为绿色硬断言（c7cf20f）。**
+4. 手工：超长会话流式追加期间 UI 保持响应——已被第 3 条的量化基准取代（benchmark 即真实 store + 真实 memo 链路的端到端测量，不再依赖手工手感）。
 5. typecheck / lint / architecture 真实通过。
 
 两批次共同的收尾：spec 先行（A → `packages/desktop/spec/renderer-crash-recovery.md`，**spec 里枚举 8 值 reason 全集并显式归类**、写死隐藏态示回与 A3 防护；B1 → `packages/shared/spec/` 按需创建，写行为、所有权、接口与验收场景）；回合末跑 `node scripts/check-doc-sync.mjs`。
