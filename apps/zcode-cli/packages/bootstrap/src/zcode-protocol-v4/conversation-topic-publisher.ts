@@ -27,6 +27,8 @@ import type {
   V4ConversationPlansResult,
   V4ConversationRowsRangeResult,
   V4ConversationTurnDirectoryResult,
+} from "@zcode/shared/zcode-protocol-v4";
+import {
   buildConversationTurnDirectoryItems,
   conversationRowsHavePluginReference,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -444,10 +446,11 @@ export class ConversationTopicPublisher {
       snapshot.rows.window,
       DELIVERY_PROFILES[deliveryProfile],
     );
-    if (params.aroundRowId !== undefined) {
+    const aroundRowId = params.aroundRowId;
+    if (aroundRowId !== undefined) {
       // 跳转拉取：窗口 = 从「目标前 back 行」起的连续 limit 行。目标不在全序
       // （被 rewind/淘汰）时贴其前侧，天然钳制到首尾。
-      const upToTarget = visibleRows.filter((row) => row.rowId <= params.aroundRowId);
+      const upToTarget = visibleRows.filter((row) => row.rowId <= aroundRowId);
       const back = Math.max(1, Math.ceil(limit / 2));
       const startIndex = Math.max(0, upToTarget.length - back);
       const rows = visibleRows.slice(startIndex, startIndex + limit);
