@@ -86,7 +86,7 @@ export class ConversationTelemetryFactNormalizer {
   normalize(
     sessionId: string,
     event: SessionEvent,
-    runtimeMetadata?: { modelName?: string; modelProvider?: string; memoryEnabled?: boolean },
+    runtimeMetadata?: { memoryEnabled?: boolean },
   ): ConversationTelemetryFact | null {
     const turnId = event.turnId ? String(event.turnId) : undefined;
     const turnKey = turnId ? `${sessionId}\0${turnId}` : undefined;

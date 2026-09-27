@@ -741,14 +741,10 @@ export class ConversationV4Gateway {
       if (typeof oldest === "string") this.telemetryEventIds.delete(oldest);
     }
     try {
-      const config =
-        this.publishers.get(sessionId)?.getSnapshot().config ??
-        this.host.getSessionConfigSeed?.(sessionId) ??
-        undefined;
+      // modelName/modelProvider 已无消费者（桌面埋点随 bfd11a8 移除），生产侧只带
+      // memoryEnabled；不再查 publisher 快照/config seed，省一次逐事实取值。
       const fact = this.telemetryNormalizer.normalize(sessionId, event, {
         memoryEnabled: this.host.getSessionMemoryEnabled?.(sessionId),
-        modelName: config?.model,
-        modelProvider: config?.provider,
       });
       if (fact) {
         this.host.emitConversationTelemetryFact?.(fact);

@@ -116,7 +116,8 @@ CLI 会话事件(SessionEvent)
 | `conversation-telemetry-facts.ts` | 上游动了被删区域才会显式大空冲突块(唯一样本内两文件零改动,概率被高估但 v3.14.3 主题与 workflow 同源,趋势真实) | 冲突块保 HEAD(空侧)= 再裁;对保留区域(三 turn case + helper + imports)跑一次上游 diff,确认自动合并的 turn 链演进 |
 | `conversation-telemetry-workflow-facts.ts` | modify/delete 冲突 | `git rm` 保删除(只服务 workflow.lifecycle,无 turn 链依赖) |
 | `packages/shared/src/zcode-protocol-v4/telemetry.ts` | **大概率零冲突自动合并——最需人工看** | merge 后必 diff:上游加 fact 分支 → 登记 check-doc-sync 检查 D2(第二步裁剪候选);上游改 turn 两分支字段 → 对照 normalizer 产出,required 字段缺失须同步补生产,否则运行时 parse throw(低概率窄缝,E2E/心跳冒烟可抓) |
-| `v4-gateway.ts` / `v4-bridge.ts` | 自动合并(本地未动) | 无需手动;normalize 签名变更由 typecheck 兜底 |
+| `v4-gateway.ts` | emitLiveTelemetryFact 内取值块已删(2026-09-26,见下节),上游若动该函数会小冲突 | 冲突块保 HEAD(无 config 取值块、normalize 只传 memoryEnabled);normalize 签名收敛后上游多传字段会直接 typecheck 报错,属预期兜底 |
+| `v4-bridge.ts` | 自动合并(本地未动) | 无需手动;normalize 签名变更由 typecheck 兜底 |
 | merge 后验证 | — | `node scripts/check-doc-sync.mjs`(检查 D)+ `pnpm typecheck` + 心跳冒烟 |
 
 ### 下次裁剪候选(非本次范围)
@@ -124,3 +125,10 @@ CLI 会话事件(SessionEvent)
 - `normalize` 的 `runtimeMetadata` 签名收敛为 `{ memoryEnabled?: boolean }`(`modelName`/`modelProvider` 已无消费者),连带删 v4-gateway 的 config 取值块;
 - `zcodeAgentConnectionScope.ts:870` 附近指向已不存在的 renderer 订阅者的陈旧注释(bfd11a8 遗留,非本次引入);
 - 陈旧打包副本(`bundled-agents`/`dist-community` 内旧 zcode.cjs 仍产 8 种 fact)在 CLI 重建后自然收敛,重建前「不再生产」仅对源码成立。
+
+### 2026-09-26 跟进收尾(上节候选全部落地)
+
+- **签名收敛**:normalize `runtimeMetadata` 已收敛为 `{ memoryEnabled?: boolean }`,v4-gateway emitLiveTelemetryFact 的 config 取值块(publisher 快照 + config seed)已删,生产侧只带 memoryEnabled。merge 预案对应行已更新。
+- **陈旧注释**:zcodeAgentConnectionScope 的 telemetry 注释已改为陈述现状——renderer 订阅者随 bfd11a8 消失,当前唯一订阅方是 zcode-server 进程内的 taskActivityTracker(走 service 面,不经连接面);行为未动。
+- **决策点③补齐**:taskActivityTracker 补最小单测 `packages/zcode-server-cli/test/taskActivityTracker.test.ts`(4 用例:turn 起止驱动运行数、非 turn kind 无害忽略、identity 优先去重与跨 workspace 汇总、available 重注册丢弃旧集合 + unavailable 按 runtimeIdentity 匹配摘除、dispose 幂等)。当时"bootstrap 无测试基建"的约束不适用于 zcode-server-cli 包,tsx --test 直跑即可,无需引入 runner。
+- **打包副本核验**:bundled-agents 的 zcode.cjs 在 2026-09-25 dev 重建时已顺带收敛(8 种被删 kind 仅剩 schema 校验面字面量,无生产分支),2026-09-26 再次全量重建并复核;dist-community 本地副本是 2026-09-22 的 3.14.0 打包产物(早于裁剪),仍有 `KI.parse({...kind:"usage.delta"...})` 等生产分支,属陈旧安装包目录,由下一次社区打包(CI `community-build.yml` 或本地 production build)整体再生取代,不做手工修补。

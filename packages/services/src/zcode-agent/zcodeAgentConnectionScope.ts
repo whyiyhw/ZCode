@@ -876,9 +876,11 @@ export function createZCodeAgentConnectionScope(
       ) {
         return RpcEvent.None;
       }
-      // renderer 的 workspace supervisor 会先于 V4 hello/initialize 挂载。
-      // telemetry emitter 本身不发起协议请求，允许可信 desktop 提前监听，避免动态
-      // Event 在 handshake 前抛错并让 host channel 退出；live fact 仍只会在 ingest 后产生。
+      // telemetry emitter 本身不发起协议请求，允许可信 desktop 在 V4 hello/initialize
+      // 前监听（dynamic Event 提前注册会抛错并让 host channel 退出）；live fact 仍只
+      // 会在 ingest 后产生。renderer 侧订阅者已随全遥测栈移除（bfd11a8），当前唯一
+      // 订阅方是 zcode-server 进程内的 taskActivityTracker（走 service 面，不经此连接面），
+      // 此面仅为可信 desktop-continuous 连接保留同一规则。
       // 远程 workspace 还会经过 trusted host relay；这里沿用已有 trusted carrier 传递
       // 下游 clientMode/namespace connectionId，relay 自身没有可信下游时仍保持拒绝。
       return base.onDynamicConversationTelemetryFact(
