@@ -192,7 +192,7 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" "${files[@]}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "ZCode Community ${GITHUB_REF_NAME}" \
-            --notes "社区版构建（隐私断言已在 CI 通过；说明见 COMMUNITY-EDITION.md，证据见 PRIVACY-AUDIT.md）。未签名：macOS 首次打开需 xattr -rd com.apple.quarantine <App>。" \
+            --notes "社区版构建（隐私断言已在 CI 通过；说明见 COMMUNITY-EDITION.md，证据见 PRIVACY-AUDIT.md）。macOS 包为 ad-hoc 封签：首次打开提示「无法验证开发者」时，在 系统设置 → 隐私与安全性 → 仍要打开 放行，或执行 xattr -rd com.apple.quarantine <App>；历史未签名版本必须用 xattr。" \
             || gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
