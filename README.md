@@ -168,11 +168,13 @@ pnpm bundle:desktop -- --help
 
 默认目标为 macOS arm64，默认输出目录为 `packages/desktop/dist/`。`--os` 支持 `mac`、`win`、`linux`，`--arch` 支持 `x64`、`arm64`；实际打包与签名需要目标平台对应的工具和配置。
 
-安装：双击打开产物 DMG，将 ZCode 拖入"应用程序"。本地构建未签名，首次打开若被 macOS 拦截，执行：
+安装：双击打开产物 DMG，将 ZCode 拖入"应用程序"。macOS 产物为 ad-hoc 封签（无开发者证书、未公证）：本机构建的 DMG 不带 quarantine，可直接打开；网络下载的 DMG 首次打开提示"无法验证开发者"时，在"系统设置 → 隐私与安全性"点"仍要打开"，或执行：
 
 ```bash
-sudo xattr -rd com.apple.quarantine /Applications/ZCode.app
+xattr -rd com.apple.quarantine /Applications/ZCode.app
 ```
+
+修复进入 Release 前的历史产物完全未签名（非 ad-hoc），下载后打开会报"已损坏，无法打开"，只能先用上面的 xattr 命令去除 quarantine 再打开。
 
 ### ZCode 命令行版
 
