@@ -53,6 +53,7 @@ export function RemoteConnectionConnectingStep({
     }
   }, [logs.length, latestLogId, latestLogTimestamp]);
 
+  // 社区版：反馈中心已删除，剔除 handleOpenFeedback（远程连接失败上报）入口
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 h-full">
       <div className="flex flex-col flex-1 min-h-0 space-y-4">

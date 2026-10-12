@@ -1,23 +1,27 @@
+import { getPluginSandboxHost } from "./pluginSandbox/index.js";
 /* eslint-disable max-lines -- 桌面命令分发需要共享窗口与平台上下文，集中维护更便于一致性 */
-import { app, BrowserWindow, dialog, session, shell } from "electron";
-import type { MessageBoxOptions } from "electron";
+// 合并取舍：electron 导入已随上游重排到下方 @zcode/shared 块之后（见文件头下方），此处只保留
+// 上游新增的 stdio-tap 调试开关导入，避免与下方重复声明。
+import { readZCodeStdioTapDevState, setZCodeStdioTapDevEnabled } from "@zcode/services/node";
 import {
+  buildZCodeEndpointUrls,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DesktopCommandIds,
+  TEST_ZCODE_ENDPOINT_ORIGIN,
+  normalizeZCodeEndpointOrigin,
   PlatformChannels,
+  resolveZCodeEndpointOrigin,
+  ZCODE_ENV,
   type AppSettings,
   type DesktopCommandId,
   type Locale,
-  resolveRuntimeZCodeEndpointOrigin,
-  ZCODE_ENV,
-  buildZCodeEndpointUrls,
-  normalizeZCodeEndpointOrigin,
-  resolveZCodeEndpointOrigin,
+  // 合并剔除：getCommunityUrlFromConfigs / getFeedbackUrlFromConfig / resolveHelpAppConfig 属
+  // 反馈中心/社区链接配置链，社区版 @zcode/shared 已删除导出；HEAD 侧的
+  // resolveRuntimeZCodeEndpointOrigin 在合并后的分发里已无调用点（upstream 的 endpoint 分支胜出），一并去掉。
 } from "@zcode/shared";
-import { readZCodeStdioTapDevState, setZCodeStdioTapDevEnabled } from "@zcode/services/node";
+import type { MessageBoxOptions } from "electron";
+import { app, BrowserWindow, dialog, session, shell } from "electron";
 import { showAboutDialog } from "./about.js";
-import { exportLogs } from "./exportLogs.js";
-import { openResourceManager } from "./resourceManagerWindow.js";
 import { resolveCuaOsSupport } from "./cuaOsSupport.js";
 import { syncWindowControlsOverlayForZoomLevel } from "./desktopWindowButtonPosition.js";
 import {
@@ -29,6 +33,8 @@ import {
   resolveDesktopZoomFactorForLevel,
   resolveDesktopZoomLevelFromFactor,
 } from "./desktopZoom.js";
+import { exportLogs } from "./exportLogs.js";
+import { openResourceManager } from "./resourceManagerWindow.js";
 
 export const HELP_TOGGLE_DEV_TOOLS_MENU_ID = "help.toggle-dev-tools";
 export const HELP_TOGGLE_ZCODE_STDIO_TAP_MENU_ID = "help.toggle-zcode-stdio-tap";
@@ -43,7 +49,7 @@ function resolveTargetWindow(senderWindow?: BrowserWindow | null) {
 
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
 }
-function updateDesktopZoomLevel(
+export function updateDesktopZoomLevel(
   targetWindow: BrowserWindow | null | undefined,
   action: "reset" | "in" | "out",
 ) {
@@ -92,6 +98,7 @@ async function clearAllDataAndRelaunch(options: {
     return;
   }
 
+  await getPluginSandboxHost()?.clearBrowserData();
   const { rm } = await import("node:fs/promises");
   try {
     await rm(options.credentialsDir, { recursive: true, force: true });
@@ -132,6 +139,8 @@ export async function clearCodingPlanWebviewStorage(options: {
     // Coding Plan webview 使用独立持久 partition，默认窗口 session.clearStorageData()
     // 不会覆盖它；退出登录/清理数据时必须显式清除，避免旧账号 token 被下一次官网首屏读到。
     await session.fromPartition(CODING_PLAN_WEBVIEW_PARTITION).clearStorageData();
+    // 奖励中心已随营销/奖励族裁剪；登出时仍清空其 partition 残留数据（本地存储清理，无网络行为）。
+    await session.fromPartition("persist:zcode-rewards").clearStorageData();
     options.logger.info("[coding-plan-webview] cleared persistent partition storage");
   } catch (error) {
     options.logger.warn(
@@ -141,6 +150,10 @@ export async function clearCodingPlanWebviewStorage(options: {
   }
 }
 
+// 合并取舍：上游在此补齐反馈中心/社区链接的远端+本地配置读取链（fetchRemoteAppConfig/
+// resolveLocalAppConfigPath/resolveFeedbackUrl/resolveCommunityUrl/openFeedback/openCommunity）。
+// 社区版反馈中心与相关 @zcode/shared 导出均已删除，且合并后的命令分发没有这些 case、
+// 仓库内也无其它导入方——整块属死代码，按删除口径选 HEAD（空）侧剔除。
 async function promptCustomZCodeEndpoint(
   targetWindow: BrowserWindow | null | undefined,
   currentValue: string,
@@ -179,8 +192,8 @@ function buildZCodeEndpointPromptHtml(currentValue: string): string {
   <body>
     <form id="form">
       <label for="endpoint">ZCode endpoint origin</label>
-      <input id="endpoint" value="${value}" placeholder="https://endpoint.example.com" spellcheck="false" />
-      <div class="hint">Use an http or https origin, for example https://endpoint.example.com.</div>
+      <input id="endpoint" value="${value}" placeholder="https://zcode.z.ai" spellcheck="false" />
+      <div class="hint">Use an http or https origin, for example https://zcode.z.ai.</div>
       <div class="actions">
         <button id="cancel" type="button">Cancel</button>
         <button type="submit">Save</button>
@@ -472,7 +485,7 @@ export async function executeDesktopCommand(options: {
       return;
     case DesktopCommandIds.SetZCodeEndpointTest:
       await setZCodeEndpointOverride({
-        value: options.zcodeEndpointEnvBaseOrigin ?? resolveRuntimeZCodeEndpointOrigin(),
+        value: TEST_ZCODE_ENDPOINT_ORIGIN,
         settingService: options.settingService,
         onZCodeEndpointChanged: options.onZCodeEndpointChanged,
         logger: options.logger,

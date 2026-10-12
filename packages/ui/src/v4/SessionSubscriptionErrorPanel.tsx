@@ -2,7 +2,7 @@ import { TID_V4_RETRY_SUBSCRIBE } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
-interface SessionSubscriptionErrorPanelProps {
+export interface SessionSubscriptionErrorPanelProps {
   error: string;
   onReconnect: () => void;
 }
@@ -12,6 +12,7 @@ export function SessionSubscriptionErrorPanel({
   onReconnect,
 }: SessionSubscriptionErrorPanelProps) {
   const { intl } = useZCodeIntl();
+  // 社区版：反馈中心已删除，剔除 openFeedbackSubmit/buildErrorFeedbackDescription 上报入口
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-ui-base">

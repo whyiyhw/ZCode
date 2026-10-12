@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- 八类 strict telemetry fact 的同源归一集中维护，避免 privacy allowlist 分叉。 */
 import type {
   SessionEvent,
   TurnCompletePayload,
@@ -44,6 +45,10 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+// 社区版红线（PRIVACY-AUDIT §十三 + docs/plans/conversation-telemetry-fact-trim-design.md）：
+// facts 生产侧只允许 turn.started / turn.terminal 两种 kind，上游 merge 带回的
+// 非 turnovers 辅助函数（nonNegative/providerHostname/skill 字段/streaming 子代理
+// 镜像字段等）一律不落地，避免死代码复活被裁剪的 fact 分支。
 function eventTimestamp(event: SessionEvent): number {
   const value =
     event.timestamp instanceof Date ? event.timestamp.getTime() : Number(event.timestamp);

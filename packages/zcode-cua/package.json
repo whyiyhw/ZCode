@@ -1,6 +1,7 @@
 {
   "name": "@zcode/zcode-cua",
   "version": "0.6.3",
+  "zcodeCuaPlaceholder": true,
   "private": true,
   "description": "Computer Use client and runtime: broker wire protocol, model-facing tool executor, and local Helper runtime staging; fails closed when no Helper runtime is available.",
   "license": "Apache-2.0",

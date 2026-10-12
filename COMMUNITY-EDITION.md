@@ -83,6 +83,8 @@
 | 9   | 自动更新子系统（约 25-30 文件）   | 无每小时 manifest 轮询、无启动即查、无强更 gate、无更新 UI/设置项/i18n；升级 = 重装                                                                                                                           |
 | 10  | 资源遥测族（约 50 文件，跨 6 包） | main 10s 采样 / 网络遥测 / DAU 15min 心跳 / renderer 60s heap / 24h 目录扫描 / host↔main 资源消息与 `processResourceTelemetry` capability 全部消失；CLI 60s 节拍保留但只剩会话驻留回收与 event store 修剪职责 |
 
+第三批（2026-10-12，随上游 v3.15.1 合并的再裁剪，证据与逐族清单见 PRIVACY-AUDIT.md §十六）：**营销触达与奖励中心不落地**——上游新引入的营销 Banner/弹窗（点击、关闭会上报确认/取消事件）与奖励中心内嵌页属 §十四 社群入口同族的厂商营销面 + 事件采集，整体移除（shared/services/ui/desktop/preload 全链 + `MarketingTouch` 通道）；会话分享/反馈/赞踩/自动更新/遥测在上游的全部改动按既有口径保持删除；上游删除的 `device/deviceMid.ts`（计费契约红线）从社区版恢复。
+
 ## 四、如何阻断整个链路
 
 社区版采用五层纵深，**任何一层失效都不至于恢复采集**：

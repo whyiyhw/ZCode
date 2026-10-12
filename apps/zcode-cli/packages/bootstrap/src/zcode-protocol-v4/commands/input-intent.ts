@@ -1,10 +1,18 @@
 import type { TurnInputIntentMetadata } from "@zcode/contracts";
 import type { ModelSelection } from "@zcode/shared";
-import type { AttachmentRef, CommandEnvelope, QueueItem } from "@zcode/shared/zcode-protocol-v4";
-import type { SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
+import type {
+  AttachmentRef,
+  CommandEnvelope,
+  CommandPayloadMap,
+  QueueItem,
+  SubmissionMode,
+} from "@zcode/shared/zcode-protocol-v4";
 import { commandAdmissionOf } from "./executor.js";
 
-interface CanonicalCommandIntent {
+export interface CanonicalCommandIntent {
+  inputOrigin?: "desktop" | "mobile";
+  conversationQuotes?: import("@zcode/contracts").TurnInputIntentMetadata["conversationQuotes"];
+  botGroupSource?: TurnInputIntentMetadata["botGroupSource"];
   kind: "sendText" | "sendGoalCommand";
   text: string;
   modelSelection?: ModelSelection;
@@ -18,12 +26,16 @@ interface CanonicalCommandIntent {
   fallbackReasonCode?: string;
   attachmentRefs?: readonly AttachmentRef[];
   provenance?: TurnInputIntentMetadata["provenance"];
+  source?: TurnInputIntentMetadata["source"];
 }
 
 export function inputIntentMetadata(
   envelope: CommandEnvelope,
   options: {
     text: string;
+    inputOrigin?: "desktop" | "mobile";
+    conversationQuotes?: import("@zcode/contracts").TurnInputIntentMetadata["conversationQuotes"];
+    botGroupSource?: TurnInputIntentMetadata["botGroupSource"];
     requestedDelivery: TurnInputIntentMetadata["requestedDelivery"];
     admittedDelivery?: TurnInputIntentMetadata["admittedDelivery"];
     fallbackReasonCode?: string;
@@ -31,10 +43,19 @@ export function inputIntentMetadata(
     modelSelection?: ModelSelection;
     mode?: SubmissionMode;
     planEnabled?: boolean;
+    // 社区版：sharedContextRefs 已随会话分享下线；source（插件 UI 代发标记）保留。
+    source?: TurnInputIntentMetadata["source"];
   },
 ): TurnInputIntentMetadata {
   const admission = commandAdmissionOf(envelope);
+  const highspeed =
+    envelope.type === "sendText"
+      ? (envelope.payload as CommandPayloadMap["sendText"]).highspeedMeta
+      : undefined;
   return {
+    ...(options.inputOrigin ? { inputOrigin: options.inputOrigin } : {}),
+    ...(options.conversationQuotes ? { conversationQuotes: options.conversationQuotes } : {}),
+    ...(options.botGroupSource ? { botGroupSource: options.botGroupSource } : {}),
     sourceCommandId: envelope.commandId,
     queueItemId: admission.queueItemId,
     clientId: envelope.clientId || "cli",
@@ -62,6 +83,8 @@ export function inputIntentMetadata(
           : "startNow"),
     ...(options.fallbackReasonCode ? { fallbackReasonCode: options.fallbackReasonCode } : {}),
     ...(options.attachmentRefs ? { attachmentRefs: [...options.attachmentRefs] } : {}),
+    ...(highspeed ? { highspeed } : {}),
+    ...(options.source ? { source: options.source } : {}),
   };
 }
 
@@ -75,6 +98,9 @@ export function inputIntentMetadataFromCanonical(
   const originalSourceCommandId =
     canonical.provenance?.sourceCommandId ?? canonical.sourceCommandId;
   return {
+    ...(canonical.inputOrigin ? { inputOrigin: canonical.inputOrigin } : {}),
+    ...(canonical.conversationQuotes ? { conversationQuotes: canonical.conversationQuotes } : {}),
+    ...(canonical.botGroupSource ? { botGroupSource: canonical.botGroupSource } : {}),
     sourceCommandId: envelope.commandId,
     queueItemId: admission.queueItemId,
     clientId: envelope.clientId || canonical.clientId || "cli",
@@ -89,6 +115,7 @@ export function inputIntentMetadataFromCanonical(
     admittedDelivery: canonical.admittedDelivery ?? "startNow",
     ...(canonical.fallbackReasonCode ? { fallbackReasonCode: canonical.fallbackReasonCode } : {}),
     ...(canonical.attachmentRefs ? { attachmentRefs: [...canonical.attachmentRefs] } : {}),
+    ...(canonical.source ? { source: canonical.source } : {}),
     ...(originalSourceCommandId
       ? {
           provenance: canonical.provenance ?? {
@@ -107,6 +134,9 @@ export function inputIntentMetadataFromQueueItem(
   canonicalText: string,
 ): TurnInputIntentMetadata {
   return {
+    ...(item.inputOrigin ? { inputOrigin: item.inputOrigin } : {}),
+    ...(item.conversationQuotes ? { conversationQuotes: item.conversationQuotes } : {}),
+    ...(item.botGroupSource ? { botGroupSource: item.botGroupSource } : {}),
     sourceCommandId: item.sourceCommandId,
     queueItemId: item.queueItemId,
     clientId: item.clientId,
@@ -124,6 +154,8 @@ export function inputIntentMetadataFromQueueItem(
       ? { fallbackReasonCode: item.delivery.fallbackReasonCode }
       : {}),
     attachmentRefs: item.attachments,
+    ...(item.highspeed ? { highspeed: item.highspeed } : {}),
+    ...(item.source ? { source: item.source } : {}),
     // 提升只改变调度状态；重试／编辑原始输入的来源关联不能在此丢失。
     ...(item.provenance ? { provenance: { ...item.provenance } } : {}),
   };

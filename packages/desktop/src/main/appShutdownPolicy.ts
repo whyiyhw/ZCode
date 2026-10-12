@@ -2,12 +2,12 @@
 // "update-install" 分支随之删除；Windows 普通退出保留 Host 进程树兜底余量。
 export type AppShutdownKind = "normal";
 
-interface AppShutdownPolicy {
+export interface AppShutdownPolicy {
   forceKillDelayMs: number;
   waitTimeoutMs: number;
 }
 
-interface AppShutdownPolicySelection {
+export interface AppShutdownPolicySelection {
   kind: AppShutdownKind;
   policy: AppShutdownPolicy;
 }

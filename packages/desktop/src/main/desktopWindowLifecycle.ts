@@ -54,6 +54,10 @@ export function createWindow(options: {
     label: string,
     forceKillDelayMs?: number,
   ) => void;
+  // 合并取舍：webRemoteControlManager 为上游 web-remote-control 新功能（下方 disposeWindow 使用），保留；
+  // syncAutoUpdaterStateToWindow / syncReadyUpdateToWindow / syncPostUpdateReleaseNotesToWindow
+  // 属自动更新链（社区版已删），剔除。
+  webRemoteControlManager: { disposeWindow(windowId: number): Promise<void> };
   disposeRemoteWorkspaceSessionsForWindow: (windowId: number, reason: string) => void;
   reattachRemoteWorkspaceSessionsForWindow: (win: BrowserWindow, reason: string) => void;
   bootstrap?: WindowBootstrapOptions;
@@ -268,6 +272,7 @@ export function createWindow(options: {
       options.disposeHostProcess(child, `${label}:window-closed`);
       options.windowHostProcessMap.delete(wcId);
     }
+    void options.webRemoteControlManager.disposeWindow(browserWindowId);
     options.disposeRemoteWorkspaceSessionsForWindow(wcId, `${label}:window-closed`);
   });
 
@@ -367,7 +372,13 @@ export function handleDesktopWindowCloseRequest(options: {
   platform: NodeJS.Platform;
   forceQuit: boolean;
   explicitQuitRequested?: boolean;
-  closeToTrayOnWindows?: boolean;
+  closeToTray?: boolean;
+  /**
+   * Linux 关闭驻留的托盘能力（spec：docs/desktop/linux-close-to-tray.md）。
+   * GNOME 等无 StatusNotifierWatcher 的桌面托盘不渲染且不报错，必须在隐藏前显式确认能力；
+   * 空值按"不可用"安全默认，走确认退出路径，避免窗口隐藏后失联。
+   */
+  closeToTraySupported?: boolean;
   isLastWindow: boolean;
   label: string;
   logger: { info: (...args: unknown[]) => void };
@@ -376,9 +387,15 @@ export function handleDesktopWindowCloseRequest(options: {
   requestQuit: () => void;
   hideWindow?: () => void;
 }) {
+  // CR 修复:win32 不能短路丢弃 closeToTraySupported——它承载 resolveCloseToTraySupported
+  // 的合并裁决(Windows=托盘实例创建成功)。托盘创建失败时隐藏窗口即失联,与 spec
+  // "关窗分支与设置页能力查询都读同一合并结果"保持一致。
+  const canHideToTray =
+    (options.platform === "win32" || options.platform === "linux") &&
+    options.closeToTraySupported === true;
   if (
-    options.platform === "win32" &&
-    options.closeToTrayOnWindows &&
+    canHideToTray &&
+    options.closeToTray &&
     !options.forceQuit &&
     !options.explicitQuitRequested
   ) {

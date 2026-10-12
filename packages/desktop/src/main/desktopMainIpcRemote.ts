@@ -5,7 +5,6 @@ import {
   normalizeUnknownError,
   InternalChannels,
   isTrustedCodingPlanWebviewOrigin,
-  resolveZaiBusinessBaseUrl,
   PlatformChannels,
   remoteTargetSchema,
   type RemoteTarget,
@@ -17,9 +16,15 @@ import {
   parseOAuthStateRegistration,
   registerOAuthState,
 } from "./desktopOAuthDeepLink.js";
-import { openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
+// 合并取舍：web-remote-control IPC 为上游新功能（保留）；desktopArmsCustomEvent /
+// desktopRemoteUsageArmsTelemetry 属社区版已删除的 ARMS 链，剔除；两个默认打开 helper 均有调用点，保留。
+import {
+  registerWebRemoteControlIpcHandlers,
+  type WebRemoteControlIpcManager,
+} from "./desktopWebRemoteControlIpc.js";
+import { openFileUrlInDefaultApp, openPathInDefaultApp } from "./desktopMainIpcHelpers.js";
 
-function isAllowedExternalOpenUrl(value: string): boolean {
+export function isAllowedExternalOpenUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "file:";
@@ -50,6 +55,8 @@ function parseOpenExternalRequest(payload: unknown): OpenExternalRequest | null 
   };
 }
 
+const CODING_PLAN_ZAI_PAYPAL_RELAY_HOSTS = new Set(["api.z.ai", "api.z.ai"]);
+
 function isPaypalHostname(hostname: string): boolean {
   return hostname === "paypal.com" || hostname.endsWith(".paypal.com");
 }
@@ -60,7 +67,7 @@ function isCodingPlanPaypalNavigationUrl(url: string): boolean {
     if (parsed.protocol !== "https:") return false;
     if (isPaypalHostname(parsed.hostname)) return true;
     return (
-      ["https://api.z.ai", resolveZaiBusinessBaseUrl()].includes(parsed.origin) &&
+      CODING_PLAN_ZAI_PAYPAL_RELAY_HOSTS.has(parsed.hostname) &&
       parsed.pathname.startsWith("/api/pay/paypal/")
     );
   } catch {
@@ -130,6 +137,10 @@ export function registerRemoteIpcHandlers(options: {
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
   };
+  // 合并取舍：上游在本接口塞入的 appTelemetryRuntime/appTelemetryCore/reportRemoteUsageEvent/
+  // armsCustomContext/finalArmsCustomEventE2EEnabled/onOAuthCallbackHandledSideEffect 全部属
+  // ARMS / remote usage 遥测链（社区版已删），仅保留 web-remote-control 的 manager 注入。
+  webRemoteControlManager: WebRemoteControlIpcManager;
   createRemoteWorkspaceSession: (
     win: BrowserWindow,
     target: RemoteTarget,
@@ -170,6 +181,12 @@ export function registerRemoteIpcHandlers(options: {
     options.confirmRendererAttachmentReady(event.sender.id, { sessionId, attachmentId });
   });
 
+  // 合并取舍：上游在 web-remote-control IPC handler 注入的 usage 遥测回调已随社区版
+  // 遥测栈删除（desktopWebRemoteControlIpc 同步剥离上报分支），这里只传业务依赖。
+  registerWebRemoteControlIpcHandlers({
+    webRemoteControlManager: options.webRemoteControlManager,
+  });
+
   ipcMain.on(PlatformChannels.OAuthRegisterState, (event, payload: unknown) => {
     const registration = parseOAuthStateRegistration(payload);
     if (!registration) {
@@ -189,6 +206,10 @@ export function registerRemoteIpcHandlers(options: {
     const { url } = request;
     if (!isAllowedExternalOpenUrl(url)) {
       options.logger.warn("[open-external] blocked unsupported url", url);
+      return;
+    }
+    if (new URL(url).protocol === "file:") {
+      void openFileUrlInDefaultApp(url, options.logger);
       return;
     }
     const sender = event.sender;

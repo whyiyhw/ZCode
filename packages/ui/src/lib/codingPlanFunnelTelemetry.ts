@@ -36,11 +36,12 @@ export interface CodingPlanFunnelContext {
   channel: string;
 }
 
-interface CodingPlanEntryPlanState {
+export interface CodingPlanEntryPlanState {
   entryPlanStatus: CodingPlanEntryPlanStatus;
   entryPlanLevel: string;
 }
 
+// 社区版：coding plan 漏斗遥测上报逻辑已裁剪，仅保留纯逻辑 helper（不恢复 reportAppTelemetryEvent 上报）
 function createPurchaseFunnelId(): string {
   return globalThis.crypto?.randomUUID?.() ?? createFallbackFunnelId();
 }
@@ -161,8 +162,7 @@ export function resolveCodingPlanEntryPlanStateFromProviderSettings(
   return resolveCodingPlanEntryPlanState({ displayStatus: "notPurchased" });
 }
 
-
-function resolveCodingPlanProviderFamily(providerId: string): CodingPlanProviderFamily {
+export function resolveCodingPlanProviderFamily(providerId: string): CodingPlanProviderFamily {
   if (
     providerId === BIGMODEL_PROVIDER_ID ||
     providerId === BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan ||
@@ -177,10 +177,9 @@ function resolveCodingPlanProviderFamily(providerId: string): CodingPlanProvider
   return "unknown";
 }
 
-function resolveCodingPlanChannel(providerFamily: CodingPlanProviderFamily): string {
+export function resolveCodingPlanChannel(providerFamily: CodingPlanProviderFamily): string {
   return { bigmodel: "MaaS", zai: "Z_AI", unknown: "" }[providerFamily];
 }
-
 
 function isStartPlanProviderId(providerId: string): boolean {
   return (

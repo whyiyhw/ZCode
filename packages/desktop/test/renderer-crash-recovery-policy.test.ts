@@ -1,7 +1,9 @@
 // 崩溃自愈策略单测（口径：packages/desktop/spec/renderer-crash-recovery.md）。
-// 运行：npx tsx --test packages/desktop/test/renderer-crash-recovery-policy.test.ts
+// 社区版口径：本地崩溃取证/自愈保留（PRIVACY-AUDIT §十六），本测试必须保留并纳入 vitest 全量。
+// 原以 node:test 编写，根 vitest.config.ts 会拾取 packages/*/test/**，node:test 套件
+// 在 vitest 下报 "No test suite found"——改为 vitest test 入口，断言逻辑不变。
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 import {
   CRASH_STORM_WINDOW_MS,
   DUPLICATE_EVENT_WINDOW_MS,

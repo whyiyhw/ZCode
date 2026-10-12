@@ -1,37 +1,53 @@
 /* eslint-disable max-lines -- host process 统一处理 main↔host 生命周期、日志、ZCode Agent，拆分前先保持跨进程消息收口。 */
-import { bindDatabaseStartupRelay } from "./databaseStartupRelay.js";
-import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import {
+  type HostCuaOperationStateResponse,
+  // 合并取舍：RemoteTarget 为 web-remote-control 新功能所用（下方 dependencies 类型引用），保留；
+  // 上游的 HostMcpTelemetryResponse / HostSessionCreateTelemetryResponse 属 SessionCreate/遥测通道，
+  // 社区版协议已删且本文件无调用点，剔除。
+  type RemoteTarget,
+  type TaskRealtimeHostDeliveryKind,
+  type WorkspacePurpose,
+  formatZCodeHostProcessName,
+  HostMessageTypes,
+  hostResponseMessageSchema,
+  HostResponseTypes,
+  InternalChannels,
+  RUNTIME_ZCODE_DEBUG,
+  // 合并取舍：HEAD 侧的 type WorkspacePurpose 与上方重复声明；上游的 serializeLaunchMarks
+  // 依赖 launch marks 链（desktopLaunchMarks.ts 已删、loadWindow 未合入打点逻辑），不引入。
+  ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV,
+} from "@zcode/shared";
+import type {
+  PluginSandboxHandle,
+  PluginSandboxRegisterRequestPayload,
+  PluginSandboxRegisterResultPayload,
+} from "@zcode/shared/mcp-apps";
+import type { UtilityProcess as ElectronUtilityProcess, MessagePortMain } from "electron";
 import {
   app,
   BrowserWindow,
-  MessageChannelMain,
   utilityProcess as electronUtilityProcess,
+  MessageChannelMain,
 } from "electron";
-import type { MessagePortMain, UtilityProcess as ElectronUtilityProcess } from "electron";
-import {
-  type HostCuaOperationStateResponse,
-  type TaskRealtimeHostDeliveryKind,
-  formatZCodeHostProcessName,
-  HostMessageTypes,
-  HostResponseTypes,
-  hostResponseMessageSchema,
-  InternalChannels,
-  RUNTIME_ZCODE_DEBUG,
-  type WorkspacePurpose,
-  ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV,
-} from "@zcode/shared";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { BroadcastHub } from "./broadcastHub.js";
-import type { TaskRealtimeBus } from "./taskRealtimeBus.js";
-import { createHostLogRelay } from "./hostLogRelay.js";
-import { registerHostProcess, unregisterHostProcess } from "./resourceManagerWindow.js";
-import { resolveHostResourceUsageResult } from "./resourceManagerHostSampling.js";
+import { bindDatabaseStartupRelay } from "./databaseStartupRelay.js";
 import {
   buildHostProcessEnv,
   hostModulePath,
   resolveBundledGlmBinaryPath,
 } from "./desktopRuntimeEnv.js";
+import { ingestHostNetworkCapture } from "./resourceManagerNetwork.js";
 import { buildHostE2ECoverageEnv } from "./e2eCoverage.js";
+// 合并剔除：上游的 createFeedbackLogArchiveFromExportLogs（反馈中心压缩日志链）在本文件已无调用点，不引入。
+import { createHostLogRelay } from "./hostLogRelay.js";
+// 合并取舍：上游的 ingestCliResourceSample / ingestHostSelfResourceSample（processResource* 家族，
+// 模块已 git rm）与 registerHostAgentProcess / unregisterHostAgentProcess（AgentProcess* 消息族在
+// 本文件的接线已删，注册函数无调用点）均不引入；HEAD 侧 desktopRuntimeEnv/e2eCoverage 导入与上方重复。
+import { resolveHostResourceUsageResult } from "./resourceManagerHostSampling.js";
+import { registerHostProcess, unregisterHostProcess } from "./resourceManagerWindow.js";
+import type { TaskRealtimeBus } from "./taskRealtimeBus.js";
 
 export interface WindowBootstrapOptions {
   restoreSession?: boolean;
@@ -61,7 +77,7 @@ export interface HostInitMessage {
   runtimeProcessEnvPatch?: Record<string, string>;
 }
 
-interface SpawnHostProcessOptions {
+export interface SpawnHostProcessOptions {
   internalChannel?: typeof InternalChannels.ServicePort | typeof InternalChannels.ScopedServicePort;
   internalPayload?: unknown;
   registerBroadcast?: boolean;
@@ -203,6 +219,10 @@ export function spawnHostProcess(
     }) => Promise<{ ok: boolean; [k: string]: unknown }>;
     /** Host 已完成附件授权后，由 Main 将本地视频 realpath 加入精确协议授权集合。 */
     authorizeLocalMediaPreviewPath?: (path: string) => Promise<string>;
+    /** Host 校验完插件 UI HTML 后交给 Main 沙箱注册表登记，返回句柄。 */
+    registerPluginSandbox?: (
+      input: PluginSandboxRegisterRequestPayload,
+    ) => PluginSandboxHandle | Promise<PluginSandboxHandle>;
   },
   options?: SpawnHostProcessOptions,
 ): ElectronUtilityProcess {
@@ -273,6 +293,14 @@ export function spawnHostProcess(
       return;
     }
 
+    // 合并取舍：本地网络诊断抓包（NetworkCaptureBatch，host→main 转发）是社区版保留的红线链路；
+    // 上游同块的 NetworkTelemetryBatch / AgentResourceSample / HostResourceSample 处理器属
+    // 已删除的网络遥测与资源采样链（对端模块均已 git rm），按 HEAD 口径剔除。
+    if (result.data.type === HostResponseTypes.NetworkCaptureBatch) {
+      ingestHostNetworkCapture(result.data.batch, child.pid ?? 0);
+      return;
+    }
+
     if (result.data.type === HostResponseTypes.ResourceUsageSnapshotResult) {
       resolveHostResourceUsageResult(label, result.data);
       return;
@@ -307,6 +335,32 @@ export function spawnHostProcess(
             error: error instanceof Error ? error.message : String(error),
           });
         });
+      return;
+    }
+
+    if (result.data.type === HostResponseTypes.PluginSandboxRegisterRequest) {
+      const request = result.data;
+      const register = dependencies.registerPluginSandbox;
+      const reply = (payload: PluginSandboxRegisterResultPayload) =>
+        child.postMessage({ type: HostMessageTypes.PluginSandboxRegisterResult, ...payload });
+      if (!register || win.isDestroyed() || request.ownerWebContentsId !== win.webContents.id) {
+        reply({
+          requestId: request.requestId,
+          ok: false,
+          error: "Plugin UI sandbox is unavailable.",
+        });
+        return;
+      }
+      void Promise.resolve()
+        .then(() => register(request))
+        .then((handle) => reply({ requestId: request.requestId, ok: true, ...handle }))
+        .catch((error: unknown) =>
+          reply({
+            requestId: request.requestId,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
       return;
     }
 
@@ -418,7 +472,6 @@ export function spawnHostProcess(
       });
       return;
     }
-
 
     if (result.data.type === HostResponseTypes.BotRemoteWorkspaceReconnectRequest) {
       const request = result.data;

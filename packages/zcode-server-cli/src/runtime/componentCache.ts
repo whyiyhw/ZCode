@@ -8,6 +8,7 @@ import { open as openZip, type Entry, type ZipFile } from "yauzl";
 import type { ServerRuntimeManifest } from "./manifest.js";
 import { promoteImmutableReleaseDirectory } from "./immutableRelease.js";
 import type { ServerLayout } from "./paths.js";
+import { resolveHostTarCommand } from "../packaging/tarCommand.js";
 
 function assertComponentId(componentId: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(componentId)) {
@@ -183,13 +184,17 @@ export async function extractArchiveSafely(
     await extractZipSafely(archivePath, destination);
     return;
   }
-  const listing = await run("tar", ["-tzf", archivePath], destination, true);
-  const verboseListing = await run("tar", ["-tvzf", archivePath], destination, true);
+  // Windows：PATH 里的 Git Bash GNU tar 会把 `C:\...` 绝对路径当 `host:path` 远程规格
+  // （"Cannot connect to C: resolve failed"），且更新流程传入的归档/目标均为绝对路径。
+  // 与 packaging/stage.ts 同口径，显式解析 System32 bsdtar。
+  const tarCommand = resolveHostTarCommand();
+  const listing = await run(tarCommand, ["-tzf", archivePath], destination, true);
+  const verboseListing = await run(tarCommand, ["-tvzf", archivePath], destination, true);
   if (verboseListing.split(/\r?\n/u).some((line) => /^[lh]/u.test(line))) {
     throw new Error(`Component archive contains a symbolic or hard link: ${archivePath}`);
   }
   validateArchiveEntries(listing);
-  await run("tar", ["-xzf", archivePath, "-C", destination], destination);
+  await run(tarCommand, ["-xzf", archivePath, "-C", destination], destination);
 }
 
 export class ComponentCache {

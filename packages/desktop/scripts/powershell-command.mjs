@@ -25,7 +25,14 @@ export function createEncodedPowerShellArgs(script, values = []) {
         `$zcodeArg${index}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodeUtf8Value(value)}'));`,
     )
     .join("");
-  const encodedCommand = Buffer.from(`${valueBindings}${script}`, "utf16le").toString("base64");
+  // 修复原因：中文/GBK 代码页的 Windows 上 [Console]::Out 默认按系统代码页输出，
+  // 消费方（windowsAumidIcon/chromeCredentialManager 等）按 utf8 解码会得到乱码路径；
+  // 先把控制台输出编码切到 UTF-8，保证 stdout 字节与解码端一致。
+  const outputEncodingPreamble = "[Console]::OutputEncoding=[Text.Encoding]::UTF8;";
+  const encodedCommand = Buffer.from(
+    `${outputEncodingPreamble}${valueBindings}${script}`,
+    "utf16le",
+  ).toString("base64");
   return [...POWERSHELL_COMMON_ARGS, "-EncodedCommand", encodedCommand];
 }
 

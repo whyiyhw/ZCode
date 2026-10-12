@@ -1,3 +1,5 @@
+// 合并取舍：上游在此导入的 BrowserWindow 属 localTtft/TTFT 接线（社区版已删）；合并后的
+// 注册器只用到 ipcMain，按 HEAD 侧收敛导入。
 import { ipcMain } from "electron";
 import {
   DISABLED_RENDERER_ACTION_TRACE_CONFIG,
@@ -96,7 +98,7 @@ export function registerRendererActionTraceIpc(options: {
   };
 }
 
-function resolveRuntimeConfig(
+export function resolveRuntimeConfig(
   config: RendererActionTraceConfigV1,
   env: Record<string, string | undefined>,
 ): RendererActionTraceConfigV1 {
@@ -108,6 +110,10 @@ function resolveRuntimeConfig(
     enabledGroups: ["core", "settings"],
     configVersion: "local-explicit",
   } as RendererActionTraceConfigV1;
+}
+
+export function disabledRendererActionTraceConfig(): RendererActionTraceConfigV1 {
+  return { ...DISABLED_RENDERER_ACTION_TRACE_CONFIG };
 }
 
 function isTruthy(value: string | undefined): boolean {

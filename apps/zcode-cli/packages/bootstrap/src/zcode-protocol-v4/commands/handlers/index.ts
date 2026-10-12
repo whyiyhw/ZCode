@@ -10,6 +10,8 @@ import { queueHandlers } from "./queue.js";
 import { sessionFlowHandlers } from "./session-flow.js";
 import { sessionMgmtHandlers } from "./session-mgmt.js";
 import { selectionSideSessionHandlers } from "./selection-side-session.js";
+// 社区版：setAssistantFeedback 已随赞/踩功能下线；highspeed metrics 为上游新功能，保留。
+import { highspeedMetricsHandlers } from "./highspeed-metrics.js";
 
 export const NATIVE_HANDLERS = {
   ...sessionFlowHandlers,
@@ -21,4 +23,7 @@ export const NATIVE_HANDLERS = {
   ...interactionBackgroundHandlers,
   ...forkEditRetryHandlers,
   ...fileRewindHandlers,
+  ...highspeedMetricsHandlers,
 } as const;
+
+export type NativeCommandType = keyof typeof NATIVE_HANDLERS;

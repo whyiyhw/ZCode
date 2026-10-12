@@ -1,3 +1,5 @@
+// 社区版合并：保留 HEAD 的服务端目录（turnNavigatorDirectory）导航模型；
+// 上游客户端 buildConversationTurnNavigatorItems 构建链仅服务于会话分享（已删除），不引入
 export type ConversationTurnNavigatorAssistantPreviewKind = "empty" | "running" | "text";
 
 export interface ConversationTurnNavigatorItem {
@@ -17,7 +19,7 @@ export interface ConversationTurnNavigatorVirtualItem {
   size: number;
 }
 
-interface ResolveConversationTurnNavigatorActiveUnitIndexOptions {
+export interface ResolveConversationTurnNavigatorActiveUnitIndexOptions {
   items: readonly ConversationTurnNavigatorItem[];
   virtualItems: readonly ConversationTurnNavigatorVirtualItem[];
   scrollOffsetPx: number;
@@ -30,33 +32,33 @@ export interface ConversationTurnNavigatorQueryPosition {
   end: number;
 }
 
-interface ResolveConversationTurnNavigatorActiveQueryRowIdOptions {
+export interface ResolveConversationTurnNavigatorActiveQueryRowIdOptions {
   positions: readonly ConversationTurnNavigatorQueryPosition[];
   scrollOffsetPx: number;
   viewportHeightPx: number;
 }
 
-type ConversationTurnNavigatorBarTone = "idle" | "mid" | "near" | "peak";
-type ConversationTurnNavigatorBarColorTone = "focus" | "muted";
+export type ConversationTurnNavigatorBarTone = "idle" | "mid" | "near" | "peak";
+export type ConversationTurnNavigatorBarColorTone = "focus" | "muted";
 
-interface ConversationTurnNavigatorBarVisualState {
+export interface ConversationTurnNavigatorBarVisualState {
   colorTone: ConversationTurnNavigatorBarColorTone;
   opacity: number;
   scaleX: number;
   tone: ConversationTurnNavigatorBarTone;
 }
 
-interface ResolveConversationTurnNavigatorBarVisualStateOptions {
+export interface ResolveConversationTurnNavigatorBarVisualStateOptions {
   itemIndex: number;
   visualFocusItemIndex: number | undefined;
 }
 
-interface ResolveConversationTurnNavigatorVisualFocusItemIndexOptions {
+export interface ResolveConversationTurnNavigatorVisualFocusItemIndexOptions {
   activeItemIndex: number;
   interactionItemIndex: number | undefined;
 }
 
-const CONVERSATION_TURN_NAVIGATOR_MIN_WIDTH_PX = 864;
+export const CONVERSATION_TURN_NAVIGATOR_MIN_WIDTH_PX = 864;
 
 export type ConversationTurnNavigatorHydrationResult =
   | { status: "hydrated"; logEpoch: string }
@@ -105,7 +107,8 @@ export function resolveConversationTurnNavigatorActiveUnitIndex({
   }
   const itemByUnitIndex = new Map(windowItems.map((item) => [item.unitIndex, item]));
   const viewportStart = resolveFiniteNonNegative(scrollOffsetPx);
-  const viewportEnd = viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
+  const viewportEnd =
+    viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
 
   let activeUnitIndex: number | undefined;
   let activeDistance = Number.POSITIVE_INFINITY;
@@ -119,7 +122,8 @@ export function resolveConversationTurnNavigatorActiveUnitIndex({
     if (rowEnd < viewportStart || rowStart > viewportEnd) {
       continue;
     }
-    const distanceToViewportStart = rowStart <= viewportStart ? 0 : rowStart - viewportStart;
+    const distanceToViewportStart =
+      rowStart <= viewportStart ? 0 : rowStart - viewportStart;
     if (distanceToViewportStart < activeDistance) {
       activeUnitIndex = item.unitIndex;
       activeDistance = distanceToViewportStart;
@@ -154,7 +158,8 @@ export function resolveConversationTurnNavigatorActiveQueryRowId({
   if (positions.length === 0) return undefined;
 
   const viewportStart = resolveFiniteNonNegative(scrollOffsetPx);
-  const viewportEnd = viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
+  const viewportEnd =
+    viewportStart + Math.max(1, resolveFiniteNonNegative(viewportHeightPx));
   const normalized = positions
     .map((position) => {
       const start = resolveFiniteNonNegative(position.start);
@@ -171,7 +176,8 @@ export function resolveConversationTurnNavigatorActiveQueryRowId({
   );
   if (visible.length > 0) {
     return visible.reduce((nearest, candidate) =>
-      Math.abs(candidate.start - viewportStart) < Math.abs(nearest.start - viewportStart)
+      Math.abs(candidate.start - viewportStart) <
+      Math.abs(nearest.start - viewportStart)
         ? candidate
         : nearest,
     ).rowId;

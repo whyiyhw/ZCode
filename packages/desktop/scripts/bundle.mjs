@@ -88,6 +88,9 @@ const commandStdoutMaxBuffer = 64 * 1024 * 1024;
 const requiredRuntimeModules = [
   "module-details-from-path",
   "pngjs",
+  // 合并取舍：HEAD 口径——只校验 renderer action-trace 的 OTLP trace 导出链；上游重新加回的
+  // sdk-metrics / metrics-otlp-proto 校验与 @babel/runtime（ARMS peer 运行时）随遥测栈与 ARMS
+  // 链路一并剔除（社区版保留 renderer 动作追踪调试链的本地逃生口，仅此一条 OTLP 链）。
   // 与注入闭包同口径：校验 renderer action-trace 的 OTLP trace 导出链
   // （exporter → otlp-transformer → protobufjs）完整进包；metrics 导出链已随遥测栈删除。
   "@opentelemetry/exporter-trace-otlp-proto",
@@ -153,9 +156,13 @@ export function createElectronRuntimeMirrorEnv(mirror) {
 }
 
 function resolveDefaultElectronBuilderBinariesMirror(env = process.env) {
-  return env.ZCODE_DEPS_BASE_URL?.trim() || env.INTRANET_MACHINE_HOST?.trim()
-    ? `${resolveIntranetDepsBaseUrl(env)}/electron-builder-binaries/`
-    : NPMMIRROR_ELECTRON_BUILDER_BINARIES_MIRROR;
+  // 修复：未配置内网依赖源时（例如开源构建）内网地址解析会抛错，打包直接失败；
+  // 此时回退到 electron-builder 官方 release 下载地址。内部构建行为不变。
+  try {
+    return `${resolveIntranetDepsBaseUrl(env)}/electron-builder-binaries/`;
+  } catch {
+    return OFFICIAL_ELECTRON_BUILDER_BINARIES_MIRROR;
+  }
 }
 
 export function resolveElectronBuilderBinariesMirror(env = process.env) {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   DesktopCommandIds,
   TID_WORKSPACE_HELP_MENU_RESOURCE_MANAGER,
@@ -7,7 +8,11 @@ import {
   ActivityIcon,
   BookOpenIcon,
   CircleHelpIcon,
+  // 社区版合并：保留 DownloadIcon（导出日志）与 ShieldAlertIcon（漏洞上报）；
+  // Lightbulb/MessageSquare（反馈中心）、Users（openCommunity 平台接口缺失）、RefreshCw（自动更新）不引入
+  DownloadIcon,
   InfoIcon,
+  ShieldAlertIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -20,6 +25,7 @@ import {
 import { cn } from "@/components/lib/utils.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useVulnerabilityReportUrl } from "@/hooks/useVulnerabilityReportUrl.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { createHelpMenuActionHandlers } from "@/lib/helpMenuActions.js";
 
@@ -36,6 +42,11 @@ export function WorkspaceHelpMenuButton({
 }) {
   const { intl } = useZCodeIntl();
   const platform = usePlatform();
+  // 社区版合并：保留漏洞上报 URL hook（安全披露入口）；useDesktopUpdateMenu（自动更新）、
+  // useFeedbackStore（反馈中心 openSubmit/openFeatureRequest）剔除
+  const [open, setOpen] = useState(false);
+  const { url: vulnerabilityReportUrl, loading: vulnerabilityReportLoading } =
+    useVulnerabilityReportUrl(open);
   const helpMenuLabel = intl.formatMessage({ id: "workspaceHeader.help.menu" });
   const helpMenuActions = createHelpMenuActionHandlers({
     platform,
@@ -50,7 +61,7 @@ export function WorkspaceHelpMenuButton({
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <ControlHintTooltip title={helpMenuLabel} side="bottom">
         <DropdownMenuTrigger asChild>
           <Button
@@ -78,11 +89,30 @@ export function WorkspaceHelpMenuButton({
           <BookOpenIcon className="size-4" />
           {intl.formatMessage({ id: "workspaceHeader.help.docs" })}
         </DropdownMenuItem>
+        {/* 社区版合并：仅保留漏洞上报入口；issueReport/productRequest（反馈中心）、
+            community（platform.openCommunity 渲染端接口缺失）不引入 */}
+        {vulnerabilityReportLoading || vulnerabilityReportUrl ? (
+          <DropdownMenuItem
+            disabled={vulnerabilityReportLoading}
+            aria-busy={vulnerabilityReportLoading}
+            onSelect={
+              vulnerabilityReportUrl ? () => platform.openExternal(vulnerabilityReportUrl) : undefined
+            }
+          >
+            <ShieldAlertIcon className="size-4" />
+            {intl.formatMessage({ id: "workspaceHeader.help.reportVulnerability" })}
+          </DropdownMenuItem>
+        ) : null}
         {/* Windows/Linux 没有原生菜单栏，自绘标题栏箭头菜单也已下线，
             资源管理器只能从这里进；Web 端没有该窗口，不渲染。 */}
         {isDesktop ? (
           <>
             <DropdownMenuSeparator />
+            {/* 独立导出入口曾被移除；复用原菜单动作，保持打包、系统定位与提示一致。 */}
+            <DropdownMenuItem onSelect={helpMenuActions.exportLogs}>
+              <DownloadIcon className="size-4" />
+              {intl.formatMessage({ id: "titleBar.menu.help.exportLogs" })}
+            </DropdownMenuItem>
             <DropdownMenuItem
               data-testid={TID_WORKSPACE_HELP_MENU_RESOURCE_MANAGER}
               onSelect={handleOpenResourceManager}
