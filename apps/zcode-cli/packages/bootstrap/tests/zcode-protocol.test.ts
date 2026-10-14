@@ -3864,15 +3864,23 @@ describe("ZCodeProtocolAgentServer", () => {
         }
         if (message.method === zcodeProtocolMethods.subagentsReadRuntimeConfig) {
           reads.push(message.params);
+          // v3.15.1 起 subagentsReadRuntimeConfig 的 result 是 subagentRuntimeConfigSchema
+          // 判别联合（kind: ready | built-in-fallback），旧的 {documents, state} 形状已退役；
+          // 上游随 merge 带回的用例仍打旧桩，这里按现行 schema 打桩。
           void server.handleMessage({
             id: message.id,
             result: {
-              documents: [{ path: "/agents/reviewer.md", source: "user", content }],
-              state: {
-                disabledAgentIds: [],
-                builtInModelSelectionOverrides: {},
-                pluginAgentModelSelectionOverrides: {},
-              },
+              kind: "ready",
+              profiles: [
+                {
+                  name: "reviewer",
+                  description: content,
+                  source: "user",
+                  systemPrompt: content,
+                },
+              ],
+              builtInModelSelectionOverrides: {},
+              pluginAgentModelSelectionOverrides: {},
             },
           });
         }
@@ -3898,9 +3906,16 @@ describe("ZCodeProtocolAgentServer", () => {
         signal: new AbortController().signal,
         traceContext: { traceId: createTraceId(), sessionId: options[0]!.sessionId! },
       };
-      expect((await reader!(input)).documents[0]?.content).toBe("old");
+      const firstSnapshot = await reader!(input);
+      expect(firstSnapshot.kind).toBe("ready");
+      expect(
+        firstSnapshot.kind === "ready" ? firstSnapshot.profiles[0]?.systemPrompt : undefined,
+      ).toBe("old");
       content = "new";
-      expect((await reader!(input)).documents[0]?.content).toBe("new");
+      const secondSnapshot = await reader!(input);
+      expect(
+        secondSnapshot.kind === "ready" ? secondSnapshot.profiles[0]?.systemPrompt : undefined,
+      ).toBe("new");
       expect(reads).toEqual([
         { sessionId: options[0]!.sessionId },
         { sessionId: options[0]!.sessionId },
@@ -4814,12 +4829,17 @@ describe("ZCodeProtocolAgentServer", () => {
     expect(snapshot?.revision).toBe("account-1");
     expect(snapshot?.basedOnZCodeBuiltinRevision).toBe("zcode-builtin:1");
     expect(snapshot?.states?.["account:zai-individual-coding-plan"].current).toBe(false);
-    expect(snapshot?.providers.toJSON()).toEqual({
-      "account:zai-individual-coding-plan": {
-        access: { type: "zhipu-account", entitled: true },
-        builtinModelIds: ["GLM-5.2"],
+    // ProviderConfigMap.toJSON 现行形状是规则数组（[{providerId, config}]，索引保留外层
+    // 身份与名称）；上游随 merge 带回的用例仍断言旧 map 形状，这里按现行序列化对齐。
+    expect(snapshot?.providers.toJSON()).toEqual([
+      {
+        providerId: "account:zai-individual-coding-plan",
+        config: {
+          access: { type: "zhipu-account", entitled: true },
+          builtinModelIds: ["GLM-5.2"],
+        },
       },
-    });
+    ]);
   });
 
   it("workspace presentation rejects legacy runtimeModel", async () => {

@@ -35,6 +35,36 @@ rebase 附带处理：staging 的 CUA 单包合并（broker 51 文件并入 `@zc
 | `node:fs` globSync 在 Windows 返回反斜杠路径 | glob 结果必须归一化后再做前缀过滤 |
 | 产品 control endpoint 在 Windows 使用 `\\\\.\\pipe\\...` named pipe | IPC 测试必须按平台构造 endpoint，禁止因 POSIX socket fixture 在 Windows 报 EACCES 而跳过产品链路 |
 
+## 2026-10-14 补记：apps/zcode-cli/packages/bootstrap 套件 Windows 首跑对齐（183 例 → 0）
+
+上游 v3.15.1 合入后，bootstrap 包（dev-only、不在 pre-push 门禁）在 Windows 首次全量运行
+183 例失败。定性四类，规则归档如下：
+
+1. **默认 5s 超时太紧（约 120 例，最大族）**：插件缓存 seed/解压、SQLite 批写、真实
+   子进程链路在 Windows 上远慢于 CI Linux。处置：包内新增 `vitest.config.ts` 设
+   `testTimeout/hookTimeout 30_000`（对齐根仓 vitest.config.ts 的负载口径）；单个
+   实测 157s 的批量报表用例（65,536 条 report = 131,072 次同步 SQLite 写）单独放宽
+   到 300s 并注明实测依据。规则：先实测挂点，禁止无依据放数。
+2. **平台语义断言（约 15 例）**：POSIX 路径字面量期望改 `join()/resolve()` 同源构造；
+   POSIX 专属语义（exec 位、fake shebang shell、zsh 选择）`it.skipIf(win32)` 并注明
+   产品分支；guarded 危险命令用例注入确定的 POSIX `resolveInitialBashShellSelection`
+   （Windows 测试进程 shell 解析落 legacy-fallback，匹配器按设计不支持 legacy-shell
+   方言，会让 guarded 落到 YOLO 基线——环境问题而非产品回归）。
+3. **测试隔离（开发机污染）**：本机 `~/.zcode/cli/plugins` 已装官方插件会把
+   `hook_run_*` 事件注册进测试 app。插件存储根经 `os.homedir()` 读**进程级**
+   USERPROFILE/HOME（app 级 env 不生效），用 `vi.stubEnv` 指向临时根并在 finally
+   恢复。规则：跑真实 app 的测试一律隔离 HOME/USERPROFILE。
+4. **上游自带陈旧测试（在上游自身代码上也会失败）**：builtin-release fixture 写
+   `schemaVersion:3` 给只认 `literal(1)` 的解码器、storage-startup 帧（`startup/storageState`
+   迁移进度）被断言为零输出、agent-types reminder 已按现行行为持久化、session-type
+   `other`→`main` 语义等——全部按现行（与上游逐字相同的）产品行为对齐，候选上报上游。
+
+另：EBUSY/ENOTEMPTY 清理统一 `rm({recursive, force, maxRetries: 5, retryDelay: 200})`。
+skill 文档内容断言（dynamic-workflow-skill）按规则 1 在读取处做 CRLF 归一化；
+`workflow-fault-matrix*`（真实多进程链）按根仓 unit/fork-isolated 模式拆为
+`groupOrder=1` 的串行 forks 组，消除全量并发下的 CPU 争用假失败
+（B1/B2/B8a 曾在不同轮次轮流漂移，单文件运行 3/3 稳定）。
+
 ## 已修复的 8 类根因与规则
 
 1. **CRLF（16 用例 / 12 文件）**：新增 `packages/{ui,desktop}/test/readSourceText.ts`

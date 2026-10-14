@@ -59,7 +59,7 @@ describe("resolveTurnOffPeakTaskId", () => {
 
 describe("闲时 turn 清理与当前执行约束共存", () => {
   it.each(["completed", "queued", "rejected", "thrown"])(
-    "%s 不残留 idle 身份，不丢 modelExecution/sharedContextRefs",
+    "%s 不残留 idle 身份，不丢 modelExecution",
     async (outcome) => {
       const completion = Promise.withResolvers<void>();
       const sendInput = vi.fn(async () => {
@@ -80,13 +80,14 @@ describe("闲时 turn 清理与当前执行约束共存", () => {
       const modelExecution = { selectionScope: "execution" } satisfies NonNullable<
         SendInputOptions["modelExecution"]
       >;
-      const sharedContextRefs: NonNullable<SendInputOptions["sharedContextRefs"]> = [];
+      // 社区版口径（PRIVACY-AUDIT §十五）：sharedContextRefs 已随会话分享下线，
+      // startPromptTurn / SendInputOptions 均不再携带；闲时身份清理与 toolDisallowlist
+      // 断言面保持不变。
       const run = startPromptTurn({ getRecord: () => record }, record, {
         content: "p",
         inputId: "input-1",
         offPeakTaskId: "current-id",
         modelExecution,
-        sharedContextRefs,
       });
       if (outcome === "thrown" || outcome === "rejected") {
         await expect(run).rejects.toThrow();
@@ -102,7 +103,6 @@ describe("闲时 turn 清理与当前执行约束共存", () => {
         expect.anything(),
         expect.objectContaining({
           modelExecution,
-          sharedContextRefs,
           offPeakTaskId: "current-id",
           toolDisallowlist: ["OffPeakCreate", "SendMessage", "Workflow"],
         }),

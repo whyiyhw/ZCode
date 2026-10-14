@@ -79,7 +79,7 @@ function resolve(resume: boolean, modelSelection?: ModelSelection, registry = cr
 }
 
 describe("Runtime 创建与未绑定恢复的边界", () => {
-  it("新建空白会话没有 configured default 时保持未绑定，等待显式提交选择", () => {
+  it("新建空白会话没有 configured default 时回落 Registry 首个可见模型的最高档推荐", () => {
     const config = resolveAppRuntimeConfig({
       cliStorageRoot: "/test/cli",
       configResult: createConfig({ env: {}, skipUserConfig: true, workingDirectory: "/test" }),
@@ -87,7 +87,11 @@ describe("Runtime 创建与未绑定恢复的边界", () => {
       subagentOutputRootDir: "/test/agents",
       workingDirectory: "/test",
     });
-    expect(config.runtimeConfig.modelSelection).toBeUndefined();
+    // 根因：当前产品对全新草稿会给出 registry-fallback 初始推荐
+    // （resolveInitialModelSelection：configuredDefault 缺失/失效是可丢弃偏好，
+    // 按 Registry 顺序推荐首个可见模型并补最高推理档）；只有 resume 路径才保持未绑定。
+    // 旧断言“保持未绑定，等待显式提交选择”是历史设计，已与现行为不符。
+    expect(config.runtimeConfig.modelSelection).toEqual(complete);
   });
   it.each([
     undefined,

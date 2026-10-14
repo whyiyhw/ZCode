@@ -56,13 +56,15 @@ describe("App 初始化旧 Subagent 身份", () => {
         }),
       );
       app = await creation;
+      // 现行行为（migrations/0021-official-glm-selection，与上游一致）：旧小写 glm-4.6
+      // 在迁移时规范化为官方大写 GLM-4.6，断言以规范化后的形态为准。
       expect(resolveRuntimeConfig.mock.calls[0]?.[0].subagentProfiles).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             name: "user-legacy",
             modelSelection: {
               providerId: "account:zai-individual-coding-plan",
-              modelId: "glm-4.6",
+              modelId: "GLM-4.6",
               options: { reasoningLevel: "high" },
             },
           }),
@@ -73,6 +75,7 @@ describe("App 初始化旧 Subagent 身份", () => {
           expect.objectContaining({
             name: "legacy",
             modelSelection: {
+              // builtin 系 provider 不在 0021 官方规范化的 account 集合内，保持旧小写 ID。
               providerId: "builtin:zai-coding-plan",
               modelId: "glm-4.6",
               options: { reasoningLevel: "high" },
@@ -83,14 +86,16 @@ describe("App 初始化旧 Subagent 身份", () => {
       expect(await readFile(join(userRoot, "user.md"), "utf8")).toBe(
         markdown
           .replace("name: legacy", "name: user-legacy")
-          .replace("model: builtin:zai-coding-plan", "model: account:zai-individual-coding-plan"),
+          .replace("model: builtin:zai-coding-plan", "model: account:zai-individual-coding-plan")
+          // 0021 迁移随 account provider 规范化一并重写 user.md 的 model 行为官方大写 ID。
+          .replace("glm-4.6", "GLM-4.6"),
       );
       expect(await readFile(file, "utf8")).toBe(markdown);
       expect(
         JSON.parse(await readFile(stateFile, "utf8")).builtInModelSelectionOverrides.Explore,
       ).toEqual({
         providerId: "account:zai-individual-coding-plan",
-        modelId: "glm-4.6",
+        modelId: "GLM-4.6",
         options: { reasoningLevel: "high" },
       });
     } finally {

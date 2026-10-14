@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { join } from "node:path";
 import type { PluginLoadOutcome, PluginMetadata } from "@zcode/contracts";
 import { resolvePluginRuntimeFeatures } from "../src/app/plugin-runtime-features.js";
 import { resolveBuiltInNodeReplMcpServers } from "../src/app/built-in-node-repl.js";
@@ -30,11 +31,13 @@ function outcome(plugins: PluginMetadata[]): Pick<PluginLoadOutcome, "plugins"> 
 
 describe("resolvePluginRuntimeFeatures", () => {
   it("enables browser-use without exposing the legacy core node_repl tools", () => {
+    // 实现侧 browserDocumentationRoot = join(rootPath, "docs")：Windows 上返回反斜杠
+    // （`\tmp\plugin\docs`），期望值用同样的 join 构造，不写死 POSIX 字面量。
     expect(
       resolvePluginRuntimeFeatures(outcome([plugin("browser-use@zcode-plugins-official", true)])),
     ).toEqual({
       browserUse: true,
-      browserDocumentationRoot: "/tmp/plugin/docs",
+      browserDocumentationRoot: join("/tmp/plugin", "docs"),
     });
   });
 
@@ -56,11 +59,13 @@ describe("resolvePluginRuntimeFeatures", () => {
       type: "stdio",
     });
     // 产物来自宿主自己的 root，不再来自 browser-use 的 root。
+    // server 入口由 join(rootPath, "dist/mcp/server.js") 构造，Windows 上返回反斜杠；
+    // 期望值同样用 join 构造（官方包内相对路径保持正斜杠书写，join 只归一根的分隔符）。
     expect(
       enabledServers.node_repl?.type === "stdio"
         ? enabledServers.node_repl.args?.at(-1)
         : undefined,
-    ).toBe("/tmp/host/dist/mcp/server.js");
+    ).toBe(join("/tmp/host", "dist/mcp/server.js"));
     expect(enabledServers.browser_use).toBeUndefined();
   });
 

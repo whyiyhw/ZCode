@@ -789,9 +789,12 @@ async function saveUserTextMessage(
     role: "user",
     time: { created },
     agent: "zcode-agent",
-    model: {
-      providerID: "glm" as ModelProviderId,
-      modelID: "glm-4-air" as ModelId,
+    // 根因：当前存储读取边界只认 user 消息的 modelSelection（camelCase 逻辑选型），
+    // 旧 model:{providerID,modelID} 快照写入仅为旧版 Reader 兼容、读取时被丢弃；
+    // 按当前写入格式播种（无 options = 无档位）。
+    modelSelection: {
+      providerId: "glm",
+      modelId: "glm-4-air",
     },
     tools: {},
   });
@@ -819,8 +822,10 @@ async function saveAssistantTextMessage(
     role: "assistant",
     time: { created, completed: created },
     parentID: parentMessageId,
-    providerID: "glm" as ModelProviderId,
-    modelID: "glm-4-air" as ModelId,
+    // 根因：当前 AssistantMessageInfo 的来源字段是 camelCase providerId/modelId；
+    // 旧 providerID/modelID 顶层字段读取时被丢弃（codecs decodeStoredMessage）。
+    providerId: "glm" as ModelProviderId,
+    modelId: "glm-4-air" as ModelId,
     mode: "build",
     agent: "zcode-agent",
     path: { cwd: WORKSPACE_PATH, root: WORKSPACE_PATH },
@@ -2500,7 +2505,15 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         sessionID: SESSION_ID,
         type: SESSION_ENTRY_MODEL_SELECTION,
         time: { created: 5, updated: 5 },
-        data: { modelId: "glm-4.6", providerId: "glm", thoughtLevel: "deep" },
+        // 根因：当前 entry 读取边界只认逻辑 ModelSelection（options.reasoningLevel），
+        // 旧平铺 thoughtLevel 会被刻意降级为“仅恢复模型身份、不补档位”
+        // （session-store.ts readSessionModelSelection：不借旧 thoughtLevel 补值）；
+        // 旧格式数据的正式转换只发生在版本化 migration 0020。测试按当前写入格式播种。
+        data: {
+          modelId: "glm-4.6",
+          providerId: "glm",
+          options: { reasoningLevel: "deep" },
+        },
       });
     } finally {
       seedStore.close();
@@ -2561,10 +2574,13 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         role: "user",
         time: { created: 1 },
         agent: "zcode-agent",
-        model: {
-          providerID: "glm" as ModelProviderId,
-          modelID: "glm-4-air" as ModelId,
-          variant: "deep",
+        // 根因：旧版读取器把 user 消息的 model:{providerID,modelID,variant} 快照
+        // 当作选型事实；当前存储边界只读 modelSelection（旧快照仅作回滚兼容，读取时丢弃）。
+        // 相邻消息按当前格式携带档位，用于验证会话自身缺档位时不借用它。
+        modelSelection: {
+          providerId: "glm",
+          modelId: "glm-4-air",
+          options: { reasoningLevel: "deep" },
         },
         metadata: { forkOrigin },
         semantics: {
@@ -2621,6 +2637,17 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
         parentSessionId: parentSessionId as SessionId,
         targetMessageId: targetMessageId as MessageId,
         time: { start: 2, end: 2 },
+      });
+      // 根因：当前产品在分叉时为 child 写入 runtime-model-selection entry
+      // （core session-fork buildModelSelectionEntry）；冷恢复的模型身份由该 entry
+      // 提供（create-app restorePersistedModelSelection），不再从消息快照重建。
+      // 缺档位的 entry 恢复为“模型身份 + 空 thought”，不借用相邻消息档位。
+      await seedStore.saveSessionEntry({
+        id: `${legacyForkSessionId}:runtime-model-selection`,
+        sessionID: legacyForkSessionId,
+        type: SESSION_ENTRY_MODEL_SELECTION,
+        time: { created: 2, updated: 2 },
+        data: { modelId: "glm-4-air", providerId: "glm" },
       });
     } finally {
       seedStore.close();
@@ -2713,6 +2740,22 @@ describe("v4 冷恢复（集成：真 sqlite + server + binder）", () => {
   it("重启后冷订阅：旧 transcript 无档位时留空，不读取 task-index 提示", async () => {
     const dbPath = join(tempRoot, "sessions.db");
     await seedPersistedSession(dbPath);
+    // 根因：当前产品不再从消息快照重建会话选型（冷恢复 config 由 runtime 真值收口，
+    // hydration 合成的 ModelSelected 只供 modelChange marker）；旧消息格式的正式转换
+    // 由 migration 0020 落成 runtime-model-selection entry（无档位 entry 保留身份）。
+    // 按迁移后的真实状态播种 entry，验证档位留空且不读取桌面 hint。
+    const seedStore = createSqliteSessionStore({ dbPath });
+    try {
+      await seedStore.saveSessionEntry({
+        id: `${SESSION_ID}:runtime-model-selection`,
+        sessionID: SESSION_ID,
+        type: SESSION_ENTRY_MODEL_SELECTION,
+        time: { created: 5, updated: 5 },
+        data: { modelId: "glm-4-air", providerId: "glm" },
+      });
+    } finally {
+      seedStore.close();
+    }
 
     const { server, close } = bootRealRestartedServer(dbPath);
     try {

@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { arch as readOsArch, release as readOsRelease, tmpdir } from "node:os";
+import { arch as readOsArch, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProviderEndpointRoutingSourceHeaders } from "../src/provider-endpoint-routing-source-headers.js";
@@ -36,20 +36,43 @@ describe("createProviderEndpointRoutingSourceHeaders", () => {
       sourceTitle: "electron",
     });
 
+    // 社区版隐私基线（PRIVACY-AUDIT.md A2）：X-Client-Timezone / X-Os-Version 不属于路由
+    // 配置拉取的服务端契约，默认不外发（仅 serverContract 计费链路携带）；X-Device-Mid
+    // 默认不外发，仅 ZCODE_SEND_DEVICE_MID=true 显式开启时复用已有设备标识。
     expect(headers).toMatchObject({
       "HTTP-Referer": "https://routing-config.example.test",
       "User-Agent": "ZCode/1.2.3",
       "X-Client-Language": expect.any(String),
-      "X-Client-Timezone": expect.any(String),
-      "X-Device-Mid": "mid-routing-1",
       "X-Os-Category": osCategory(process.platform),
-      "X-Os-Version": readOsRelease(),
       "X-Platform": `${process.platform}-${readOsArch()}`,
       "X-Release-Channel": "test",
       "X-Title": "Z Code@electron",
       "X-ZCode-App-Version": "1.2.3",
     });
+    expect(headers).not.toHaveProperty("X-Client-Timezone");
+    expect(headers).not.toHaveProperty("X-Os-Version");
+    expect(headers).not.toHaveProperty("X-Device-Mid");
     expect(headers).not.toHaveProperty("Authorization");
+
+    // ZCODE_SEND_DEVICE_MID=true（官方计费契约确需时的显式开关）下才复用已有 deviceMid；
+    // 开关由 shared 侧 buildZCodeSourceHeadersFromContext 读全局 process.env 判定。
+    const previousFlag = process.env.ZCODE_SEND_DEVICE_MID;
+    process.env.ZCODE_SEND_DEVICE_MID = "true";
+    try {
+      const optedIn = await createProviderEndpointRoutingSourceHeaders({
+        appVersion: "1.2.3",
+        env: {
+          ZCODE_DATA_BASE_DIR: dataBaseDir,
+          ZCODE_ENV: "test",
+          ZCODE_TEST_BASE_URL: "https://routing-config.example.test",
+        },
+        sourceTitle: "electron",
+      });
+      expect(optedIn).toMatchObject({ "X-Device-Mid": "mid-routing-1" });
+    } finally {
+      if (previousFlag === undefined) delete process.env.ZCODE_SEND_DEVICE_MID;
+      else process.env.ZCODE_SEND_DEVICE_MID = previousFlag;
+    }
   });
 
   it("defaults to CLI attribution and does not create a missing device identity", async () => {

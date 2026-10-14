@@ -1554,63 +1554,69 @@ describe("ZCode plugins", () => {
     }
   });
 
-  it("reseeds official plugin cache when hook executable mode changes", async () => {
-    const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-plugin-mode-reseed-"));
-    const entryRoot = join(root, "resources", "glm");
-    const pluginStorageRoot = join(root, "plugins");
-    // 用仍登记的官方插件（skill-creator）做载体；文件全是 fixture 伪造的，
-    // 真实 skill-creator 是否带 hook 无关紧要——seed 逻辑按伪造目录 reseed。
-    const pluginRoot = join(entryRoot, "packages", "skill-creator-plugin");
-    const targetRoot = join(pluginStorageRoot, OFFICIAL_SKILL_CREATOR_PLUGIN_CACHE_PATH);
-    const originalEntrypoint = process.argv[1];
+  // Windows 上 NTFS 不保存 POSIX 执行位（chmod 0o755 后 stat().mode & 0o111 恒为 0），
+  // 「执行位翻转触发 reseed」的断言只对 POSIX 语义成立，跳过 Windows（先例：
+  // packages/desktop/test/desktopMainIpcRemoteOpenExternalFile.test.ts）。
+  it.skipIf(process.platform === "win32")(
+    "reseeds official plugin cache when hook executable mode changes",
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-plugin-mode-reseed-"));
+      const entryRoot = join(root, "resources", "glm");
+      const pluginStorageRoot = join(root, "plugins");
+      // 用仍登记的官方插件（skill-creator）做载体；文件全是 fixture 伪造的，
+      // 真实 skill-creator 是否带 hook 无关紧要——seed 逻辑按伪造目录 reseed。
+      const pluginRoot = join(entryRoot, "packages", "skill-creator-plugin");
+      const targetRoot = join(pluginStorageRoot, OFFICIAL_SKILL_CREATOR_PLUGIN_CACHE_PATH);
+      const originalEntrypoint = process.argv[1];
 
-    try {
-      await writeTestFile(join(entryRoot, "zcode.cjs"), "");
-      await writeTestFile(
-        join(pluginRoot, ".zcode-plugin", "plugin.json"),
-        JSON.stringify({
-          name: "skill-creator",
-          skills: "skills",
-          version: "0.1.0",
-        }),
-      );
-      await writeTestFile(join(pluginRoot, "hooks", "hooks.json"), "{}");
-      await writeExecutableTestFile(
-        join(pluginRoot, "hooks", "run-hook.cmd"),
-        "#!/usr/bin/env bash\n",
-      );
-      await writeTestFile(join(pluginRoot, "skills", "skill-creator", "SKILL.md"), "# skill");
+      try {
+        await writeTestFile(join(entryRoot, "zcode.cjs"), "");
+        await writeTestFile(
+          join(pluginRoot, ".zcode-plugin", "plugin.json"),
+          JSON.stringify({
+            name: "skill-creator",
+            skills: "skills",
+            version: "0.1.0",
+          }),
+        );
+        await writeTestFile(join(pluginRoot, "hooks", "hooks.json"), "{}");
+        await writeExecutableTestFile(
+          join(pluginRoot, "hooks", "run-hook.cmd"),
+          "#!/usr/bin/env bash\n",
+        );
+        await writeTestFile(join(pluginRoot, "skills", "skill-creator", "SKILL.md"), "# skill");
 
-      const seedFiles = await hashFixtureSeedFiles(pluginRoot, [
-        ".zcode-plugin/plugin.json",
-        "hooks/hooks.json",
-        "hooks/run-hook.cmd",
-        "skills/skill-creator/SKILL.md",
-      ]);
-      await writeTestFile(join(targetRoot, ".zcode-plugin", "plugin.json"), "{}");
-      await writeTestFile(join(targetRoot, "hooks", "run-hook.cmd"), "#!/usr/bin/env bash\n");
-      await writeTestFile(
-        join(targetRoot, ".zcode-plugin-seed.json"),
-        JSON.stringify({
-          hash: hashText(JSON.stringify(seedFiles.map(({ path, sha256 }) => [path, sha256]))),
-          marketplace: "zcode-plugins-official",
-          plugin: "skill-creator",
-          pluginVersion: "0.1.0",
-          source: "filesystem",
-          version: 1,
-        }),
-      );
-      expect((await stat(join(targetRoot, "hooks", "run-hook.cmd"))).mode & 0o111).toBe(0);
+        const seedFiles = await hashFixtureSeedFiles(pluginRoot, [
+          ".zcode-plugin/plugin.json",
+          "hooks/hooks.json",
+          "hooks/run-hook.cmd",
+          "skills/skill-creator/SKILL.md",
+        ]);
+        await writeTestFile(join(targetRoot, ".zcode-plugin", "plugin.json"), "{}");
+        await writeTestFile(join(targetRoot, "hooks", "run-hook.cmd"), "#!/usr/bin/env bash\n");
+        await writeTestFile(
+          join(targetRoot, ".zcode-plugin-seed.json"),
+          JSON.stringify({
+            hash: hashText(JSON.stringify(seedFiles.map(({ path, sha256 }) => [path, sha256]))),
+            marketplace: "zcode-plugins-official",
+            plugin: "skill-creator",
+            pluginVersion: "0.1.0",
+            source: "filesystem",
+            version: 1,
+          }),
+        );
+        expect((await stat(join(targetRoot, "hooks", "run-hook.cmd"))).mode & 0o111).toBe(0);
 
-      process.argv[1] = join(entryRoot, "zcode.cjs");
-      resolveOfficialPluginRoots({ storageRoot: pluginStorageRoot });
+        process.argv[1] = join(entryRoot, "zcode.cjs");
+        resolveOfficialPluginRoots({ storageRoot: pluginStorageRoot });
 
-      expect((await stat(join(targetRoot, "hooks", "run-hook.cmd"))).mode & 0o111).not.toBe(0);
-    } finally {
-      process.argv[1] = originalEntrypoint;
-      await rm(root, { force: true, recursive: true });
-    }
-  });
+        expect((await stat(join(targetRoot, "hooks", "run-hook.cmd"))).mode & 0o111).not.toBe(0);
+      } finally {
+        process.argv[1] = originalEntrypoint;
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   it("projects restore legacy sessions skills and commands only when enabled", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-bootstrap-restore-plugin-enabled-"));

@@ -18,6 +18,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import type {
   ExecutionPort,
   ExecutionRequest,
@@ -750,7 +751,10 @@ describe("files.glob world read", () => {
   it("maps the port's mtime-ordered absolute paths to lexicographic workspace-relative", async () => {
     const { driver, globRequests } = makeDriver({
       // 端口按 mtime 降序、绝对/相对混合（真适配器给绝对路径；形状归一是 driver 的事）。
-      glob: ["/ws/src/z.ts", "/ws/a.ts", "src/m.ts"],
+      // 绝对路径假数据用 resolve 构造：Windows 上真端口给 `D:\ws\...` 这类宿主风格绝对路径，
+      // 写死 `/ws/...` 字面量时驱动的 win32 resolve/relative 认不出它在工作区内，相对化会被跳过。
+      // driver 侧输出承诺统一为 `/` 分隔，所以期望值仍是 POSIX 风格的字面量。
+      glob: [resolve(CWD, "src/z.ts"), resolve(CWD, "a.ts"), "src/m.ts"],
     });
     await expect(driver.executeWorldRead("glob", ["**/*.ts"])).resolves.toEqual([
       "a.ts",
@@ -800,11 +804,13 @@ describe("files.glob world read", () => {
 describe("files.grep world read", () => {
   it("maps port entries to workspace-relative {path, line, text}", async () => {
     const { driver, grepRequests } = makeDriver({
+      // 绝对路径条目用 resolve 构造（同 files.glob 用例）：Windows 端口产出宿主风格绝对路径，
+      // POSIX 字面量 `/ws/...` 不会被驱动的 win32 路径相对化识别。
       grep: [
-        { path: "/ws/src/a.ts", lineNumber: 12, text: "// TODO: fix" },
+        { path: resolve(CWD, "src/a.ts"), lineNumber: 12, text: "// TODO: fix" },
         { path: "src/b.ts", lineNumber: 3, text: "// TODO: later" },
         // 端口在别的 outputMode 下会产出没有行号的条目；那不是一条内容命中。
-        { path: "/ws/src/c.ts", count: 4 },
+        { path: resolve(CWD, "src/c.ts"), count: 4 },
       ],
     });
     await expect(driver.executeWorldRead("grep", ["TODO", "*.ts"])).resolves.toEqual([
@@ -931,7 +937,9 @@ describe("files.read — workspace containment", () => {
   it("resolves a legitimate nested path against the workspace", async () => {
     const { driver, readPaths } = makeDriver({});
     await expect(driver.executeWorldRead("read", ["sub/nested/a.ts"])).resolves.toBe("body");
-    expect(readPaths).toEqual([`${CWD}/sub/nested/a.ts`]);
+    // driver 用宿主 resolve 把相对路径解析成绝对路径（Windows 上带盘符与反斜杠），
+    // 期望值必须同样用 resolve 构造，不能拼 `${CWD}/...` 字面量。
+    expect(readPaths).toEqual([resolve(CWD, "sub/nested/a.ts")]);
   });
 
   it("rejects a path that escapes the workspace with ..", async () => {

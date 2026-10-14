@@ -324,8 +324,14 @@ describe("script workflow runtime", () => {
       const childSession = await store.getSession(activities[0]!.childSessionId!);
       expect(childSession?.taskType).toBe("workflow_child");
       const providerText = requestTexts.join("\n");
-      expect(providerText).toContain("- Shell: zsh");
-      expect(providerText).not.toContain("- Shell: fish");
+      // 「在 PATH 上放一个可执行 zsh、压过 SHELL=fish」钉的是 POSIX shell 选择语义
+      // （bash-shell-provider 的 posix 分支按 PATH 扫描 zsh/bash）。Windows 走 Git Bash/CMD
+      // 解析分支，伪造的 zsh 脚本既无 exec 位也无 .exe 后缀，无法被选中，此断言在 Windows 上
+      // 不可表达；本用例主体（子会话先持久化再关联 activity）与平台无关，保持执行。
+      if (process.platform !== "win32") {
+        expect(providerText).toContain("- Shell: zsh");
+        expect(providerText).not.toContain("- Shell: fish");
+      }
     } finally {
       store.close();
       await rm(tempRoot, { force: true, recursive: true });

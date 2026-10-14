@@ -133,7 +133,11 @@ describe("project MCP config", () => {
         ["plugin:ios-dev:ios-simulator", "node_repl"],
       ]);
       expect(connectedConfigs[0]?.["plugin:ios-dev:ios-simulator"]).toMatchObject({
-        args: [join(pluginRoot, "server.js")],
+        // 根因：${ZCODE_PLUGIN_ROOT} 是字面量模板替换（plugins/mcp.ts resolveTemplate），
+        // 模板里 "/server.js" 的正斜杠原样保留；Windows 上结果是混合分隔符路径
+        // （...\\ios-plugin/server.js），与 join() 的全反斜杠不一致。上游 CI 只在
+        // POSIX 上运行所以两者恰好相等，本机 Windows 暴露了这一差异。按实际替换结果断言。
+        args: [`${pluginRoot}/server.js`],
         command: "node",
         type: "stdio",
       });

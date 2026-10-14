@@ -23,7 +23,8 @@ const intent: TurnInputIntentMetadata = {
   admittedDelivery: "queue",
   queuePosition: 0,
   attachmentRefs: [{ ref: "artifact://note", fileName: "note.txt", mime: "text/plain", bytes: 3 }],
-  sharedContextRefs: [{ kind: "shared_context_import", context_id: "shared-context" }],
+  // 社区版口径（PRIVACY-AUDIT §十五）：sharedContextRefs 已随会话分享下线
+  //（src/zcode-protocol-v4/commands/input-intent.ts 同步裁剪），往返不再携带。
   provenance: {
     sourceCommandId: "original-command",
     queueItemId: "original-queue",

@@ -73,7 +73,9 @@ function stripFacadeBlock(text: string): string {
 }
 
 async function readSkillFile(name: string): Promise<string> {
-  return readFile(join(SKILL_DIR, name), "utf8");
+  // Windows 兼容（docs/windows-test-compatibility 规则 1）：core.autocrlf=true 下工作区
+  // 文本为 CRLF，而本文件的全部内容断言按 LF 字面量书写，读取后统一归一化。
+  return readFile(join(SKILL_DIR, name), "utf8").then((text) => text.replace(/\r\n/g, "\n"));
 }
 
 async function readAllContent(): Promise<{ name: string; text: string }[]> {

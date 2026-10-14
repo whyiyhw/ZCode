@@ -341,7 +341,9 @@ describe("a run that reported 65,536 items", () => {
 
     // 快照 256 + 冷回放 64 + GetWorkflowRun 64；产物清单与修订导入一条不读。
     expect(counted.items()).toBe(256 + 64 + 64);
-  }, 120_000);
+    // 65,536 条 report = 131,072 次同步 SQLite 写（putNode + appendEvent 各一），Windows 本地
+    // 磁盘实测 ~157s（稳态插入、非死锁），上游 120s 上限在 Windows 造成假失败；按实测两倍余量放宽。
+  }, 300_000);
 });
 
 describe("report item size: 1 MiB items stay out of JavaScript except where they are shown", () => {

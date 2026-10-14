@@ -49,7 +49,11 @@ function createFixture(
       access: options.access ?? { type: "api-key", apiKey: "fixture-key" },
       api: {
         type: apiType,
-        baseUrl: options.baseUrl ?? "https://provider.example.test/v1",
+        // 社区版隐私基线（PRIVACY-AUDIT.md A4/A5）：客户端指纹头（版本、渠道、语言、
+        // 平台、X-ZCode-Agent、HTTP-Referer 等）仅对官方端点放行；默认 baseUrl 走官方
+        // 端点验证完整归因集，第三方端点的收紧行为由下方专项用例覆盖。
+        baseUrl:
+          options.baseUrl ?? "https://open.bigmodel.cn/api/paas/v4",
         ...(options.headers ? { headers: options.headers } : {}),
       },
     }),
@@ -191,14 +195,12 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
         expect(headers.get("http-referer")).toBe("https://zcode.z.ai");
         expect(headers.get("x-zcode-agent")).toBe("glm");
         expect(headers.get("x-release-channel")).toBe("production");
-        for (const key of [
-          "x-client-language",
-          "x-client-timezone",
-          "x-platform",
-          "x-os-category",
-          "x-os-version",
-        ])
+        // 社区版隐私基线（PRIVACY-AUDIT.md A4）：X-Client-Timezone / X-Os-Version 不外发
+        //（时区在 CLI 模型链路已移除，OS 内核版本仅保留平台/架构类别）。
+        for (const key of ["x-client-language", "x-platform", "x-os-category"])
           expect(headers.get(key)).toBeTruthy();
+        expect(headers.get("x-client-timezone")).toBe(null);
+        expect(headers.get("x-os-version")).toBe(null);
         expect(headers.get("authorization")).toBe("Bearer fixture-key");
         expect(headers.has("x-device-mid")).toBe(false);
         expect(headers.has("x-openrouter-title")).toBe(false);
@@ -206,6 +208,30 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
       });
     }
   }
+
+  it("第三方 provider 端点只保留最简 User-Agent，不泄露客户端指纹", async () => {
+    // 社区版隐私基线（PRIVACY-AUDIT.md A4/A5）：adapters 侧 model-source-header-policy
+    // 按端点放行指纹头，非官方端点仅剩 User-Agent（openrouter 归因头属用户可见的
+    // 显式归因，不在收紧范围）。
+    const { model, requests } = createFixture({ baseUrl: "https://provider.example.test/v1" });
+    await model.generateText(requestInput);
+    expect(requests).toHaveLength(1);
+    const headers = requests[0]!.headers;
+    expect(headers.get("user-agent")).toContain(`ZCode/${CLIENT_VERSION}`);
+    for (const key of [
+      "x-zcode-app-version",
+      "x-title",
+      "x-zcode-agent",
+      "x-release-channel",
+      "x-client-language",
+      "x-client-timezone",
+      "x-platform",
+      "x-os-category",
+      "x-os-version",
+      "x-device-mid",
+    ])
+      expect(headers.get(key)).toBe(null);
+  });
 
   it.each([
     ["https://openrouter.ai/api/v1", true],
@@ -263,7 +289,7 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
     expect(requests[0]!.headers.get("x-title")).toBe(`Z Code@${options.sourceTitle}`);
   });
 
-  it("真实 Runtime 标题 sidecar 沿公共工厂携带版本、other 类型和会话追踪", async () => {
+  it("真实 Runtime 标题 sidecar 沿公共工厂携带版本、宿主会话类型和会话追踪", async () => {
     const { model, requests } = createFixture();
     const sessionId = createSessionId("header-title-session");
     const updateSession = vi.fn(async (input) => input);
@@ -302,7 +328,10 @@ describe("模型请求默认 Header：Bootstrap → Adapter → 真实 SDK", () 
     );
     expect(requests).toHaveLength(1);
     expect(requests[0]!.headers.get("x-zcode-app-version")).toBe(CLIENT_VERSION);
-    expect(requests[0]!.headers.get("x-zcode-session-type")).toBe("other");
+    // v3.15.1 语义（core/src/runtime/methods/runtime-model.ts）：标题、Memory、工具调用不再
+    // 按用途覆写 other，会话类型统一绑定在句柄上并保留宿主分类——interactive 主会话的
+    // 标题 sidecar 请求归因为 main。上游随 v3.15.1 合入的旧断言仍写 other，属过期期望。
+    expect(requests[0]!.headers.get("x-zcode-session-type")).toBe("main");
     // 既有请求归因会去掉内部 sess_ 前缀；本次不改变服务端看到的会话身份格式。
     expect(requests[0]!.headers.get("x-session-id")).toBe("header-title-session");
     expect(requests[0]!.headers.get("x-zcode-trace-id")).toBeTruthy();

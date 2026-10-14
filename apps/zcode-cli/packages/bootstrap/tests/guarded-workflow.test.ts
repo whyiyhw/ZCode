@@ -36,6 +36,16 @@ describe("guarded workflow runtime ingress", () => {
       let sent = false;
       const app = await createRegistryBackedTestApp({
         env: { ZCODE_HOME: root },
+        // Windows 测试进程的 shell 解析会落到 legacy-fallback（dialect=legacy-shell），
+        // dangerous-command 匹配器按设计不支持该方言（语法不可可靠解析），guarded 会因此
+        // 落到 YOLO 基线放行。注入确定的 POSIX shell 选择，使 rm -rf 命中
+        // safety.bash.remove-critical-path → userApprovalRule → user-once 审批链
+        // （与 guarded-interaction-lifecycle.test.ts 的 executor 级注入同口径）。
+        resolveInitialBashShellSelection: async () => ({
+          dialect: "posix",
+          source: "auto-detected",
+          display: { name: "bash" },
+        }),
         skipUserConfig: true,
         sessionStore: store,
         providerRegistry: createTestProviderRegistry([selection]),

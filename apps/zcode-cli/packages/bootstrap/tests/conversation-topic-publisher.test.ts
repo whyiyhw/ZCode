@@ -135,21 +135,9 @@ function clientApply(
   store.seq = frame.toSeq;
 }
 
-describe("分享导入来源种子", () => {
-  it("在 publisher 快照中保留来源提示且不产生 conversation delta", () => {
-    const publisher = new ConversationTopicPublisher("session-1", "epoch-1");
-    const before = publisher.getSnapshot();
-
-    publisher.seedSharedContextImport({ title: "导入的分享" });
-
-    const snapshot = publisher.getSnapshot();
-    expect(snapshot.sharedContextImport).toEqual({ title: "导入的分享" });
-    expect(snapshot.revision).toBe(before.revision);
-    expect(snapshot.seq).toBe(before.seq);
-    expect(snapshot.rows.window).toEqual([]);
-  });
-});
-
+// 社区版口径（PRIVACY-AUDIT §十五）：分享导入链（seedSharedContextImport /
+// snapshot.sharedContextImport）未随上游 v3.15.1 采纳，对应种子用例移除；
+// schema 兼容分支另行由 shared 协议侧覆盖。
 describe("subscribe(base) 裁决矩阵", () => {
   function publisherWith(events: readonly SessionEvent[], retention?: number) {
     const publisher = new ConversationTopicPublisher("session-1", "epoch-1", {

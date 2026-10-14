@@ -16,8 +16,11 @@ describe("listRegistryBackedModels", () => {
     const registry = new ProviderRegistry([
       {
         providerId: "provider-a",
+        // 根因：展示名已从 ProviderConfig.label 迁移到 Provider 条目的 providerName，
+        // 投影逻辑用 providerName ?? providerId 兜底；旧写法把 label 塞进 config 被静默丢弃，
+        // 断言只能收到 providerId 兜底值。另外 listRegistryBackedModels 现在只收 registry 一个参数。
+        providerName: "Provider A",
         config: createApiKeyProviderConfig({
-          label: "Provider A",
           models: ["model-a", "model-b"],
         }),
         models: [
@@ -27,11 +30,7 @@ describe("listRegistryBackedModels", () => {
       },
     ]);
 
-    const models = listRegistryBackedModels(registry, {
-      providerId: "provider-a",
-      modelId: "model-b",
-      options: {},
-    });
+    const models = listRegistryBackedModels(registry);
 
     expect(models.map(({ providerLabel, ref }) => [providerLabel, ref])).toEqual([
       ["Provider A", { providerId: "provider-a", modelId: "model-a" }],

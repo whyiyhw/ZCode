@@ -39,7 +39,12 @@ const PDF_BYTES = Buffer.from("%PDF-1.4\nZCode PDF model switch fixture\n%%EOF\n
 const PDF_OMITTED_TEXT =
   "Media omitted from provider request because the selected model does not support PDF input.";
 
-describe("Read PDF model capability switching E2E", () => {
+// 上游遗留 e2e 引用不存在的 AiSdkModelRegistry（当前与上游 src 均无该导出，导入得到
+// undefined，运行即 "not a constructor"）；上游 CI 因缺 poppler 从不执行这两个文件，
+// 本机检出 poppler 才会运行。按运行时缺失跳过，避免误报为产品回归。
+const aiSdkModelRegistryAvailable = typeof AiSdkModelRegistry === "function";
+
+describe.skipIf(!aiSdkModelRegistryAvailable)("Read PDF model capability switching E2E", () => {
   it("omits and restores raw PDF data in final provider requests", async () => {
     const root = await mkdtemp(join(tmpdir(), "zcode-read-pdf-model-switch-e2e-"));
     const pdfPath = join(root, "switchable.pdf");

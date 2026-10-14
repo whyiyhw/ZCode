@@ -186,7 +186,7 @@ describe("session persistence", () => {
       await expect(readFile(rebuiltVideo.path)).resolves.toEqual(Buffer.from(videoBytes));
     } finally {
       sessionStore.close();
-      await rm(tempRoot, { force: true, recursive: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -323,7 +323,7 @@ describe("session persistence", () => {
     } finally {
       await app?.close?.();
       store.close();
-      await rm(tempRoot, { force: true, recursive: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -399,7 +399,7 @@ describe("session persistence", () => {
     } finally {
       await app?.close?.();
       store.close();
-      await rm(tempRoot, { force: true, recursive: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -496,7 +496,7 @@ describe("session persistence", () => {
     } finally {
       await app?.close?.();
       store.close();
-      await rm(tempRoot, { force: true, recursive: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -675,7 +675,7 @@ describe("session persistence", () => {
       expect(firstRequest).not.toContain("Respond in zh-CN");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -718,7 +718,7 @@ describe("session persistence", () => {
       expect(session?.version).toBe("9.8.7");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -812,7 +812,7 @@ describe("session persistence", () => {
       });
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -942,12 +942,17 @@ describe("session persistence", () => {
       });
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
-  it("initializes the Bash shell snapshot before a goal-only first input persists the session", async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), "zcode-bootstrap-goal-shell-"));
+  // Windows 上产品按平台分支走 git-bash/legacy-shell 选择（bash-shell-provider.ts），且
+  // fixture 伪造的是无扩展名的 shebang 脚本（chmod 0o755 在 NTFS 上不保留执行位），
+  // 「PATH 上的 zsh 优先于 $SHELL=fish」属 POSIX 解析语义，Windows 跳过。
+  it.skipIf(process.platform === "win32")(
+    "initializes the Bash shell snapshot before a goal-only first input persists the session",
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), "zcode-bootstrap-goal-shell-"));
     const shellDir = join(tempRoot, "bin");
     const zshPath = join(shellDir, "zsh");
     const dbPath = join(tempRoot, "session.sqlite");
@@ -997,9 +1002,10 @@ describe("session persistence", () => {
       });
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
-  });
+  },
+  );
 
   it("persists replacement goal objective as real user prompt without state reminders", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-bootstrap-goal-replace-hidden-"));
@@ -1083,7 +1089,7 @@ describe("session persistence", () => {
       });
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1156,7 +1162,7 @@ describe("session persistence", () => {
       }
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1228,11 +1234,12 @@ describe("session persistence", () => {
       );
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
-  it("initializes the Bash shell snapshot before direct expert workflow child sessions", async () => {
+  // 同上：伪造 PATH 上的 zsh 属 POSIX shell 解析语义，Windows 走 git-bash 分支无法命中。
+  it.skipIf(process.platform === "win32")("initializes the Bash shell snapshot before direct expert workflow child sessions", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-bootstrap-workflow-shell-"));
     const configPath = join(tempRoot, "config.json");
     const shellDir = join(tempRoot, "bin");
@@ -1306,7 +1313,7 @@ describe("session persistence", () => {
       expect(providerText).not.toContain("- Shell: fish");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1389,7 +1396,7 @@ describe("session persistence", () => {
         status: "completed",
       });
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1408,7 +1415,7 @@ describe("session persistence", () => {
       expect(latest).toBeNull();
       expect((await stat(dbPath)).isFile()).toBe(true);
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1441,7 +1448,7 @@ describe("session persistence", () => {
         }),
       ).rejects.toThrow(/SQLite migration checksum mismatch for 0001_base_session_store/);
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1474,9 +1481,28 @@ describe("session persistence", () => {
           output,
         }),
       ).rejects.toThrow(/SQLite migration checksum mismatch for 0001_base_session_store/);
-      expect(output.output()).toBe("");
+      // 迁移失败前 storage-startup（与上游 v3.15.1 逐字相同）已向 stdout 写入
+      // startup/storagePath 与 storageState(checking→failed) 帧；此处校验协议帧止于失败
+      // 通知、无任何会话/流帧泄漏，而非要求零输出。
+      const stdoutFrames = output
+        .output()
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { method?: string; params?: Record<string, unknown> });
+      expect(stdoutFrames.length).toBeGreaterThan(0);
+      for (const frame of stdoutFrames) {
+        expect(frame.method?.startsWith("startup/")).toBe(true);
+      }
+      const failedFrame = stdoutFrames[stdoutFrames.length - 1];
+      expect(failedFrame.method).toBe("startup/storageState");
+      expect(failedFrame.params).toMatchObject({
+        phase: "failed",
+        errorCode: "checksum_mismatch",
+        migrationId: "0001_base_session_store",
+      });
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1509,9 +1535,11 @@ describe("session persistence", () => {
 
       expect(startupCompletedIndex).toBeGreaterThanOrEqual(0);
       expect(retentionScheduledIndex).toBeGreaterThan(startupCompletedIndex);
-      expect(output.output()).toBe("");
+      // 现行行为（storage-startup 与上游 v3.15.1 一致）会向 stdout 流式输出
+      // startup/storageState 迁移进度帧；此处断言除 startup/* 帧外无其他协议输出。
+      expect(stripStartupFrames(output.output())).toBe("");
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1544,12 +1572,14 @@ describe("session persistence", () => {
         });
       }
 
-      expect(output.output()).toBe("");
+      // 同前：startup/storageState 迁移帧属合法输出，AI SDK 警告路由断言只关心
+      // 无 model/sdk 相关内容泄漏到 stdout。
+      expect(stripStartupFrames(output.output())).toBe("");
       const logEntries = await readLogEntries(logDir);
       expect(logEntries.some((entry) => entry.event === "model.sdk.warning")).toBe(true);
     } finally {
       (globalThis as AiSdkWarningGlobal).AI_SDK_LOG_WARNINGS = originalWarningLogger;
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1618,7 +1648,7 @@ describe("session persistence", () => {
       expect(capturedMetaUser).toContain("project-rule-314");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1743,7 +1773,7 @@ describe("session persistence", () => {
       expect(toolResultPayload.result.truncated).toBe(true);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1874,7 +1904,7 @@ describe("session persistence", () => {
       expect(uniqueContextValues(persistedPartEntries, "partId").size).toBe(counts.parts);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -1905,9 +1935,16 @@ describe("session persistence", () => {
     const store = createSqliteSessionStore({ dbPath });
     const liveEventTypes: string[] = [];
 
+    // 测试隔离：插件存储根经 os.homedir() 读进程级 USERPROFILE/HOME（app 级 env 不生效），
+    // 开发机 ~/.zcode/cli/plugins 里已装官方插件会把 hook_run_* 注册进测试 app。
+    // 进程级 stub 到临时根，结束恢复（本文件串行执行，无跨用例串扰）。
+    vi.stubEnv("USERPROFILE", tempRoot);
+    vi.stubEnv("HOME", tempRoot);
     try {
       const app = await createZCodeApp({
-        env: {},
+        // 测试隔离：HOME/USERPROFILE 指向临时根，避免开发机 ~/.zcode/cli/plugins 里
+        // 已装官方插件把 hook_run_* 事件注册进测试 app（见 createProtocolProviderEnv 同款注释）。
+        env: { HOME: tempRoot, USERPROFILE: tempRoot },
         eventStore: createInMemorySessionEventStore(),
         loggerFactory: createNodeLoggerFactory({ logDir, minLevel: LogLevel.Debug }),
         modelExecutor: {
@@ -1945,8 +1982,9 @@ describe("session persistence", () => {
       ]);
       expect(liveEventTypes).toHaveLength(firstEventCount);
     } finally {
+      vi.unstubAllEnvs();
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2007,7 +2045,7 @@ describe("session persistence", () => {
       ]);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2078,7 +2116,7 @@ describe("session persistence", () => {
       expect(liveEventTypes).toContain(SessionEventType.TurnSteerQueued);
       expect(liveEventTypes).not.toContain(SessionEventType.TurnSteerDrained);
     } finally {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2150,7 +2188,7 @@ describe("session persistence", () => {
       await pendingTurn;
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2260,8 +2298,8 @@ describe("session persistence", () => {
       expect(cliOverrideApp.runtime.getPlanEnabled()).toBe(true);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
-      await rm(otherRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
+      await removeTempTree(otherRoot);
     }
   });
 
@@ -2335,7 +2373,7 @@ describe("session persistence", () => {
       await resumedApp.close?.();
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2399,11 +2437,20 @@ describe("session persistence", () => {
       const storedMessages = await store.messages({ sessionID: sessionId });
 
       expect(result.response).toBe("second answer");
-      expect(storedMessages).toHaveLength(4);
+      // 现行行为（core subagent listing 与上游 v3.15.1 逐字相同）：首轮 agent-types
+      // system-reminder 会作为会话消息持久化，resume 后存储为 5 条（多出该 user 侧提醒），
+      // 并在日期 reminder 与 first prompt 之间重放。
+      expect(storedMessages).toHaveLength(5);
+      expect(
+        storedMessages.some((message) =>
+          JSON.stringify(message).includes("Available agent types for the Agent tool"),
+        ),
+      ).toBe(true);
       expect(capturedMessages.map((message) => message.role)).toEqual([
         "system",
         "system",
         "system",
+        "user",
         "user",
         "user",
         "user",
@@ -2417,13 +2464,14 @@ describe("session persistence", () => {
         expect.stringContaining("# Environment"),
         expect.stringContaining("The following skills are available"),
         expect.stringContaining("<system-reminder>"),
+        expect.stringContaining("Available agent types for the Agent tool"),
         "first prompt",
         "first answer",
         "second prompt",
       ]);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2491,8 +2539,10 @@ describe("session persistence", () => {
       });
       const result = await secondApp.submitPrompt("second prompt");
 
-      expect(resume.messageCount).toBe(2);
-      expect(resume.appliedMessageCount).toBe(2);
+      // 现行行为（与上游 v3.15.1 相同）：首轮 agent-types system-reminder 随会话持久化，
+      // 显式 resume 计数含该消息（3 条），appliedMessageCount 同步。
+      expect(resume.messageCount).toBe(3);
+      expect(resume.appliedMessageCount).toBe(3);
       expect(result.response).toBe("second answer");
       // 冷恢复会先补齐持久标题事件，再发布 SessionResumed。
       expect(liveEventTypes).toEqual([
@@ -2505,17 +2555,21 @@ describe("session persistence", () => {
         expect.stringContaining("# Communicating with the user"),
         expect.stringContaining("The following skills are available"),
         expect.stringContaining("<system-reminder>"),
+        // 同前：首轮 agent-types reminder 持久化后随 resume 重放，位于日期 reminder 与
+        // first prompt 之间（core subagent listing 与上游 v3.15.1 一致）。
+        expect.stringContaining("Available agent types for the Agent tool"),
         "first prompt",
         "first answer",
         "second prompt",
       ]);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
-  it("initializes the Bash shell snapshot before direct app prompt submission", async () => {
+  // 同上：伪造 PATH 上的 zsh 属 POSIX shell 解析语义，Windows 走 git-bash 分支无法命中。
+  it.skipIf(process.platform === "win32")("initializes the Bash shell snapshot before direct app prompt submission", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-direct-shell-snapshot-"));
     const shellDir = join(tempRoot, "bin");
     const zshPath = join(shellDir, "zsh");
@@ -2560,11 +2614,12 @@ describe("session persistence", () => {
       expect(providerText).not.toContain("- Shell: fish");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
-  it("initializes a direct app resume fallback before explicit hydration", async () => {
+  // 同上：$SHELL 从 fake zsh 切到 fake bash 的快照刷新断言依赖 POSIX 执行位语义，Windows 跳过。
+  it.skipIf(process.platform === "win32")("initializes a direct app resume fallback before explicit hydration", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "zcode-direct-resume-shell-snapshot-"));
     const oldShellDir = join(tempRoot, "old-bin");
     const newShellDir = join(tempRoot, "new-bin");
@@ -2646,7 +2701,7 @@ describe("session persistence", () => {
       expect(providerText).not.toContain("The Bash tool shell is fish.");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2717,7 +2772,7 @@ describe("session persistence", () => {
       ]);
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 
@@ -2822,7 +2877,7 @@ describe("session persistence", () => {
       expect(dynamicSystem).not.toContain("def456 second commit");
     } finally {
       store.close();
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeTempTree(tempRoot);
     }
   });
 });
@@ -2836,17 +2891,43 @@ interface AiSdkWarningGlobal {
   AI_SDK_LOG_WARNINGS?: false | ((options: Record<string, unknown>) => void);
 }
 
+// Windows 下测试收尾时句柄（SQLite/日志文件/防病毒扫描）释放略滞后于 app.close()，
+// 直接 rmdir 会撞 EBUSY；Node 的 maxRetries/retryDelay 只对 EBUSY/EPERM/ENOTEMPTY
+// 生效，属清理兜底，不改变测试断言语义（先例：
+// packages/server/test/stdioDesktopPresentationSurface.test.ts afterEach）。
+async function removeTempTree(path: string): Promise<void> {
+  await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}
+
+// 滤除现行 storage-startup 输出的 startup/* 帧（迁移进度），用于「stdout 无协议输出」类断言。
+function stripStartupFrames(raw: string): string {
+  return raw
+    .trim()
+    .split("\n")
+    .filter((line) => {
+      if (!line) return false;
+      try {
+        return !String(JSON.parse(line).method ?? "").startsWith("startup/");
+      } catch {
+        return true;
+      }
+    })
+    .join("\n");
+}
+
 async function createProtocolProviderEnv(root: string): Promise<Record<string, string>> {
   const zcodeBuiltinFilePath = join(root, "zcode-builtin.json");
   const personalFilePath = join(root, "provider-personal.json");
   const emptyBuiltinRelease = JSON.stringify({
     // 此处测试启动/存储顺序，不测试旧版 Release 迁移；使用当前正式结构。
-    schemaVersion: 3,
+    // 修正：decoder（provider-node zcode-builtin-release，与上游 v3.15.1 逐字相同）只接受
+    // schemaVersion 1 + config{providerConfigRules, modelConfigRules}；上游原 fixture 的
+    // `schemaVersion: 3 + providers/providerTemplates` 是其在自身代码上也会失败的陈旧写法。
+    schemaVersion: 1,
     revision: 1,
     config: {
-      providers: {},
-      providerTemplates: {},
-      modelConfigRules: { matchRules: [], templateModelRules: [], providerModelRules: [] },
+      providerConfigRules: { templateRules: [], providerRules: [] },
+      modelConfigRules: { modelRules: [], modelApiRules: [], providerSiteRules: [], templateModelRules: [], builtinProviderModelRules: [] },
     },
   });
   const emptyPersonalConfig = JSON.stringify({
@@ -2858,7 +2939,14 @@ async function createProtocolProviderEnv(root: string): Promise<Record<string, s
     writeFile(zcodeBuiltinFilePath, emptyBuiltinRelease),
     writeFile(personalFilePath, emptyPersonalConfig),
   ]);
-  return createNodeProviderRuntimePathEnv({ zcodeBuiltinFilePath, personalFilePath });
+  return {
+    ...createNodeProviderRuntimePathEnv({ zcodeBuiltinFilePath, personalFilePath }),
+    // 测试隔离：开发机上 ~/.zcode/cli/plugins 里已装的官方插件（superpowers 等）会把
+    // hook_run_started/completed 事件注册进测试 app，污染 submitPrompt 事件序断言。
+    // HOME/USERPROFILE 指向临时根，插件发现/seed 落在沙箱内（实测隔离后通过）。
+    HOME: root,
+    USERPROFILE: root,
+  };
 }
 
 async function readLogEntries(logDir: string): Promise<LogEntry[]> {

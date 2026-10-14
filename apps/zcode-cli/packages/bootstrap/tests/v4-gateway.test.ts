@@ -323,241 +323,10 @@ describe("订阅与帧调度", () => {
     expect(JSON.stringify(host.telemetryFacts)).not.toContain("不可进入 fact 的正文");
   });
 
-  it.each([
-    {
-      detailKind: "command",
-      toolName: "Bash",
-      perf: {
-        totalMs: 130,
-        permissionWaitMs: 20,
-        detail: {
-          kind: "command",
-          command: {
-            runMs: 100,
-            firstOutputMs: 10,
-            noOutputMs: 0,
-            exitCode: 0,
-            timedOut: false,
-            outputBytes: 64,
-            category: "git",
-            name: "git",
-            count: 1,
-            status: "completed",
-            hash: "0123456789abcdef",
-          },
-        },
-      },
-      expected: {
-        totalMs: 130,
-        permissionWaitMs: 20,
-        commandRunMs: 100,
-        firstOutputMs: 10,
-        noOutputMs: 0,
-        exitCode: 0,
-        timedOut: false,
-        outputBytes: 64,
-        commandCategory: "git",
-        commandName: "git",
-        commandCount: 1,
-        commandStatus: "completed",
-      },
-    },
-    {
-      detailKind: "filesystem",
-      toolName: "Write",
-      perf: {
-        totalMs: 80,
-        detail: {
-          kind: "filesystem",
-          filesystem: {
-            readMs: 5,
-            writeMs: 60,
-            fileCount: 1,
-            totalBytes: 256,
-            maxFileBytes: 256,
-            workspaceKind: "local",
-          },
-        },
-      },
-      expected: {
-        totalMs: 80,
-        fsReadMs: 5,
-        fsWriteMs: 60,
-        fileCount: 1,
-        totalBytes: 256,
-        maxFileBytes: 256,
-        workspaceKind: "local",
-      },
-    },
-    {
-      detailKind: "patch",
-      toolName: "Edit",
-      perf: {
-        totalMs: 90,
-        detail: {
-          kind: "patch",
-          filesystem: {
-            readMs: 6,
-            writeMs: 20,
-            fileCount: 1,
-            totalBytes: 512,
-            maxFileBytes: 512,
-            workspaceKind: "remote",
-          },
-          patch: { matchMs: 12, hunkCount: 2, matchAttempts: 3 },
-        },
-      },
-      expected: {
-        totalMs: 90,
-        fsReadMs: 6,
-        fsWriteMs: 20,
-        fileCount: 1,
-        totalBytes: 512,
-        maxFileBytes: 512,
-        workspaceKind: "remote",
-        patchMatchMs: 12,
-        hunkCount: 2,
-        matchAttempts: 3,
-      },
-    },
-    {
-      detailKind: "common-only",
-      toolName: "Read",
-      perf: { totalMs: 40, permissionWaitMs: 7 },
-      expected: { totalMs: 40, permissionWaitMs: 7 },
-    },
-  ])("将 $detailKind runtime perf 映射为扁平工具终态 fact", ({ toolName, perf, expected }) => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest("session-1", sessionCreated(log));
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.TurnStarted,
-        { turnNumber: 1, input: "private prompt", inputId: "command-1" },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallScheduled,
-        {
-          toolCallId: "tool-1",
-          toolName,
-          input: { private: "must-not-leak" },
-          schedule: { parallelGroups: [["tool-1"]], executionOrder: ["tool-1"] },
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallResult,
-        {
-          toolCallId: "tool-1",
-          duration: 123,
-          result: { success: true, content: "private tool output", perf },
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-
-    const terminalFact = host.telemetryFacts.find(
-      (fact) =>
-        fact.kind === "tool.lifecycle" &&
-        fact.toolCallId === "tool-1" &&
-        fact.phase === "completed",
-    );
-    expect(terminalFact).toMatchObject({
-      kind: "tool.lifecycle",
-      phase: "completed",
-      toolName,
-      durationMs: 123,
-      performance: expected,
-    });
-    const serializedPerformance = JSON.stringify(
-      terminalFact?.kind === "tool.lifecycle" ? terminalFact.performance : undefined,
-    );
-    expect(serializedPerformance).not.toContain("detail");
-    expect(serializedPerformance).not.toContain("hash");
-    expect(serializedPerformance).not.toContain("commandHash");
-    expect(host.errors.filter((entry) => entry.scope === "v4.telemetry.normalize")).toEqual([]);
-  });
-
-  it("失败 ToolCallResult 同样保留扁平 performance 与错误事实", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest("session-1", sessionCreated(log));
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.TurnStarted,
-        { turnNumber: 1, input: "private prompt", inputId: "command-1" },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallScheduled,
-        {
-          toolCallId: "tool-1",
-          toolName: "Bash",
-          input: { command: "private command" },
-          schedule: { parallelGroups: [["tool-1"]], executionOrder: ["tool-1"] },
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallResult,
-        {
-          toolCallId: "tool-1",
-          duration: 50,
-          result: {
-            success: false,
-            content: "private failure output",
-            error: { type: "ToolExecutionFailed", code: "EXIT_2", message: "exit 2" },
-            perf: {
-              totalMs: 70,
-              detail: {
-                kind: "command",
-                command: { runMs: 50, exitCode: 2, status: "failed" },
-              },
-            },
-          },
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-
-    expect(host.telemetryFacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "tool.lifecycle",
-          phase: "failed",
-          toolName: "Bash",
-          durationMs: 50,
-          errorCode: "EXIT_2",
-          errorMessage: "exit 2",
-          performance: {
-            totalMs: 70,
-            commandRunMs: 50,
-            exitCode: 2,
-            commandStatus: "failed",
-          },
-        }),
-      ]),
-    );
-    expect(host.errors.filter((entry) => entry.scope === "v4.telemetry.normalize")).toEqual([]);
-  });
-
+  // 社区版口径（PRIVACY-AUDIT §十三）：conversationTelemetryFact 只保留 turn.started /
+  // turn.terminal 两种 kind；tool.lifecycle（含 runtime perf 扁平化、失败错误字段、
+  // Skill 受限 metadata 等断言面）已随遥测栈裁剪，上游用例整段移除。私钥/正文不落
+  // fact 的隐私目标由「fact 分支不存在」自然满足。
   it("automation admission 与 CronCreate 成功结果只透传稳定关联 ID", () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -613,115 +382,16 @@ describe("订阅与帧调度", () => {
           taskTrigger: "schedule",
           scheduledAt: 1_700_000_000_000,
         }),
-        expect.objectContaining({
-          kind: "tool.lifecycle",
-          phase: "completed",
-          toolName: "CronCreate",
-          automationId: "automation-created",
-        }),
+        // 社区版口径（PRIVACY-AUDIT §十三）：tool.lifecycle fact 已裁剪，
+        // CronCreate 结果不再进入遥测事实——保留下方「正文不落 fact」总检查。
       ]),
     );
     expect(JSON.stringify(host.telemetryFacts)).not.toContain("定时任务正文");
     expect(JSON.stringify(host.telemetryFacts)).not.toContain("不能透传");
   });
 
-  it("Skill tool result 只透传受限 metadata，其他工具不继承", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest("session-1", sessionCreated(log));
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallScheduled,
-        {
-          toolCallId: "tool-skill",
-          toolName: "Skill",
-          input: { skill: "document-skills:pptx", args: "" },
-          schedule: { parallelGroups: [], executionOrder: [] },
-        },
-        { turnId: "turn-skill" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallResult,
-        {
-          toolCallId: "tool-skill",
-          duration: 10,
-          skillMetadata: {
-            qualifiedName: "document-skills:pptx",
-            pluginId: "document-skills@zcode-plugins-official",
-            source: "plugin",
-          },
-          result: { success: true, content: "<skill_content>正文不进入 fact</skill_content>" },
-        },
-        { turnId: "turn-skill" },
-      ),
-    );
-
-    const skillFact = host.telemetryFacts.find(
-      (fact) => fact.kind === "tool.lifecycle" && fact.phase === "completed",
-    );
-    expect(skillFact).toMatchObject({
-      toolName: "Skill",
-      skillQualifiedName: "document-skills:pptx",
-      skillPluginId: "document-skills@zcode-plugins-official",
-      skillSource: "plugin",
-    });
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("正文不进入 fact");
-  });
-
-  it("Skill tool error 保留已解析的 metadata", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest("session-1", sessionCreated(log));
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallScheduled,
-        {
-          toolCallId: "tool-skill-error",
-          toolName: "Skill",
-          input: { skill: "document-skills:pptx", args: "" },
-          schedule: { parallelGroups: [], executionOrder: [] },
-        },
-        { turnId: "turn-skill-error" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ToolCallError,
-        {
-          toolCallId: "tool-skill-error",
-          skillMetadata: {
-            qualifiedName: "document-skills:pptx",
-            pluginId: "document-skills@zcode-plugins-official",
-            source: "plugin",
-          },
-          error: { type: "SERIALIZATION_ERROR", message: "post hook failed" },
-        },
-        { turnId: "turn-skill-error" },
-      ),
-    );
-
-    expect(host.telemetryFacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "tool.lifecycle",
-          phase: "failed",
-          toolName: "Skill",
-          skillQualifiedName: "document-skills:pptx",
-          skillPluginId: "document-skills@zcode-plugins-official",
-          skillSource: "plugin",
-        }),
-      ]),
-    );
-  });
-
+  // 社区版口径（PRIVACY-AUDIT §十三）：tool.lifecycle fact（含 Skill 受限 metadata、
+  // tool error metadata 断言面）已随遥测栈裁剪，上游用例整段移除。
   it("Off-Peak TurnStarted 只透传稳定 task attribution，不透传正文", () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -825,75 +495,12 @@ describe("订阅与帧调度", () => {
     expect(mismatchStart).not.toHaveProperty("taskTrigger");
     expect(mismatchStart).not.toHaveProperty("scheduledAt");
 
-    const cronResult = host.telemetryFacts.find(
-      (fact) => fact.kind === "tool.lifecycle" && fact.phase === "completed",
-    );
-    expect(cronResult).toMatchObject({ toolName: "CronCreate" });
-    expect(cronResult).not.toHaveProperty("automationId");
+    // 社区版口径（PRIVACY-AUDIT §十三）：CronCreate 解析降级的 tool.lifecycle 断言面
+    // 已裁剪；turn.started 的 manual/mismatch 语义（automationAdmission 保留在 src）仍在。
   });
 
-  it("model request fact 只保留 URL 解析后的 hostname", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    const network = log.push(
-      SessionEventType.ModelNetworkStatus,
-      {
-        type: "model_request_started",
-        timestamp: "2026-07-17T00:00:00.000Z",
-        traceId: "trace-1",
-        requestId: "request-1",
-        providerId: "provider-1",
-        modelId: "model-1",
-        baseURL: "https://user:secret@example.com/private/path?token=secret#fragment",
-        transport: "sse",
-        attempt: 1,
-        maxAttempts: 3,
-        requestHeaders: { authorization: "Bearer secret" },
-        responseHeaders: { "set-cookie": "secret" },
-      },
-      { turnId: "turn-1" },
-    );
-
-    gateway.ingest("session-1", network);
-
-    expect(host.telemetryFacts).toEqual([
-      expect.objectContaining({
-        kind: "model.request.status",
-        providerHostname: "example.com",
-      }),
-    ]);
-    const serialized = JSON.stringify(host.telemetryFacts);
-    expect(serialized).not.toContain("private/path");
-    expect(serialized).not.toContain("token=secret");
-    expect(serialized).not.toContain("authorization");
-    expect(serialized).not.toContain("set-cookie");
-
-    const failed = log.push(
-      SessionEventType.ModelNetworkStatus,
-      {
-        type: "model_request_failed",
-        timestamp: "2026-07-17T00:00:01.000Z",
-        traceId: "trace-1",
-        requestId: "request-1",
-        providerId: "provider-1",
-        modelId: "model-1",
-        baseURL: "https://example.com/v1/messages",
-        transport: "sse",
-        attempt: 1,
-        maxAttempts: 3,
-        durationMs: 10,
-        reason: "server_error",
-        retryable: true,
-        message: "上游响应正文不能穿过 fact",
-        statusCode: 503,
-      },
-      { turnId: "turn-1" },
-    );
-    gateway.ingest("session-1", failed);
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("上游响应正文不能穿过 fact");
-  });
-
+  // 社区版口径（PRIVACY-AUDIT §十三）：model.request.status fact 已裁剪（上游的
+  // hostname-only 隐私收敛随之失效——fact 分支不存在，URL/凭据不会落任何遥测事实）。
   it("准入等待的两端不产出 model.request.status fact，也不让 schema 抛出（v3 决策 44）", () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -926,394 +533,11 @@ describe("订阅与帧调度", () => {
     expect(host.telemetryFacts.filter((fact) => fact.kind === "model.request.status")).toEqual([]);
   });
 
-  it("usage fact 的 totalTokens fallback 与 contracts 公式一致，不重复加 reasoning", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ModelComplete,
-        {
-          content: "done",
-          stopReason: "stop",
-          querySource: "main_turn",
-          usage: {
-            inputTokens: 10,
-            outputTokens: 4,
-            reasoningTokens: 3,
-            cacheReadTokens: 2,
-            cacheWriteTokens: 1,
-          },
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-    expect(host.telemetryFacts).toEqual([
-      expect.objectContaining({
-        kind: "usage.delta",
-        totalTokens: 14,
-        reasoningTokens: 3,
-      }),
-    ]);
-  });
-
-  it("usage fact 不把标题 sidecar、compact 或 tool_internal 累加到 prompt", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    for (const [querySource, stopReason] of [
-      ["session_title", "end_turn"],
-      ["compact", "end_turn"],
-    ] as const) {
-      gateway.ingest(
-        "session-1",
-        log.push(
-          SessionEventType.ModelComplete,
-          {
-            content: "sidecar private content",
-            ...(querySource ? { querySource } : {}),
-            stopReason,
-            usage: { inputTokens: 64, outputTokens: 8 },
-          },
-          { turnId: "turn-1" },
-        ),
-      );
-    }
-
-    for (const requestId of ["request-tool-internal", "request-main"]) {
-      gateway.ingest(
-        "session-1",
-        log.push(
-          SessionEventType.ModelNetworkStatus,
-          {
-            type: "model_request_completed",
-            timestamp: "2026-07-24T00:00:00.000Z",
-            traceId: `trace-${requestId}`,
-            requestId,
-            providerId: "provider-1",
-            modelId: "model-1",
-            baseURL: "https://example.com/v1/messages",
-            transport: "sse",
-            attempt: 1,
-            maxAttempts: 1,
-            durationMs: 20,
-          },
-          { turnId: "turn-1" },
-        ),
-      );
-      gateway.ingest(
-        "session-1",
-        log.push(
-          SessionEventType.ModelComplete,
-          {
-            content: "private content",
-            stopReason: requestId === "request-tool-internal" ? "tool_internal" : "stop",
-            usage: { inputTokens: 64, outputTokens: 8 },
-          },
-          { turnId: "turn-1" },
-        ),
-      );
-    }
-
-    expect(host.telemetryFacts.filter((fact) => fact.kind === "usage.delta")).toEqual([
-      expect.objectContaining({
-        requestId: "request-main",
-        totalTokens: 72,
-      }),
-    ]);
-  });
-
-  it("main/subagent ModelComplete 关联最近完成 request 的真实模型与 usage", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const mainLog = new EventLog("session-1");
-    gateway.ingest(
-      "session-1",
-      mainLog.push(
-        SessionEventType.ModelNetworkStatus,
-        {
-          type: "model_request_completed",
-          timestamp: "2026-07-24T00:00:00.000Z",
-          traceId: "trace-main",
-          requestId: "request-main",
-          providerId: "main-provider",
-          modelId: "main-model",
-          baseURL: "https://main.example.com/v1/messages?secret=1",
-          transport: "sse",
-          querySource: "main_turn",
-          attempt: 1,
-          maxAttempts: 1,
-          durationMs: 20,
-        },
-        { turnId: "turn-main" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      mainLog.push(
-        SessionEventType.ModelComplete,
-        {
-          content: "main private content",
-          stopReason: "stop",
-          querySource: "main_turn",
-          usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
-        },
-        { turnId: "turn-main" },
-      ),
-    );
-
-    const childLog = new EventLog("child-session");
-    gateway.ingestDetachedLiveSession(
-      "child-session",
-      childLog.push(
-        SessionEventType.ModelNetworkStatus,
-        {
-          type: "model_request_completed",
-          timestamp: "2026-07-24T00:00:01.000Z",
-          traceId: "trace-child",
-          requestId: "request-child",
-          providerId: "child-provider",
-          modelId: "child-model",
-          baseURL: "https://child.example.com/v1/messages?secret=1",
-          transport: "sse",
-          querySource: "subagent",
-          attempt: 1,
-          maxAttempts: 1,
-          durationMs: 30,
-        },
-        { turnId: "turn-child" },
-      ),
-    );
-    gateway.ingestDetachedLiveSession(
-      "child-session",
-      childLog.push(
-        SessionEventType.ModelComplete,
-        {
-          content: "child private content",
-          stopReason: "stop",
-          querySource: "subagent",
-          usage: { inputTokens: 20, outputTokens: 5, totalTokens: 25 },
-        },
-        { turnId: "turn-child" },
-      ),
-    );
-
-    expect(host.telemetryFacts.filter((fact) => fact.kind === "usage.delta")).toEqual([
-      expect.objectContaining({
-        sessionId: "session-1",
-        requestId: "request-main",
-        providerId: "main-provider",
-        modelId: "main-model",
-        providerHostname: "main.example.com",
-        totalTokens: 14,
-      }),
-      expect.objectContaining({
-        sessionId: "child-session",
-        requestId: "request-child",
-        providerId: "child-provider",
-        modelId: "child-model",
-        providerHostname: "child.example.com",
-        totalTokens: 25,
-      }),
-    ]);
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("private content");
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("secret=1");
-  });
-
-  it("SubagentSpawned/Stopped 只透传父子关联和 background 状态", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.TurnStarted,
-        { inputId: "command-1", input: "private prompt" },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.SubagentSpawned,
-        {
-          agentId: "agent-1",
-          agentType: "explore",
-          childSessionId: "child-session-1",
-          parentToolCallId: "tool-agent-1",
-          background: false,
-          status: "running",
-          prompt: "private child prompt",
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.SubagentStopped,
-        {
-          agentId: "agent-1",
-          agentType: "explore",
-          childSessionId: "child-session-1",
-          parentToolCallId: "tool-agent-1",
-          background: false,
-          status: "completed",
-          output: "private child output",
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-
-    expect(host.telemetryFacts.filter((fact) => fact.kind === "subagent.lifecycle")).toEqual([
-      expect.objectContaining({
-        phase: "spawned",
-        sourceCommandId: "command-1",
-        childSessionId: "child-session-1",
-        parentToolCallId: "tool-agent-1",
-        background: false,
-      }),
-      expect.objectContaining({
-        phase: "stopped",
-        sourceCommandId: "command-1",
-        childSessionId: "child-session-1",
-        background: false,
-      }),
-    ]);
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("private child");
-  });
-
-  it("background stopped fact 保留既有 Runtime 错误但不透传结果正文", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest(
-      "session-1",
-      log.push(SessionEventType.SubagentStopped, {
-        agentId: "agent-bg",
-        childSessionId: "child-bg",
-        parentToolCallId: "tool-bg",
-        background: true,
-        status: "failed",
-        error: "provider returned 429",
-        output: "private child output",
-      }),
-    );
-    expect(host.telemetryFacts).toEqual([
-      expect.objectContaining({
-        kind: "subagent.lifecycle",
-        phase: "stopped",
-        background: true,
-        status: "failed",
-        errorMessage: "provider returned 429",
-      }),
-    ]);
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("private child output");
-  });
-
-  it("镜像 Subagent 工具从 payload 顶层透传 agent_id 与 child 关联", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog("parent-session");
-    gateway.ingest(
-      "parent-session",
-      log.push(
-        SessionEventType.TurnStarted,
-        { inputId: "parent-command", input: "private prompt" },
-        { turnId: "parent-turn" },
-      ),
-    );
-    const relation = {
-      agentId: "agent-child",
-      agentType: "Explore",
-      childSessionId: "child-session",
-      childToolCallId: "toolu-child",
-      parentToolCallId: "call-parent-agent",
-      source: "subagent",
-      background: true,
-    };
-    gateway.ingest(
-      "parent-session",
-      log.push(
-        SessionEventType.ToolCallScheduled,
-        {
-          toolCallId: "tool_subagent_agent-child_toolu-child",
-          toolName: "WebFetch",
-          input: { secret: "must-not-leak" },
-          schedule: { parallelGroups: [], executionOrder: [] },
-          ...relation,
-        },
-        { turnId: "parent-turn" },
-      ),
-    );
-    gateway.ingest(
-      "parent-session",
-      log.push(
-        SessionEventType.ToolCallResult,
-        {
-          toolCallId: "tool_subagent_agent-child_toolu-child",
-          duration: 42,
-          result: { success: true, content: "private child tool output" },
-          ...relation,
-        },
-        { turnId: "parent-turn" },
-      ),
-    );
-
-    const toolFacts = host.telemetryFacts.filter(
-      (fact) => fact.kind === "tool.lifecycle" && fact.toolName === "WebFetch",
-    );
-    expect(toolFacts).toHaveLength(2);
-    expect(toolFacts).toEqual([
-      expect.objectContaining({
-        phase: "scheduled",
-        agentId: "agent-child",
-        childSessionId: "child-session",
-        childToolCallId: "toolu-child",
-        parentToolCallId: "call-parent-agent",
-        background: true,
-      }),
-      expect.objectContaining({
-        phase: "completed",
-        agentId: "agent-child",
-        childSessionId: "child-session",
-        childToolCallId: "toolu-child",
-        parentToolCallId: "call-parent-agent",
-        background: true,
-      }),
-    ]);
-    expect(JSON.stringify(toolFacts)).not.toContain("must-not-leak");
-    expect(JSON.stringify(toolFacts)).not.toContain("private child tool output");
-  });
-
-  it("stream fact 保留 parentToolCallId 供主对话统计排除子代理正文", () => {
-    const host = makeHost();
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    gateway.ingest(
-      "session-1",
-      log.push(
-        SessionEventType.ModelStreaming,
-        {
-          kind: "text_delta",
-          delta: "child private content",
-          done: false,
-          parentToolCallId: "parent-agent-tool",
-        },
-        { turnId: "turn-1" },
-      ),
-    );
-    expect(host.telemetryFacts).toEqual([
-      expect.objectContaining({
-        kind: "stream.chunk",
-        chunkLength: 21,
-        parentToolCallId: "parent-agent-tool",
-      }),
-    ]);
-    expect(JSON.stringify(host.telemetryFacts)).not.toContain("child private content");
-  });
-
+  // 社区版口径（PRIVACY-AUDIT §十三）：usage.delta / subagent.lifecycle / stream / 镜像
+  // Subagent tool.lifecycle 等 fact kind 均已随遥测栈裁剪，只保留 turn.started /
+  // turn.terminal；以下上游用例（usage 归集与 fallback 公式、ModelComplete 关联真实
+  // 模型、Subagent 父子关联、background 错误、agent_id 镜像、parentToolCallId 排除）
+  // 整段移除。
   it("cancelled turn fact 保留旧 user interrupt 固定错误字段", () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -1393,36 +617,7 @@ describe("订阅与帧调度", () => {
     ]);
   });
 
-  it("compact terminal 在尚无 network status 时回落 session config 模型", () => {
-    const host = makeHost();
-    host.configSeeds.set("session-1", {
-      provider: "provider-from-config",
-      model: "model-from-config",
-    });
-    const gateway = makeGateway(host);
-    const log = new EventLog();
-    const compact = log.push(SessionEventType.CompactFailed, {
-      operationId: "compact-1",
-      messageId: "compact-message-1",
-      status: "failed",
-      trigger: "manual",
-      reason: "api_error",
-      attempt: 1,
-      startedAt: 100,
-      endedAt: 200,
-    });
-
-    gateway.ingest("session-1", compact);
-
-    expect(host.telemetryFacts).toEqual([
-      expect.objectContaining({
-        kind: "compaction.terminal",
-        modelName: "model-from-config",
-        modelProvider: "provider-from-config",
-      }),
-    ]);
-  });
-
+  // 社区版口径（PRIVACY-AUDIT §十三）：compaction.terminal fact 已裁剪，上游用例移除。
   it("persisted hydration 与 initial snapshot 不产生 telemetry fact", async () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -4068,10 +3263,28 @@ describe("v4/command 收口", () => {
     const turnGate = new Promise<Record<string, never>>((resolve) => {
       finishTurn = () => resolve({});
     });
-    const sendInput = vi.fn().mockReturnValue({
-      kind: "started_turn",
-      turnId: "turn-new",
-      completion: turnGate,
+    // 上游随 v3.15.1 合入的用例漏了「推进 revision」这一步：sendInput 打桩不 ingest
+    // TurnStarted，publisher revision 停留在快照值，旧 revision 命令不会被判 stale，
+    // 反而落进 retryTurn 执行路径（record 打桩缺 rewindConversationToMessage 而报
+    // fault.command.executionFailed）。这里参照相邻「pending projection」用例，让
+    // sendInput ingest 新 turn 的 TurnStarted，验证 stale 防护本身（src 与上游一致）。
+    const newTurnStarted = log.push(
+      SessionEventType.TurnStarted,
+      {
+        turnNumber: 2,
+        input: "你好",
+        inputId: "cmd-new",
+        messageId: "msg-user-new",
+      },
+      { turnId: "turn-new" },
+    );
+    const sendInput = vi.fn().mockImplementation(() => {
+      gateway.ingest("session-1", newTurnStarted);
+      return {
+        kind: "started_turn",
+        turnId: "turn-new",
+        completion: turnGate,
+      };
     });
     const submitPrompt = vi.fn().mockResolvedValue({});
     const applyWorkspaceFileRewind = vi.fn().mockResolvedValue({
@@ -4731,18 +3944,9 @@ describe("config 种子（R-19 gateway 接线）", () => {
   });
 });
 
-describe("ConversationV4Gateway.collectMemoryDiagnostics", () => {
-  it("返回 publisher / detached 子 session / raw seq 状态表的只读大小", () => {
-    const gateway = makeGateway(makeHost());
-    expect(gateway.collectMemoryDiagnostics()).toEqual({
-      publishers: 0,
-      detachedLive: 0,
-      detachedTerminal: 0,
-      rawSeqStates: 0,
-    });
-  });
-});
-
+// 社区版口径（PRIVACY-AUDIT §十四）：collectMemoryDiagnostics 诊断读出口已随
+// memoryDiagnostics / 进程资源采样裁剪，上游用例整段移除。publisher 释放语义仍由
+// 下方生命周期用例经 pruneDetachedChildPublishers / 存在性探测覆盖。
 describe("detached subagent child publisher 生命周期（session-idle-deactivation.md）", () => {
   function childTurnComplete(log: EventLog): SessionEvent {
     return log.push(
@@ -4752,6 +3956,17 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
     );
   }
 
+  // 社区版口径（PRIVACY-AUDIT §十四）：collectMemoryDiagnostics 诊断读出口已裁剪，
+  // publisher 存在性改用 resolveRowActionTarget 探测——publisher 在时返回非 null
+  // 解析结果（row 不存在 → ok:false），释放后返回 null；释放动作本身经
+  // pruneDetachedChildPublishers 的返回计数观测。
+  const hasPublisher = (gateway: ConversationV4Gateway, sessionId: string) =>
+    gateway.resolveRowActionTarget(
+      sessionId,
+      { rowId: 999_999, entityId: "probe" },
+      "retryTurn",
+    ) !== null;
+
   it("父 record 释放时连带释放没有 record 的 detached child publisher", () => {
     const host = makeHost();
     const gateway = makeGateway(host);
@@ -4759,15 +3974,13 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
     const childLog = new EventLog("child-1");
     gateway.ingestDetachedLiveSession("child-1", sessionCreated(childLog), "session-1");
     gateway.ingestDetachedLiveSession("child-1", textDelta(childLog, "x"), "session-1");
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 2, detachedLive: 1 });
+    expect(hasPublisher(gateway, "session-1")).toBe(true);
+    expect(hasPublisher(gateway, "child-1")).toBe(true);
 
     gateway.disposeSession("session-1");
 
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({
-      publishers: 0,
-      detachedLive: 0,
-      detachedTerminal: 0,
-    });
+    expect(hasPublisher(gateway, "session-1")).toBe(false);
+    expect(hasPublisher(gateway, "child-1")).toBe(false);
   });
 
   it("child 已有自己的 record 时，父释放不碰它，交给 child 自己的生命周期", () => {
@@ -4779,10 +3992,10 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
     host.sessions.add("child-2");
 
     gateway.disposeSession("session-1");
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 1, detachedLive: 1 });
+    expect(hasPublisher(gateway, "child-2")).toBe(true);
 
     gateway.disposeSession("child-2");
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 0, detachedLive: 0 });
+    expect(hasPublisher(gateway, "child-2")).toBe(false);
   });
 
   it("时间兜底：child 终态后无订阅者且超过 grace 才释放；有订阅者不释放", async () => {
@@ -4794,15 +4007,15 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
     gateway.ingestDetachedLiveSession("child-3", textDelta(childLog, "x"), "session-1");
     gateway.ingestDetachedLiveSession("child-3", childTurnComplete(childLog), "session-1");
     const terminalAt = Date.now();
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ detachedTerminal: 1 });
 
     // grace 内不释放。
     expect(gateway.pruneDetachedChildPublishers(terminalAt + 60_000)).toBe(0);
+    expect(hasPublisher(gateway, "child-3")).toBe(true);
 
     // 有订阅者时即使超过 grace 也不释放。
     const { ack } = await gateway.subscribe(subscribeParams({ topic: "conversation/child-3" }));
     expect(gateway.pruneDetachedChildPublishers(terminalAt + 3 * 60_000)).toBe(0);
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 2 });
+    expect(hasPublisher(gateway, "child-3")).toBe(true);
 
     gateway.unsubscribe({
       topic: "conversation/child-3",
@@ -4810,14 +4023,10 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
       connectionId: "conn-1",
     });
     expect(gateway.pruneDetachedChildPublishers(terminalAt + 3 * 60_000)).toBe(1);
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({
-      publishers: 1,
-      detachedLive: 0,
-      detachedTerminal: 0,
-    });
+    expect(hasPublisher(gateway, "child-3")).toBe(false);
     // 父 record 后续释放不受影响（child 映射已摘除）。
     gateway.disposeSession("session-1");
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 0 });
+    expect(hasPublisher(gateway, "session-1")).toBe(false);
   });
 
   it("child 再次 turn_started 撤销终态记录，时间兜底不再释放它", () => {
@@ -4835,8 +4044,7 @@ describe("detached subagent child publisher 生命周期（session-idle-deactiva
       ),
       "session-1",
     );
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ detachedTerminal: 0 });
     expect(gateway.pruneDetachedChildPublishers(Date.now() + 10 * 60_000)).toBe(0);
-    expect(gateway.collectMemoryDiagnostics()).toMatchObject({ publishers: 1, detachedLive: 1 });
+    expect(hasPublisher(gateway, "child-4")).toBe(true);
   });
 });

@@ -36,18 +36,21 @@ afterAll(() => source.dispose());
 describe("真实 ZCode Built-in Config 到 Active Model", () => {
   it("API Key Personal Overlay 经 Registry 原样装配到 Adapter", () => {
     const providerId = "zai-api";
-    const modelId = "glm-5.3";
+    // 根因：目录里 zai-api 模板成员为 GLM-5.3/GLM-5.3-Flash，Registry 按精确 modelId 建索引，
+    // 旧断言的小写 "glm-5.3" 永远查不到模型。
+    const modelId = "GLM-5.3";
     const registry = resolveOneBuiltinProvider(providerId, {
-      personalProviders: new ProviderConfigMap([
-        [
-          providerId,
-          new ProviderConfig({
-            templateId: "zai-api",
-            group: "standard-personal",
-            access: new ApiKeyAccessConfig({ apiKey: "test-zai-api-key" }),
-          }),
-        ],
-      ]),
+      // 根因：templateId 现在是 ProviderConfigRule 的外层身份字段，不再属于 ProviderConfig；
+      // 旧写法把 templateId 塞进 config 会被静默丢弃，模板 api 无法参与 overlay，
+      // 解析器按“缺少必填配置 providers.zai-api.api”拒绝。改用 setRule 携带模板引用。
+      personalProviders: ProviderConfigMap.empty().setRule({
+        providerId,
+        templateId: "zai-api",
+        config: new ProviderConfig({
+          group: "standard-personal",
+          access: new ApiKeyAccessConfig({ apiKey: "test-zai-api-key" }),
+        }),
+      }),
     });
     const capture = captureRuntime(registry);
 
@@ -86,9 +89,13 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
           }),
         ],
       ]),
-      personalProviders: new ProviderConfigMap([
-        [providerId, new ProviderConfig({ label: "Personal final label" })],
-      ]),
+      // 根因：ProviderConfig 已无 label 字段，展示名属于规则外层 providerName；
+      // Personal Overlay 的“最后覆盖”改由规则级 providerName 压过内置 "Start Plan" 来验证。
+      personalProviders: ProviderConfigMap.empty().setRule({
+        providerId,
+        providerName: "Personal final label",
+        config: new ProviderConfig({}),
+      }),
     });
     const capture = captureRuntime(registry);
 
@@ -99,8 +106,8 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
     expect(registry.getProvider(providerId)?.models.map(({ modelId: id }) => id)).toEqual([
       modelId,
     ]);
+    expect(registry.getProvider(providerId)?.providerName).toBe("Personal final label");
     expect(capture.created[0]?.providerConfig).toMatchObject({
-      label: "Personal final label",
       access: {
         type: "zhipu-account",
         accountType: "zai",
@@ -112,7 +119,8 @@ describe("真实 ZCode Built-in Config 到 Active Model", () => {
 
   it("隐藏 Request Auth Provider 仍由普通 Registry 精确创建 Model", () => {
     const providerId = "account:zai-offpeak-idle-plan";
-    const modelId = "GLM-5.2";
+    // 根因：当前目录中 offpeak 套餐成员是 GLM-5.3/GLM-5.3-Flash，旧期望的 GLM-5.2 不在其中。
+    const modelId = "GLM-5.3";
     const registry = resolveOneBuiltinProvider(providerId, {
       accountProviders: new ProviderConfigMap([
         [
