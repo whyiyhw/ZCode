@@ -30,3 +30,13 @@ allowBuilds:
   protobufjs: true
   ssh2: true
   unsafe-pointer: true
+# pnpm 10 起不再读取 package.json 的 pnpm.overrides / pnpm.patchedDependencies
+# （10.33 起仅告警，后续版本将彻底移除），按官方迁移口径移入本文件。
+overrides:
+  react: 19.2.7
+  react-dom: 19.2.7
+patchedDependencies:
+  vitest@4.1.7: patches/vitest@4.1.7.patch
+  wdio-electron-service@9.2.1: patches/wdio-electron-service@9.2.1.patch
+  '@ai-sdk/openai-compatible@2.0.60': patches/@ai-sdk__openai-compatible@2.0.60.patch
+  '@ai-sdk/anthropic@3.0.81': patches/@ai-sdk__anthropic@3.0.81.patch

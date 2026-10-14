@@ -87,11 +87,12 @@ describe("desktop e2e Electron service lifecycle", () => {
   });
 
   it("cancels the ContextId timeout after the default execution context is found", () => {
-    const rootPackageJson = JSON.parse(
-      readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
-    ) as {
-      pnpm?: { patchedDependencies?: Record<string, string> };
-    };
+    // pnpm 10 起 overrides/patchedDependencies 的正式家是 pnpm-workspace.yaml
+    // （package.json 的 pnpm 字段已废弃并移除），补丁注册断言随之改读新位置。
+    const workspaceYaml = readFileSync(
+      new URL("../../../pnpm-workspace.yaml", import.meta.url),
+      "utf8",
+    );
     const electronServiceSource = readFileSync(
       new URL(
         "../../../node_modules/wdio-electron-service/dist/esm/index.js",
@@ -108,11 +109,9 @@ describe("desktop e2e Electron service lifecycle", () => {
 
     // Bug 根因：上游 9.2.1 的 ContextId Promise 成功 resolve 后没有取消 timeout，
     // 定时器仍会在健康 case 运行期间打印误导性的 Timeout exceeded error。
-    expect(
-      rootPackageJson.pnpm?.patchedDependencies?.[
-        "wdio-electron-service@9.2.1"
-      ],
-    ).toBe("patches/wdio-electron-service@9.2.1.patch");
+    expect(workspaceYaml).toMatch(
+      /wdio-electron-service@9\.2\.1:\s*patches\/wdio-electron-service@9\.2\.1\.patch/u,
+    );
     expect(contextIdHandler).toContain("clearTimeout(timeout)");
     expect(contextIdHandler).toContain(
       "this.off('Runtime.executionContextCreated', onExecutionContextCreated)",
