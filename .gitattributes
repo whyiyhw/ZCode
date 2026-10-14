@@ -2,6 +2,24 @@
 *.mjs text eol=lf
 *.sh  text eol=lf
 
+# fmt 口径（2026-10-14）：oxfmt 只输出 LF 且不支持 endOfLine=auto，仓库统一
+# fmt 管辖类型 checkout 为 LF（覆盖本机 core.autocrlf=true 的 CRLF 行为）。
+# 此前 Windows 工作区 CRLF 使 pnpm fmt:check 有 5727/7794 为行尾伪差；
+# LF 化后 fmt:check 反映真实格式债。git blob 侧本就统一 LF，此改动不影响仓库内容。
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.cjs  text eol=lf
+*.mts  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.mdx  text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
 # E2E PDF fixture 含规范 xref 尾空格，必须按二进制处理，避免 diff --check 误报。
 packages/desktop/test/e2e/fixtures/fs/**/*.pdf binary
 
