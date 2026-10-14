@@ -89,4 +89,3 @@ export const logger = {
     log(level, `[trace:${traceId}]`, ...args);
   },
 };
-

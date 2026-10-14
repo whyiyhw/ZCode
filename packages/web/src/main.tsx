@@ -2286,7 +2286,6 @@ async function bootstrapWebApp() {
     return;
   }
 
-
   if (isWebRemoteControlRoute()) {
     await bootstrapExternalRelayWebRemoteControl(params);
     return;

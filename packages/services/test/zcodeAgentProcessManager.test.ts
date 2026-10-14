@@ -10,10 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ZCODE_AGENT_RUNTIME,
-  ZCODE_RUNTIME_ENV_KEY,
-} from "@zcode/shared";
+import { ZCODE_AGENT_RUNTIME, ZCODE_RUNTIME_ENV_KEY } from "@zcode/shared";
 import {
   ZCODE_PROCESS_DIAGNOSTIC_PREFIX,
   ZCODE_AGENT_LIFECYCLE_LOG_MARKER,

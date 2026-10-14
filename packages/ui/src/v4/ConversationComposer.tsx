@@ -1321,15 +1321,14 @@ function ConversationComposerImpl({
           pptxElements: currentPptxElementReferences,
           pluginUiContexts: currentPluginUiContexts,
         });
-        const contextAttachmentCount =
-          countComposerPromptContexts({
-            codeComments: currentCodeCommentContexts,
-            conversationSelections: currentConversationSelections,
-            webElements: currentWebElementContexts,
-            pptxElements: currentPptxElementReferences,
-            // 社区版合并：保留插件 UI 上下文计数；submittedShareContext 计数（分享）剔除
-            pluginUiContexts: currentPluginUiContexts,
-          });
+        const contextAttachmentCount = countComposerPromptContexts({
+          codeComments: currentCodeCommentContexts,
+          conversationSelections: currentConversationSelections,
+          webElements: currentWebElementContexts,
+          pptxElements: currentPptxElementReferences,
+          // 社区版合并：保留插件 UI 上下文计数；submittedShareContext 计数（分享）剔除
+          pluginUiContexts: currentPluginUiContexts,
+        });
         if (trimmed) {
           promptHistoryBeforeSend = readPromptHistoryEntries(workspacePath);
           promptHistoryAfterAppend = appendPromptHistoryEntry(promptHistoryBeforeSend, trimmed);

@@ -11,8 +11,6 @@
   简体中文 | <a href="README.en.md">English</a>
 </p>
 
-
-
 ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Agent。本仓库包含客户端、后端服务、共享 UI，以及 Agent CLI 与运行时源码。
 
 ## 更新
@@ -231,21 +229,21 @@ node dist/zcode/debug/zcode/bin/zcode.mjs --web \
 
 ## 仓库结构
 
-| 目录                                                 | 职责                                           |
-| ---------------------------------------------------- | ---------------------------------------------- |
-| `packages/desktop`                                   | Electron Main、Host、Renderer 与桌面打包       |
-| `packages/web`                                       | Web 客户端                                     |
-| `packages/server`                                    | HTTP / WebSocket 服务与远程连接                |
-| `packages/zcode-server-cli`                          | 独立 Server 启动与进程管理                     |
-| `packages/ui`                                        | 共享 React 组件、hooks 与 Zustand 状态         |
-| `packages/services`                                  | 业务服务与持久化                               |
-| `packages/shared`、`packages/rpc`、`packages/client` | 共享协议和类型、RPC 框架、Agent 客户端 SDK     |
-| `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现                  |
-| `packages/model-option-map`                          | 模型选项映射的受限 CEL 表达式编译与求值        |
-| `packages/formal-proof`                              | 产品行为状态空间枚举器（compact/fork/goal 等） |
+| 目录                                                 | 职责                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| `packages/desktop`                                   | Electron Main、Host、Renderer 与桌面打包               |
+| `packages/web`                                       | Web 客户端                                             |
+| `packages/server`                                    | HTTP / WebSocket 服务与远程连接                        |
+| `packages/zcode-server-cli`                          | 独立 Server 启动与进程管理                             |
+| `packages/ui`                                        | 共享 React 组件、hooks 与 Zustand 状态                 |
+| `packages/services`                                  | 业务服务与持久化                                       |
+| `packages/shared`、`packages/rpc`、`packages/client` | 共享协议和类型、RPC 框架、Agent 客户端 SDK             |
+| `packages/provider`、`packages/provider-node`        | Provider 公共能力与 Node 实现                          |
+| `packages/model-option-map`                          | 模型选项映射的受限 CEL 表达式编译与求值                |
+| `packages/formal-proof`                              | 产品行为状态空间枚举器（compact/fork/goal 等）         |
 | `packages/zcode-cua`                                 | Computer Use 客户端与运行时（Helper 二进制仅本地暂存） |
-| `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具                   |
-| `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料         |
+| `apps/zcode-cli`                                     | Agent CLI、TUI、运行时与工具                           |
+| `scripts`、`config`、`third-party`                   | 构建维护脚本、内置配置与第三方声明材料                 |
 
 文档体系分层与维护规则见 [DOCUMENTATION.md](DOCUMENTATION.md)。
 

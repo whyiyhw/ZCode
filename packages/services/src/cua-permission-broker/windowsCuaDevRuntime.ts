@@ -97,7 +97,10 @@ export async function resolveWindowsCuaRuntime(
   const userStagedRoot = options.userStagedRoot?.trim();
   if (userStagedRoot) {
     try {
-      return await resolveDevelopmentRuntime(userStagedRoot, options.fileSystem ?? defaultFileSystem);
+      return await resolveDevelopmentRuntime(
+        userStagedRoot,
+        options.fileSystem ?? defaultFileSystem,
+      );
     } catch {
       // 尚未自动搬运（目录不存在）或已暂存副本损坏：一律落回产品路由给出最终
       // 结论——本地开关出包可能自带运行时；两者皆缺时由产品路由的

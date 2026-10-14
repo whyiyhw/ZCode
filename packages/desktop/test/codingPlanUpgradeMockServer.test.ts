@@ -9,8 +9,6 @@ import {
 
 describe("Coding Plan upgrade E2E mock server", () => {
   let server: CodingPlanUpgradeMockServer | null = null;
-;
-;
 
   afterEach(async () => {
     await server?.stop();
@@ -37,14 +35,6 @@ describe("Coding Plan upgrade E2E mock server", () => {
     await mode("ready");
   });
 
-;
-
-;
-
-;
-
-;
-
   it("webview inventory starts with a resolvable existing personal connection before purchase", async () => {
     server = await startCodingPlanUpgradeMockServer("webview-refresh-provider");
     const customer = await fetchJson<{ data: { organizations: unknown[] } }>(
@@ -54,8 +44,6 @@ describe("Coding Plan upgrade E2E mock server", () => {
       { organizationId: "org-e2e", projects: [{ projectId: "proj-e2e", projectType: 0 }] },
     ]);
   });
-
-;
 
   it("expires Start without revoking Coding Plan and resets the expiry between workers", async () => {
     server = await startCodingPlanUpgradeMockServer("manual-claim-experience");

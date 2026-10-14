@@ -2,10 +2,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { resolve } from "node:path";
 import { Emitter, Event, type Event as RpcEvent } from "@zcode/rpc";
 import type { FileWatchEvent } from "@zcode/shared";
-import {
-  createServiceLogger,
-  type ServiceLogger,
-} from "#src/logger/serviceLogger.js";
+import { createServiceLogger, type ServiceLogger } from "#src/logger/serviceLogger.js";
 import type { IFileWatcherService } from "./fileWatcher.js";
 
 /** 防抖时间（ms）——批量文件变更（如 git checkout）时避免频繁刷新 */

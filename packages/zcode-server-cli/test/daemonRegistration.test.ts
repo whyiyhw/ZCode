@@ -12,12 +12,12 @@ const serviceMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("node:child_process", async (importOriginal) => ({
-  ...await importOriginal<typeof import("node:child_process")>(),
+  ...(await importOriginal<typeof import("node:child_process")>()),
   fork: serviceMocks.fork,
 }));
 
 vi.mock("../src/platform/serviceManager.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../src/platform/serviceManager.js")>(),
+  ...(await importOriginal<typeof import("../src/platform/serviceManager.js")>()),
   registerService: serviceMocks.registerService,
   unregisterService: serviceMocks.unregisterService,
 }));
@@ -81,8 +81,10 @@ describe("daemon service registration", () => {
     // CLI 的 serve 走 resolveCanonicalServerLayout 收敛 root；Windows mkdtemp 的 8.3 短路径
     // 经 realpath 展开后 stablePathId 不同 → control pipe 名不一致。测试侧用同一规范化口径。
     const layout = await resolveCanonicalServerLayout(join(root, "server"));
-    const platform = process.platform === "darwin" || process.platform === "linux" ? process.platform : "win32";
-    const kind = platform === "darwin" ? "launchd" : platform === "linux" ? "systemd" : "task-scheduler";
+    const platform =
+      process.platform === "darwin" || process.platform === "linux" ? process.platform : "win32";
+    const kind =
+      platform === "darwin" ? "launchd" : platform === "linux" ? "systemd" : "task-scheduler";
     const legacyDescriptor = createServiceDescriptor({
       platform,
       command: join(layout.stableBinDir, platform === "win32" ? "zcode.cmd" : "zcode"),

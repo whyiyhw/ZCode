@@ -964,9 +964,7 @@ export function createComputerUseRuntime(options = {}) {
       if (args.text.length === 0) {
         return textResult({ note: "Typed 0 character(s). action_sent=false." });
       }
-      const observation = args.target
-        ? resolveElementForAction(deps, args.target)
-        : null;
+      const observation = args.target ? resolveElementForAction(deps, args.target) : null;
       if (observation && args.strategy !== "event") {
         await deps.broker.callBroker(
           "element_set_value",

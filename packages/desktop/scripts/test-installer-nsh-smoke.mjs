@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -26,17 +33,15 @@ function toLongPath(value) {
     // 规避引号/空格/中文路径的二次解析。输出编码切 UTF-8 与本脚本解码一致。
     const encoded = Buffer.from(value, "utf8").toString("base64");
     const command =
-      "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
-      + `[Console]::Out.Write((Get-Item -LiteralPath ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')))).FullName)`;
+      "[Console]::OutputEncoding=[Text.Encoding]::UTF8;" +
+      `[Console]::Out.Write((Get-Item -LiteralPath ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}')))).FullName)`;
     const encodedCommand = Buffer.from(command, "utf16le").toString("base64");
     return (
-      execFileSync("powershell.exe", [
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-EncodedCommand",
-        encodedCommand,
-      ], { encoding: "utf8" }).trim() || value
+      execFileSync(
+        "powershell.exe",
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand],
+        { encoding: "utf8" },
+      ).trim() || value
     );
   } catch {
     return value;

@@ -219,7 +219,6 @@ describe("desktopApplicationMenu endpoint submenu", () => {
     expect(findMenuItem(template, "ZCode Endpoint")).toBeUndefined();
   });
 
-
   it("开发运行形态也隐藏已下线的压测开关", async () => {
     envMock.value = "production";
     envMock.isPackaged = false;

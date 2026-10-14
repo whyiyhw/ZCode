@@ -30,5 +30,4 @@ describe("shared runtime env", () => {
     expect(env.ZCODE_ENV).toBe("production");
     expect(env.ZCODE_PRODUCT_FLAVOR).toBe("preview");
   });
-
 });

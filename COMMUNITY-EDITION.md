@@ -65,15 +65,15 @@
 
 七项 P0 整改（2026-09-21 实施，门禁 typecheck/lint/architecture 全绿，详见 PRIVACY-AUDIT.md §九）：
 
-| #   | 整改                                  | 位置                                                                            | 效果                                                                                                                                  |
-| --- | ------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 遥测总闸改 opt-in 默认关（2026-09-23 起遥测整栈已物理删除，开关随之移除，见 §十五） | `packages/shared/src/env.ts`                                       | 数仓 + ARMS + 远程 crash 三条通道先熄火、后整栈删除                                                                                  |
-| 2   | 桌面/服务侧指纹头收口                 | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带（2026-09-22 修订：`/api/v1/zcode-plan/` 计费路径族按服务端硬契约豁免补回三头，缺头即 400，见 PRIVACY-AUDIT.md §十二） |
-| 3   | CLI 指纹头按端点放行                  | 新增 `apps/zcode-cli/packages/adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸 |
-| 4   | model-io 落盘改 opt-in                | `apps/zcode-cli/packages/adapters/src/model/runner-debug.ts`                    | 默认不再写明文提示词/代码 JSONL                                                                                                       |
-| 5   | 反馈 full 档移除（2026-09-23 已随反馈功能整体下线） | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭；后续反馈功能整体删除，通道不复存在                    |
-| 6   | server fail-closed + Origin/Host 校验 | `packages/server/src/http.ts`                                                   | 非回环监听无 token 拒绝启动；跨站 WS 劫持与 DNS rebinding 被拦                                                                        |
-| 7   | 安装脚本强制哈希校验                  | `scripts/zcode-distribution/installer.mjs`                                      | 解压前 sha256 三方一致（latest.json / sha256.txt / 实际文件）                                                                         |
+| #   | 整改                                                                                | 位置                                                                            | 效果                                                                                                                                                                                                               |
+| --- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | 遥测总闸改 opt-in 默认关（2026-09-23 起遥测整栈已物理删除，开关随之移除，见 §十五） | `packages/shared/src/env.ts`                                                    | 数仓 + ARMS + 远程 crash 三条通道先熄火、后整栈删除                                                                                                                                                                |
+| 2   | 桌面/服务侧指纹头收口                                                               | `packages/shared/src/zcode-source-headers.ts`                                   | 删 `X-Client-Timezone`/`X-Os-Version`；`X-Device-Mid` 仅 `ZCODE_SEND_DEVICE_MID=true` 时携带（2026-09-22 修订：`/api/v1/zcode-plan/` 计费路径族按服务端硬契约豁免补回三头，缺头即 400，见 PRIVACY-AUDIT.md §十二） |
+| 3   | CLI 指纹头按端点放行                                                                | 新增 `apps/zcode-cli/packages/adapters/src/model/model-source-header-policy.ts` | 第三方模型端点只收 `User-Agent`；`metadata.user_id` 不再发往第三方且不触发 deviceMid 文件创建；`ZCODE_SEND_CLIENT_HEADERS=0` 紧急总闸                                                                              |
+| 4   | model-io 落盘改 opt-in                                                              | `apps/zcode-cli/packages/adapters/src/model/runner-debug.ts`                    | 默认不再写明文提示词/代码 JSONL                                                                                                                                                                                    |
+| 5   | 反馈 full 档移除（2026-09-23 已随反馈功能整体下线）                                 | `packages/services/src/feedback/`（五处联动）                                   | 反馈日志恒为 `logs/` ≤2MB；整目录出网上报路径消灭；后续反馈功能整体删除，通道不复存在                                                                                                                              |
+| 6   | server fail-closed + Origin/Host 校验                                               | `packages/server/src/http.ts`                                                   | 非回环监听无 token 拒绝启动；跨站 WS 劫持与 DNS rebinding 被拦                                                                                                                                                     |
+| 7   | 安装脚本强制哈希校验                                                                | `scripts/zcode-distribution/installer.mjs`                                      | 解压前 sha256 三方一致（latest.json / sha256.txt / 实际文件）                                                                                                                                                      |
 
 第二批整改：**性能瘦身三连删**（2026-09-22 实施，spec 见 `packages/desktop/spec/`，验证与文件清单见 PRIVACY-AUDIT.md §十一）——以「个人开发者不需要且常驻消耗 CPU/内存/网络」为标准整链删除，顺带消灭了 §二.B 所述「每小时 device_mid 更新心跳」在社区版的存在基础：
 
@@ -101,13 +101,13 @@
 
 **开关一览（全部默认安全方向）：**
 
-| 环境变量                       | 语义                                        | 默认                   |
-| ------------------------------ | ------------------------------------------- | ---------------------- |
+| 环境变量                           | 语义                                                                           | 默认                   |
+| ---------------------------------- | ------------------------------------------------------------------------------ | ---------------------- |
 | `ZCODE_BILLING_CONTRACT_HEADERS=0` | 计费契约三头（时区/OS 版本/设备标识，仅 `/api/v1/zcode-plan/` 路径）紧急关闭闸 | 开（该路径族默认携带） |
-| `ZCODE_SEND_DEVICE_MID=true`   | 全局 `X-Device-Mid` 指纹头（历史逃生口；计费路径已由上一行覆盖） | 关                     |
-| `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点收全集） |
-| `ZCODE_MODEL_IO_ENABLED=1`     | model-io 全量落盘（诊断用）                 | 关                     |
-| `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行 Origin 白名单               | 空                     |
+| `ZCODE_SEND_DEVICE_MID=true`       | 全局 `X-Device-Mid` 指纹头（历史逃生口；计费路径已由上一行覆盖）               | 关                     |
+| `ZCODE_SEND_CLIENT_HEADERS=0`      | CLI 指纹头与 anthropic metadata 紧急总闸                                       | 开（仅官方端点收全集） |
+| `ZCODE_MODEL_IO_ENABLED=1`         | model-io 全量落盘（诊断用）                                                    | 关                     |
+| `ZCODE_SERVER_ALLOWED_ORIGINS`     | server 额外放行 Origin 白名单                                                  | 空                     |
 
 **产物级验证（自 2026-09-21 起随每次出包执行，清单见 PRIVACY-AUDIT.md §七；2026-09-22 起口径见 §十二）：** 对 asar 与内置 agent grep：`proj-xtrace`/`apm/trace` 应 0 命中（已实测 0）；计费契约头 `X-Client-Timezone`/`X-Os-Version` 自 §十二 起改为「成对出现」断言——头名必须与 scoped 实现证据（`/api/v1/zcode-plan/` 前缀判定 + `ZCODE_BILLING_CONTRACT_HEADERS` kill-switch）同时在 asar，证明是路径级豁免而非无条件回滚；新开关字符串应在（实测在）。ARMS SDK 与遥测整栈已于 2026-09-23 物理删除（§十五）；`sdk.rum.aliyuncs` 等字符串现为零命中硬断言。
 

@@ -810,9 +810,9 @@ describe("SessionPane user query editing", () => {
         store: {
           markCommandPending: vi.fn(),
           expectAcceptedInputProjection: vi.fn(),
-        // v3.15.1 merge 新增：跳转窗口一次性抑制（SessionPane 落点补拉用）；
-        // 本文件不覆盖跳转场景，固定返回 false 保持"无抑制"旧行为。
-        consumeLeadingTurnBackfillSuppression: vi.fn(() => false),
+          // v3.15.1 merge 新增：跳转窗口一次性抑制（SessionPane 落点补拉用）；
+          // 本文件不覆盖跳转场景，固定返回 false 保持"无抑制"旧行为。
+          consumeLeadingTurnBackfillSuppression: vi.fn(() => false),
           onOnlineModelTransition: vi.fn(() => () => {}),
           refreshPlans: vi.fn(async () => {}),
           recoverFromStaleAuthority,

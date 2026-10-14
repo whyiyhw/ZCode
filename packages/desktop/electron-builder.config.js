@@ -25,7 +25,10 @@ import {
 // 并新增 sharp/koffi/computer-use-producer/powershell 等打包资产脚本；这些是 CUA/签名链路的
 // 纯功能改动，选 upstream 侧。HEAD 侧的内联函数定义随之删除（同名函数由共享模块导出）。
 import { createWindowsPowerShellSecurityArgs } from "./scripts/powershell-command.mjs";
-import { isSharpRequiredByComputerUse, verifyStagedSharp } from "./scripts/sharp-package-assets.mjs";
+import {
+  isSharpRequiredByComputerUse,
+  verifyStagedSharp,
+} from "./scripts/sharp-package-assets.mjs";
 import { isRealComputerUseProducerInstalled } from "./scripts/computer-use-producer.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
 import {

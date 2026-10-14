@@ -29,69 +29,69 @@
 
 ## 二、A 类：厂商遥测与指纹通道
 
-| # | 通道 | 证据 | 默认状态 | 处置 |
-|---|---|---|---|---|
-| A1 | 数仓事件（user_id/device_mid/分辨率/营销归因/事件明细） | （历史通道）原 `services/src/telemetry/telemetryCore.ts` | ✅ **已删除**（2026-09-23 整栈移除，见 §十五） | 完成 |
-| A2 | **全量指纹头随每次 ZCode endpoint API 外发**：`X-Device-Mid`、`X-Client-Timezone`、`X-Os-Version`、语言、平台、渠道 | `shared/src/zcode-source-headers.ts:45-58`；注入点 `services/src/providers/api/nodeApiClient.ts:62-74`（OAuth/计费/配置/分享全走这里；反馈通道已于 2026-09-23 下线） | **开，无开关** | P0：删 `X-Device-Mid`/时区/OS 版本三头，或并入遥测总闸 |
-| A3 | **灰度配置拉取**（启动 + 1h TTL）：`/api/v1/client/configs` 带全套 sourceHeaders | （历史通道）原 `desktop/src/main/desktopContextPromptRollout.ts`、`desktopHelpConfig.ts` | **已消灭**（灰度链 2026-09-22 移除；helpConfig 用户触发拉取链 2026-09-23 随社群入口下线，见 §十四） | 完成 |
-| A4 | **CLI 对所有模型 provider（含用户自建第三方端点）发指纹头**：`HTTP-Referer: zcode.z.ai`、版本、时区、locale、OS 内核版本 | `apps/zcode-cli/packages/bootstrap/src/model-config.ts:47-66`；注入 `adapters/src/model/model-execution.ts:202-208` | **开，无开关** | P0：仅对官方端点注入 + `ZCODE_SEND_CLIENT_HEADERS=0` 紧急开关 |
-| A5 | **Anthropic 协议请求体带 `metadata.user_id = {device_id, session_id}`，对第三方端点同样生效** | `adapters/src/model/anthropic-request-metadata.ts:7-32`；调用 `runner-generate.ts:166`、`runner-stream.ts:284` | **开** | P0：同 A4 按端点放行 |
-| A6 | 更新探测每小时心跳：`GET /api/v1/releases/electron/manifest?platform=&device_mid=&channel=` + `X-Device-Mid` 头 | `desktop/src/main/manifestUpdateProvider.ts:77-93,218-223`；`autoUpdater.ts:26` | production flavor 开；**社区构建（preview flavor）关** | P1：删 device_mid；需要彻底断时 patch 掉 `initAutoUpdater` |
-| A7 | ARMS RUM 全家桶（jsError/consoleError/crash/api/click/longTask + agent 崩溃 stderr tail ≤4000 字符） | （历史通道）原 `desktop/src/main/appARMSBootstrap.ts` 等 | ✅ **已删除**（2026-09-23 随 E1 摘除，见 §十五） | 完成 |
-| A8 | 营销归因（utm/channel_id）持久化并附于每个遥测事件 | `services/src/oauth/callbackAttribution.ts` → `oauthCredentialRepo.ts`（持久化仍在，遥测读取方已删） | 随 A1 删除上报侧 | P2：删持久化本身（OAuth 凭据库内的归因字段） |
-| A9 | provider 内置配置远端刷新（版本+平台，无 deviceMid） | `provider-node/src/zcode-builtin-download.ts:50-57`；CLI 接线 `bootstrap/src/app/process-provider-registry-runtime.ts:60-90` | 仅 SEA 打包态启用 | P2：加 kill-switch |
-| A10 | 官方端点改道网关：`open.bigmodel.cn`/`api.z.ai` 的 anthropic 端点改发 `zcode.z.ai/api/v1/ultra[-zai]/anthropic` | `adapters/src/model/official-coding-plan-gateway.ts:22-94` | 开（精确匹配官方端点） | 保留但文档显式声明 |
+| #   | 通道                                                                                                                     | 证据                                                                                                                                                                 | 默认状态                                                                                            | 处置                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| A1  | 数仓事件（user_id/device_mid/分辨率/营销归因/事件明细）                                                                  | （历史通道）原 `services/src/telemetry/telemetryCore.ts`                                                                                                             | ✅ **已删除**（2026-09-23 整栈移除，见 §十五）                                                      | 完成                                                          |
+| A2  | **全量指纹头随每次 ZCode endpoint API 外发**：`X-Device-Mid`、`X-Client-Timezone`、`X-Os-Version`、语言、平台、渠道      | `shared/src/zcode-source-headers.ts:45-58`；注入点 `services/src/providers/api/nodeApiClient.ts:62-74`（OAuth/计费/配置/分享全走这里；反馈通道已于 2026-09-23 下线） | **开，无开关**                                                                                      | P0：删 `X-Device-Mid`/时区/OS 版本三头，或并入遥测总闸        |
+| A3  | **灰度配置拉取**（启动 + 1h TTL）：`/api/v1/client/configs` 带全套 sourceHeaders                                         | （历史通道）原 `desktop/src/main/desktopContextPromptRollout.ts`、`desktopHelpConfig.ts`                                                                             | **已消灭**（灰度链 2026-09-22 移除；helpConfig 用户触发拉取链 2026-09-23 随社群入口下线，见 §十四） | 完成                                                          |
+| A4  | **CLI 对所有模型 provider（含用户自建第三方端点）发指纹头**：`HTTP-Referer: zcode.z.ai`、版本、时区、locale、OS 内核版本 | `apps/zcode-cli/packages/bootstrap/src/model-config.ts:47-66`；注入 `adapters/src/model/model-execution.ts:202-208`                                                  | **开，无开关**                                                                                      | P0：仅对官方端点注入 + `ZCODE_SEND_CLIENT_HEADERS=0` 紧急开关 |
+| A5  | **Anthropic 协议请求体带 `metadata.user_id = {device_id, session_id}`，对第三方端点同样生效**                            | `adapters/src/model/anthropic-request-metadata.ts:7-32`；调用 `runner-generate.ts:166`、`runner-stream.ts:284`                                                       | **开**                                                                                              | P0：同 A4 按端点放行                                          |
+| A6  | 更新探测每小时心跳：`GET /api/v1/releases/electron/manifest?platform=&device_mid=&channel=` + `X-Device-Mid` 头          | `desktop/src/main/manifestUpdateProvider.ts:77-93,218-223`；`autoUpdater.ts:26`                                                                                      | production flavor 开；**社区构建（preview flavor）关**                                              | P1：删 device_mid；需要彻底断时 patch 掉 `initAutoUpdater`    |
+| A7  | ARMS RUM 全家桶（jsError/consoleError/crash/api/click/longTask + agent 崩溃 stderr tail ≤4000 字符）                     | （历史通道）原 `desktop/src/main/appARMSBootstrap.ts` 等                                                                                                             | ✅ **已删除**（2026-09-23 随 E1 摘除，见 §十五）                                                    | 完成                                                          |
+| A8  | 营销归因（utm/channel_id）持久化并附于每个遥测事件                                                                       | `services/src/oauth/callbackAttribution.ts` → `oauthCredentialRepo.ts`（持久化仍在，遥测读取方已删）                                                                 | 随 A1 删除上报侧                                                                                    | P2：删持久化本身（OAuth 凭据库内的归因字段）                  |
+| A9  | provider 内置配置远端刷新（版本+平台，无 deviceMid）                                                                     | `provider-node/src/zcode-builtin-download.ts:50-57`；CLI 接线 `bootstrap/src/app/process-provider-registry-runtime.ts:60-90`                                         | 仅 SEA 打包态启用                                                                                   | P2：加 kill-switch                                            |
+| A10 | 官方端点改道网关：`open.bigmodel.cn`/`api.z.ai` 的 anthropic 端点改发 `zcode.z.ai/api/v1/ultra[-zai]/anthropic`          | `adapters/src/model/official-coding-plan-gateway.ts:22-94`                                                                                                           | 开（精确匹配官方端点）                                                                              | 保留但文档显式声明                                            |
 
 ---
 
 ## 三、B 类：内容出网通道（用户触发，需裁剪或警示）
 
-| # | 通道 | 证据 | 备注 |
-|---|---|---|---|
-| B1 | **会话分享发布**：整段对话 + 工作区文件字节 multipart 上传 zcode.z.ai | （历史通道）原 `services/src/conversation-share/` | ✅ **已删除**（2026-09-23 发布链与导入/落地页整体下线，见 §十五；持久化 schema 的 sharedContext 解码分支保留以兼容旧会话文件） | 完成 |
-| B2 | **反馈工单日志直传 OSS**：compact 档 ≤2MB logs/；`full:true` 打包**整个 appConfigDir（上限 1GB）**，可能裹入 setting.json、凭据备份 | （历史通道）原 `services/src/feedback/feedbackService.ts`、`feedbackHttpClient.ts`；身份 `X-Device-Mid` + JWT | ✅ 已随 2026-09-23 反馈功能整体下线彻底消灭（见 §十三）；full 档与 OSS 直传在此前 2026-09-21 已先行移除（见 §七第 5 条） |
-| B3 | 模型 API 本体（提示词/代码进上下文即出境） | 服务本体，非通道缺陷 | 不可移除；靠上下文自觉 + 可选本地模型 |
-| B4 | Coding Plan webview 向官网 localStorage 注入 OAuth token + `__zcodeReportContext__`（deviceMid/userId） | `ui/src/settings/model-provider-section/codingPlanEmbeddedWebview.ts:186-240`；preload origin 门禁 `desktop/src/preload/codingPlanWebview.ts:34-62` | P2：改 postMessage 按需传递 |
+| #   | 通道                                                                                                                                | 证据                                                                                                                                                | 备注                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| B1  | **会话分享发布**：整段对话 + 工作区文件字节 multipart 上传 zcode.z.ai                                                               | （历史通道）原 `services/src/conversation-share/`                                                                                                   | ✅ **已删除**（2026-09-23 发布链与导入/落地页整体下线，见 §十五；持久化 schema 的 sharedContext 解码分支保留以兼容旧会话文件） | 完成 |
+| B2  | **反馈工单日志直传 OSS**：compact 档 ≤2MB logs/；`full:true` 打包**整个 appConfigDir（上限 1GB）**，可能裹入 setting.json、凭据备份 | （历史通道）原 `services/src/feedback/feedbackService.ts`、`feedbackHttpClient.ts`；身份 `X-Device-Mid` + JWT                                       | ✅ 已随 2026-09-23 反馈功能整体下线彻底消灭（见 §十三）；full 档与 OSS 直传在此前 2026-09-21 已先行移除（见 §七第 5 条）       |
+| B3  | 模型 API 本体（提示词/代码进上下文即出境）                                                                                          | 服务本体，非通道缺陷                                                                                                                                | 不可移除；靠上下文自觉 + 可选本地模型                                                                                          |
+| B4  | Coding Plan webview 向官网 localStorage 注入 OAuth token + `__zcodeReportContext__`（deviceMid/userId）                             | `ui/src/settings/model-provider-section/codingPlanEmbeddedWebview.ts:186-240`；preload origin 门禁 `desktop/src/preload/codingPlanWebview.ts:34-62` | P2：改 postMessage 按需传递                                                                                                    |
 
 ---
 
 ## 四、C 类：本地敏感落盘
 
-| # | 数据 | 位置与证据 | 处置 |
-|---|---|---|---|
-| C1 | **model-io 全量请求/响应明文 JSONL（含完整系统提示词、代码、工具结果），生产默认开启** | `adapters/src/model/runner-debug.ts:64-68`（`shouldRecordModelIO` 仅 test 关）→ `~/.zcode/cli/rollout/model-io-<session>.jsonl`；轮转 3 文件×64MB；图片已占位、头已脱敏，但**文本正文全量**；当前无上传消费方 | **P0**：改 `ZCODE_MODEL_IO_ENABLED=1` opt-in；锁定 `modelIoFullRetentionEnabled` 协议偏好默认 false（`bootstrap/src/zcode-protocol-v4/model-io-preferences.ts:14-19`） |
-| C2 | **credentials.json 加密密钥可推导**：`sha256("zcode-credential-fallback:{platform}:{homedir}:{username}")`，且兼容明文回读；rawProfile（邮箱/头像原始 JSON）一并落盘 | `services/src/credential/providers/credentialCipherProvider.ts:24-38,79-83`；`oauth/repo/oauthCredentialRepo.ts:292-409` | P1：接 OS keychain；短期强制 `ZCODE_CREDENTIAL_SECRET`、删明文回读、rawProfile 不落盘 |
-| C3 | 会话库 db.sqlite 未加密（全部消息/工具调用/dwf journal） | `adapters/src/storage/session-store/paths.ts:5-9` | P2 |
-| C4 | 日志含工作区路径/session id/device_mid（7 天保留，键名脱敏、值不脱敏） | `~/.zcode/cli/log/`、`~/.zcode/v2/logs/`；`adapters/src/logging/index.ts:223` | P2 |
-| C5 | 崩溃 dump 双目录（线程/模块镜像，本地上传关闭 `uploadToServer:false`） | `desktop/src/main/desktopCrashCapture.ts:353-381` | P2：加保留期 |
-| C6 | 内嵌浏览器完整站点数据 + Chrome 导入 cookie | `desktop/src/main/browserDataManager.ts:30,123,216` | 已知设计，文档公示 |
-| C7 | deviceMid 持久 UUID（`~/.zcode/v2/telemetry-state.json`），永不轮换，计费链路依赖 | `services/src/device/deviceMid.ts:23-28`、`adapters/src/device/cli-device-mid.ts:34-83` | 随 A2/A5 处置 |
+| #   | 数据                                                                                                                                                                 | 位置与证据                                                                                                                                                                                                    | 处置                                                                                                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | **model-io 全量请求/响应明文 JSONL（含完整系统提示词、代码、工具结果），生产默认开启**                                                                               | `adapters/src/model/runner-debug.ts:64-68`（`shouldRecordModelIO` 仅 test 关）→ `~/.zcode/cli/rollout/model-io-<session>.jsonl`；轮转 3 文件×64MB；图片已占位、头已脱敏，但**文本正文全量**；当前无上传消费方 | **P0**：改 `ZCODE_MODEL_IO_ENABLED=1` opt-in；锁定 `modelIoFullRetentionEnabled` 协议偏好默认 false（`bootstrap/src/zcode-protocol-v4/model-io-preferences.ts:14-19`） |
+| C2  | **credentials.json 加密密钥可推导**：`sha256("zcode-credential-fallback:{platform}:{homedir}:{username}")`，且兼容明文回读；rawProfile（邮箱/头像原始 JSON）一并落盘 | `services/src/credential/providers/credentialCipherProvider.ts:24-38,79-83`；`oauth/repo/oauthCredentialRepo.ts:292-409`                                                                                      | P1：接 OS keychain；短期强制 `ZCODE_CREDENTIAL_SECRET`、删明文回读、rawProfile 不落盘                                                                                  |
+| C3  | 会话库 db.sqlite 未加密（全部消息/工具调用/dwf journal）                                                                                                             | `adapters/src/storage/session-store/paths.ts:5-9`                                                                                                                                                             | P2                                                                                                                                                                     |
+| C4  | 日志含工作区路径/session id/device_mid（7 天保留，键名脱敏、值不脱敏）                                                                                               | `~/.zcode/cli/log/`、`~/.zcode/v2/logs/`；`adapters/src/logging/index.ts:223`                                                                                                                                 | P2                                                                                                                                                                     |
+| C5  | 崩溃 dump 双目录（线程/模块镜像，本地上传关闭 `uploadToServer:false`）                                                                                               | `desktop/src/main/desktopCrashCapture.ts:353-381`                                                                                                                                                             | P2：加保留期                                                                                                                                                           |
+| C6  | 内嵌浏览器完整站点数据 + Chrome 导入 cookie                                                                                                                          | `desktop/src/main/browserDataManager.ts:30,123,216`                                                                                                                                                           | 已知设计，文档公示                                                                                                                                                     |
+| C7  | deviceMid 持久 UUID（`~/.zcode/v2/telemetry-state.json`），永不轮换，计费链路依赖                                                                                    | `services/src/device/deviceMid.ts:23-28`、`adapters/src/device/cli-device-mid.ts:34-83`                                                                                                                       | 随 A2/A5 处置                                                                                                                                                          |
 
 ---
 
 ## 五、D 类：本机/局域网暴露面（packages/server）
 
-| # | 问题 | 证据 | 处置 |
-|---|---|---|---|
-| D1 | **HTTP/WS 无 Origin/Host 校验且默认无 token：恶意网页可跨站连 `ws://127.0.0.1:3030/ws` 读会话/代码、执行终端** | `server/src/http.ts:304-315`（token 空则不装鉴权）、`:322-329`；WS 无同源限制 | **P0**：WS upgrade + `/api/*` 校验 Origin/Host 白名单 |
-| D2 | `/api/rpc-host-capability` 可被 no-cors simple POST 取 ticket → 连 `/ws/host` 成为 trusted-host 解除限制 | `server/src/http.ts:318,331-343`；`shared/src/channels.ts:498` | **P0**：与 D1 一并 |
-| D3 | `0.0.0.0` + 无 token 全 LAN 暴露（server-core 已 fail-closed，packages/server 没有） | `server/src/entry-http.ts:14-26`；对照 `zcode-server-cli/src/server-core/http.ts:126-132` | **P0**：移植 fail-closed |
-| D4 | `/api/server-info` 回 hostname/workspace 绝对路径；`/api/connect-remote` 未鉴权 SSRF 面 | `server/src/http.ts:147-182,346-365` | P1 |
-| D5 | Web OAuth token 存 localStorage（XSS 即窃） | `web/src/auth/browserOAuthCredentialRepo.ts:86-96` | P2 |
-| D6 | Windows 命名管道无 DACL，本机其他用户可控 stop/restart/update | `zcode-server-cli/src/runtime/paths.ts:43-46`、`ipc/controlServer.ts:106-126` | P2 |
+| #   | 问题                                                                                                           | 证据                                                                                      | 处置                                                  |
+| --- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| D1  | **HTTP/WS 无 Origin/Host 校验且默认无 token：恶意网页可跨站连 `ws://127.0.0.1:3030/ws` 读会话/代码、执行终端** | `server/src/http.ts:304-315`（token 空则不装鉴权）、`:322-329`；WS 无同源限制             | **P0**：WS upgrade + `/api/*` 校验 Origin/Host 白名单 |
+| D2  | `/api/rpc-host-capability` 可被 no-cors simple POST 取 ticket → 连 `/ws/host` 成为 trusted-host 解除限制       | `server/src/http.ts:318,331-343`；`shared/src/channels.ts:498`                            | **P0**：与 D1 一并                                    |
+| D3  | `0.0.0.0` + 无 token 全 LAN 暴露（server-core 已 fail-closed，packages/server 没有）                           | `server/src/entry-http.ts:14-26`；对照 `zcode-server-cli/src/server-core/http.ts:126-132` | **P0**：移植 fail-closed                              |
+| D4  | `/api/server-info` 回 hostname/workspace 绝对路径；`/api/connect-remote` 未鉴权 SSRF 面                        | `server/src/http.ts:147-182,346-365`                                                      | P1                                                    |
+| D5  | Web OAuth token 存 localStorage（XSS 即窃）                                                                    | `web/src/auth/browserOAuthCredentialRepo.ts:86-96`                                        | P2                                                    |
+| D6  | Windows 命名管道无 DACL，本机其他用户可控 stop/restart/update                                                  | `zcode-server-cli/src/runtime/paths.ts:43-46`、`ipc/controlServer.ts:106-126`             | P2                                                    |
 
 ---
 
 ## 六、E 类：构建与供应链
 
-| # | 问题 | 证据 | 处置 |
-|---|---|---|---|
-| E1 | ARMS SDK + OTLP 导出器 + `@babel/runtime` 被强制打进 asar；`patches/@arms__rum-electron` 还在**增强**采集（console.error 多参数、minidump process_type 解析） | （历史问题）原 `desktop/electron-builder.config.js` 注入清单、`patches/@arms__rum-electron@0.0.3.patch` | ✅ **已删除**（2026-09-23：依赖、patch、注入清单、本地 TTFT OTLP 导出链整体移除，见 §十五） | 完成 |
-| E2 | 构建期 env 注入面：`__ZCODE_ENDPOINT_ENV__`（ZCODE_BASE_URL 等 5 键）与 renderer `VITE_*` 烘进产物；`scripts/load-endpoint-env.mjs` 会合并未跟踪 `.env` | `desktop/tsup.config.ts:97-114`、`desktop/vite.config.ts:190-209` | P1：CI 构建前显式 unset 全部遥测 env（清单见下） |
-| E3 | **install.sh 不校验 sha256**（sha256.txt 是死文件），BASE_URL 劫持可装入任意代码 | `scripts/zcode-distribution/installer.mjs:3-58`；生成方 `build-zcode.mjs:268-288` | P0：安装脚本加 `sha256sum -c` |
-| E4 | 构建机外联：electron/electron-builder 二进制（npmmirror，无哈希校验的镜像回退）、Node 运行时（cdn.npmmirror.com）；native-search 源包与 ripgrep 预编译**已全量钉 sha256** | `mise.toml:7`、`bundle.mjs:160-231`、`native-search-tools-config.mjs:43-173` | P2：按需改镜像 |
-| E5 | 内置 provider 配置内联 13 家第三方端点 + zcode-plan 计费端点，随包分发 | `config/provider/zcode-builtin.json`（186KB）→ `__ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__` | 保留（功能面），文档公示 |
-| E6 | `ZCODE_DEBUG_NETWORK_CAPTURE` 未设视为启用 + debug server CORS 全开（仅 127.0.0.1:4174、不存正文、需手动配代理） | `apps/zcode-cli/packages/debug/server/network-capture.ts:304-414`、`server/index.ts:31` | P2：语义反转 + 收紧 CORS + 发布构建剥离 |
+| #   | 问题                                                                                                                                                                      | 证据                                                                                                    | 处置                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---- |
+| E1  | ARMS SDK + OTLP 导出器 + `@babel/runtime` 被强制打进 asar；`patches/@arms__rum-electron` 还在**增强**采集（console.error 多参数、minidump process_type 解析）             | （历史问题）原 `desktop/electron-builder.config.js` 注入清单、`patches/@arms__rum-electron@0.0.3.patch` | ✅ **已删除**（2026-09-23：依赖、patch、注入清单、本地 TTFT OTLP 导出链整体移除，见 §十五） | 完成 |
+| E2  | 构建期 env 注入面：`__ZCODE_ENDPOINT_ENV__`（ZCODE*BASE_URL 等 5 键）与 renderer `VITE*\*` 烘进产物；`scripts/load-endpoint-env.mjs`会合并未跟踪`.env`                    | `desktop/tsup.config.ts:97-114`、`desktop/vite.config.ts:190-209`                                       | P1：CI 构建前显式 unset 全部遥测 env（清单见下）                                            |
+| E3  | **install.sh 不校验 sha256**（sha256.txt 是死文件），BASE_URL 劫持可装入任意代码                                                                                          | `scripts/zcode-distribution/installer.mjs:3-58`；生成方 `build-zcode.mjs:268-288`                       | P0：安装脚本加 `sha256sum -c`                                                               |
+| E4  | 构建机外联：electron/electron-builder 二进制（npmmirror，无哈希校验的镜像回退）、Node 运行时（cdn.npmmirror.com）；native-search 源包与 ripgrep 预编译**已全量钉 sha256** | `mise.toml:7`、`bundle.mjs:160-231`、`native-search-tools-config.mjs:43-173`                            | P2：按需改镜像                                                                              |
+| E5  | 内置 provider 配置内联 13 家第三方端点 + zcode-plan 计费端点，随包分发                                                                                                    | `config/provider/zcode-builtin.json`（186KB）→ `__ZCODE_BUILTIN_PROVIDER_CONFIG_JSON__`                 | 保留（功能面），文档公示                                                                    |
+| E6  | `ZCODE_DEBUG_NETWORK_CAPTURE` 未设视为启用 + debug server CORS 全开（仅 127.0.0.1:4174、不存正文、需手动配代理）                                                          | `apps/zcode-cli/packages/debug/server/network-capture.ts:304-414`、`server/index.ts:31`                 | P2：语义反转 + 收紧 CORS + 发布构建剥离                                                     |
 
 ---
 
@@ -128,13 +128,13 @@
 
 改动面（git status）：16 个文件修改 + 2 个新增（`model-source-header-policy.ts`、`shared/spec/`），净行为：
 
-| 新增环境开关 | 语义 | 默认 |
-|---|---|---|
-| `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸 | 关 |
-| `ZCODE_SEND_DEVICE_MID=true` | `X-Device-Mid` 指纹头（官方计费契约逃生口） | 关 |
-| `ZCODE_SEND_CLIENT_HEADERS=0` | CLI 指纹头与 anthropic metadata 紧急总闸 | 开（仅官方端点） |
-| `ZCODE_MODEL_IO_ENABLED=1` | model-io 全量请求/响应落盘 | 关 |
-| `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行的 Origin 白名单（逗号分隔） | 空 |
+| 新增环境开关                   | 语义                                        | 默认             |
+| ------------------------------ | ------------------------------------------- | ---------------- |
+| `ZCODE_TELEMETRY_ENABLED=true` | 数仓/ARMS/远程 crash 总闸                   | 关               |
+| `ZCODE_SEND_DEVICE_MID=true`   | `X-Device-Mid` 指纹头（官方计费契约逃生口） | 关               |
+| `ZCODE_SEND_CLIENT_HEADERS=0`  | CLI 指纹头与 anthropic metadata 紧急总闸    | 开（仅官方端点） |
+| `ZCODE_MODEL_IO_ENABLED=1`     | model-io 全量请求/响应落盘                  | 关               |
+| `ZCODE_SERVER_ALLOWED_ORIGINS` | server 额外放行的 Origin 白名单（逗号分隔） | 空               |
 
 验证结果（真实执行）：
 
@@ -251,6 +251,7 @@
 **会话分享（B1）**：`services/src/conversation-share/` 整目录、web 落地页（`web/src/share/`）、UI 全部发布/导入入口（分享菜单、选择面板/确认/成功 Dock、导入横幅、只读时间线、deep link `zcode://share/import` 链）、`ServiceChannels.ConversationShare`、`PlatformChannels.ShareImport` 与 `IConversationShareService` 契约整体移除。web OAuth 基础设施（callback 页/state codec）保留（通用登录设施，见代码注释对 `/remote` 的预留）。持久化兼容：`zcodeSessionImportHistorySchema` 的 `sharedContext` 解码分支、legacy `"shared_context"` 消息来源枚举、sqlite store 的 `transitionSharedContextImport`、RowView 的 share 尾块剥离 parser 均保留——老会话文件必须继续可读；只删生产方。
 
 **遥测整栈（A1/E1/A7）**：
+
 - 数仓：`services/src/telemetry/`（telemetryCore `/event/report`）、`shared/src/telemetry{,Redaction}.ts`、`sessionCreateTelemetry.ts`、`remoteUsageTelemetry.ts`、ui 侧 `appTelemetry` + 15 个功能文件里的 `reportAppTelemetryEvent` 调用点、desktop `appTelemetryCore`/IPC。
 - ARMS：`@arms/rum-electron` 依赖与其 patch、`appARMSBootstrap` 注入链、ui ARMS 家族（uiPerf/reactError/sendFunnel/planUsage/chatErrorBanner/sessionOpen + E2E ring）、`ArmsCustomEventPayload` 契约与 5 个 IPC 通道。
 - 本地 TTFT OTLP 导出链：`localTtft.ts` schema、协议帧 `ttft/ttftRelated` 字段与 `v4/telemetry/local-ttft` 通知、UI observer、desktop exporter、CLI recorder（`ZCODE_LOCAL_TTFT_ENABLED` 逃生口随之消失）。启动 LaunchMarks 链（main→renderer 注入→uiPerf）一并删除。

@@ -348,7 +348,9 @@ function ReadyV4PaneConversationProvider({
 
   return (
     <ServiceProvider services={services}>
-      <V4ConversationContext.Provider value={bundle.value}>{children}</V4ConversationContext.Provider>
+      <V4ConversationContext.Provider value={bundle.value}>
+        {children}
+      </V4ConversationContext.Provider>
     </ServiceProvider>
   );
 }

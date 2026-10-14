@@ -44,7 +44,6 @@ describe("desktop deep link url helpers", () => {
     expect(extractWorkspaceOpenPath(new URL("zcode://workspace/open"))).toBeNull();
   });
 
-
   it("extracts protocol urls from desktop argv variants", async () => {
     const { extractDeepLinkUrlFromArgs } = await import("../src/main/desktopDeepLinkUrl.js");
 

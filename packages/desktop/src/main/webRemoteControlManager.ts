@@ -33,7 +33,6 @@ import {
   type WebRemoteControlWorkspaceListResult,
   type WebRemoteControlWorkspaceTarget,
   type RemoteUsageRemoteKind,
-
   measureWebRemoteControlRpcRelayEnvelopeBytes,
 } from "@zcode/shared";
 import {
@@ -281,7 +280,6 @@ export function createWebRemoteControlManager(dependencies: WebRemoteControlMana
   const runtimes = new Map<number, WindowControlRuntime>();
   const startAuthorizations = new Map<string, WebRemoteControlStartAuthorization>();
   const availableWorkspacesByWindowId = new Map<number, WebRemoteControlWorkspaceTarget[]>();
-
 
   const availableTasksByWindowId = new Map<number, WebRemoteControlTaskTarget[]>();
   const pushedWorkspaceListSignaturesByWindowId = new Map<number, string>();
@@ -956,10 +954,10 @@ export function createWebRemoteControlManager(dependencies: WebRemoteControlMana
 
       dependencies.logger.info(
         `[web-remote-control] workspace bridge active window=${runtime.windowId} session=${runtime.deviceSid} bridgeSession=${request.bridgeSessionId}`,
-      );;
+      );
 
       return toExternalBridge(bridgeRuntime);
-    } catch (error) {;
+    } catch (error) {
       if (acquired) {
         dependencies.releaseWorkspaceHostAttachment(acquired.attachmentId);
       }

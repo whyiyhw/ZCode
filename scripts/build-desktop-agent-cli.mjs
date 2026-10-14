@@ -176,19 +176,9 @@ if (!useTurboBuild) {
 // CLI 嵌套 workspace 已合并进仓库根 workspace（turbo.json 同步上移到根）：
 // turbo 直接在仓库根解析 workspace 与任务定义，--filter 圈定 @zcode/cli 即可，
 // 不再需要 --skip-infer --cwd apps/zcode-cli 的子 workspace 锚定。
-runCommand(
-  "pnpm",
-  [
-    "exec",
-    "turbo",
-    "run",
-    "build:desktop-agent",
-    "--filter=@zcode/cli",
-  ],
-  {
-    env: pnpmRunEnv,
-    stdio: "inherit",
-  },
-);
+runCommand("pnpm", ["exec", "turbo", "run", "build:desktop-agent", "--filter=@zcode/cli"], {
+  env: pnpmRunEnv,
+  stdio: "inherit",
+});
 stageDevAgentBundle();
 stageDevCuaPluginRuntime({ env: cuaPluginRuntimeStagingEnv });

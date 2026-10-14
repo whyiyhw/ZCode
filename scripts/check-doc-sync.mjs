@@ -281,15 +281,8 @@ const TELEMETRY_FACT_SCHEMA_PATH = "packages/shared/src/zcode-protocol-v4/teleme
 const TELEMETRY_FACT_PARSE_RE =
   /conversationTelemetryFactSchema\.parse\([\s\S]{0,1000}?kind:\s*"([^"]+)"/g;
 const telemetryProducerFiles = (
-  gitOk([
-    "grep",
-    "-l",
-    "-F",
-    "conversationTelemetryFactSchema.parse",
-    "--",
-    "apps",
-    "packages",
-  ]) ?? ""
+  gitOk(["grep", "-l", "-F", "conversationTelemetryFactSchema.parse", "--", "apps", "packages"]) ??
+  ""
 )
   .split("\n")
   .map((line) => line.trim())
@@ -348,8 +341,8 @@ if (existsSync(telemetrySchemaAbsolute)) {
       `【D2】shared telemetry schema 的 fact kind 集合与登记清单不一致：` +
         `新增 ${JSON.stringify(kindAdded)} / 消失 ${JSON.stringify(kindRemoved)}\n` +
         `    处置：上游 merge 给 packages/shared/src/zcode-protocol-v4/telemetry.ts 加了新 fact 分支时，\n` +
-      `    生产侧不落地（D1 已断），在此显式登记（第二步裁剪候选）；kind 被上游删除或第二步裁剪\n` +
-      `    收缩 schema 时，同步收缩本清单。`,
+        `    生产侧不落地（D1 已断），在此显式登记（第二步裁剪候选）；kind 被上游删除或第二步裁剪\n` +
+        `    收缩 schema 时，同步收缩本清单。`,
     );
   }
 }

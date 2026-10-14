@@ -987,9 +987,9 @@ export function App({
     navigateBack: canPrimaryNavigationBack
       ? () => runVisibleWorkspaceCommand(handlePrimaryNavigationBack)
       : null,
-      navigateForward: canTaskNavForward
-        ? () => runVisibleWorkspaceCommand(handleTaskNavForward)
-        : null,
+    navigateForward: canTaskNavForward
+      ? () => runVisibleWorkspaceCommand(handleTaskNavForward)
+      : null,
   });
 
   const quickPickCommands = useMemo(
@@ -1114,7 +1114,7 @@ export function App({
         onSearchResultHighlightRequest={handleSearchResultHighlightRequest}
         onOpenCodeViewer={handleOpenCodeViewerIfWritable}
       />
-{/* 社区版合并：保留上游 PluginUiWorkspaceProvider/workflow 深链/web-remote props；
+      {/* 社区版合并：保留上游 PluginUiWorkspaceProvider/workflow 深链/web-remote props；
     FeedbackHost（反馈中心）、updateReadyVersion/updateState（自动更新）、platform 剔除 */}
       <PluginUiWorkspaceProvider onOpenSidePane={handleOpenPluginUi}>
         <WorkspaceShellLayout

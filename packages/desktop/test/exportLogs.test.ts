@@ -523,7 +523,6 @@ describe("export logs archive", () => {
     }
   });
 
-
   it("导出日志应只对日志类目录应用近 3 天窗口并跳过旧 session 状态目录", async () => {
     const originalHome = process.env["HOME"];
     try {

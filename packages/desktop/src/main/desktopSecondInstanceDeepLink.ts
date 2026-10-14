@@ -44,9 +44,7 @@ export function handleSecondInstanceWorkspaceRequest(deps: SecondInstanceWorkspa
       confirmationCopy: deps.workspaceConfirmationCopy,
       resolveApplicationWindow: deps.resolveApplicationWindow,
       onWorkspaceOpenBlocked: () => {
-        deps.logger.warn(
-          "[second-instance] 已忽略 second-instance workspace deep link 请求",
-        );
+        deps.logger.warn("[second-instance] 已忽略 second-instance workspace deep link 请求");
       },
     })
   ) {

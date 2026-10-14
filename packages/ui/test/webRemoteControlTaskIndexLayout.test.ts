@@ -239,8 +239,9 @@ describe("WebRemoteControlTaskIndex layout", () => {
     );
 
     expect(source).toContain("shouldRetryWebRemoteControlTaskIndexLoad");
+    // 2026-10-14 全仓 fmt 后该依赖数组被 oxfmt 拆为独立一行，期望同步为新形态。
     expect(source).toContain(
-      "}, [activeTaskId, activeWorkspaceIdentity, activeWorkspacePath, switcher]);",
+      "[activeTaskId, activeWorkspaceIdentity, activeWorkspacePath, switcher],",
     );
   });
 
@@ -313,7 +314,9 @@ describe("Web 归档批量删除入口", () => {
     expect(populated).toContain('aria-label="taskList.archivedActions"');
     expect(populated).not.toContain('data-testid="delete-all-archived-tasks"');
     const empty = await renderTaskIndexWithInitialArchivedTasks(false);
-    expect(empty).toMatch(/<button(?=[^>]*disabled="")(?=[^>]*data-testid="archived-tasks-actions")/);
+    expect(empty).toMatch(
+      /<button(?=[^>]*disabled="")(?=[^>]*data-testid="archived-tasks-actions")/,
+    );
     expect(await renderTaskIndex()).not.toContain('data-testid="archived-tasks-actions"');
   });
 });

@@ -239,4 +239,3 @@ describe("desktopHostProcess disposeHostProcessAndWait", () => {
 // 社区版口径：MCP 资源样本来源（processResourceMcpTelemetrySource）与 PRT-010
 // tool-exec 资源上报（desktopResourceTelemetry 的 ARMS perf_tool_exec_resource）已随
 // 资源采样遥测删除，对应 describe 与顶层用例移除。
-

@@ -73,5 +73,4 @@ describe("desktopCronScheduler", () => {
     child.emit("exit", 0);
     await disposing;
   });
-
 });

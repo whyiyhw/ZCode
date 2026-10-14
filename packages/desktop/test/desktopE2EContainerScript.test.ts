@@ -78,8 +78,9 @@ describe("desktop E2E container presets", () => {
       "utf-8",
     ).replaceAll("\r\n", "\n");
 
+    // 2026-10-14 全仓 fmt 后 oxfmt 对齐了表格分隔线宽度并在表尾补空行，期望同步为新形态。
     expect(dockerPlan).toContain(
-      "| Spec | 迁移状态 |\n| --- | --- |\n<!-- conversation-session-verified-table-end -->",
+      "| Spec | 迁移状态 |\n| ---- | -------- |\n\n<!-- conversation-session-verified-table-end -->",
     );
 
     const spec = "./test/e2e/conversation-session/example.test.ts";

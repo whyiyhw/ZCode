@@ -96,7 +96,9 @@ export function WorkspaceHelpMenuButton({
             disabled={vulnerabilityReportLoading}
             aria-busy={vulnerabilityReportLoading}
             onSelect={
-              vulnerabilityReportUrl ? () => platform.openExternal(vulnerabilityReportUrl) : undefined
+              vulnerabilityReportUrl
+                ? () => platform.openExternal(vulnerabilityReportUrl)
+                : undefined
             }
           >
             <ShieldAlertIcon className="size-4" />

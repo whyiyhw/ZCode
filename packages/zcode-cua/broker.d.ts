@@ -89,7 +89,10 @@ export declare function errorResponse(
 ): BrokerResponse;
 export declare function errorResponseFromException(id: number, error: unknown): BrokerResponse;
 export declare function serializeResponse(response: BrokerResponse): string;
-export declare function withBrokerPresentation(result: unknown, presentation: unknown): {
+export declare function withBrokerPresentation(
+  result: unknown,
+  presentation: unknown,
+): {
   result: unknown;
   presentation: unknown;
 };

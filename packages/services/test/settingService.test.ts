@@ -39,7 +39,10 @@ function makeTempHome(): string {
   return home;
 }
 
-async function createSettingServiceInHome(home: string, dataBaseDir?: string): Promise<ISettingService> {
+async function createSettingServiceInHome(
+  home: string,
+  dataBaseDir?: string,
+): Promise<ISettingService> {
   process.env.HOME = home;
   // 清除宿主泄漏的数据根指向：vitest 下 ZCODE_PRODUCT_FLAVOR 恒为 preview（无 define 注入），
   // 设置文件路径走 getDataBaseDir()，必须保证 env 分支干净，落盘才会跟随当前 HOME；

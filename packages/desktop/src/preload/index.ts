@@ -76,11 +76,7 @@ import type {
   MaterializeWorkflowArtifactFileRequest,
   OpenCuaPermissionOnboardingOptions,
 } from "@zcode/shared";
-import {
-  InternalChannels,
-  PlatformChannels,
-  formatZCodeRendererProcessName,
-} from "@zcode/shared";
+import { InternalChannels, PlatformChannels, formatZCodeRendererProcessName } from "@zcode/shared";
 import { createOAuthCallbackHandler } from "./oauthCallbackBridge.js";
 
 const openWorkspacePathCallbacks = new Set<(path: string) => void>();

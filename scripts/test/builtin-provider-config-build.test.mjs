@@ -193,9 +193,7 @@ test("both repository configurations pass the runtime release decoder", async ()
 test("Turbo and bootstrap include the out-of-workspace configuration inputs", async () => {
   // 社区版（fork）：apps/zcode-cli 嵌套 workspace 已在 1516111d 合并进仓库根，
   // turbo 任务随之迁到根 turbo.json，input 前缀从 $TURBO_ROOT$/../../ 收敛为 $TURBO_ROOT$/。
-  const turbo = JSON.parse(
-    await readFile(resolve(repositoryRoot, "turbo.json"), "utf8"),
-  );
+  const turbo = JSON.parse(await readFile(resolve(repositoryRoot, "turbo.json"), "utf8"));
   for (const taskName of ["@zcode/cli#build", "build:desktop-agent"]) {
     const task = turbo.tasks[taskName];
     assert.ok(task.env.includes("ZCODE_ENV"));

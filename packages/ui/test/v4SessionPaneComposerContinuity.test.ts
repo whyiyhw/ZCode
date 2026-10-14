@@ -604,7 +604,9 @@ describe("SessionPane composer continuity", () => {
       });
       // 后续发送直接进既有会话，不再触发新的 createSession。
       expect(
-        conversationMock.sendCommand.mock.calls.filter(([command]) => command.type === "createSession"),
+        conversationMock.sendCommand.mock.calls.filter(
+          ([command]) => command.type === "createSession",
+        ),
       ).toHaveLength(1);
     },
   );

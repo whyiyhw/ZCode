@@ -106,7 +106,6 @@ function assistantRow(rowId: number, text: string): ConversationRow {
   };
 }
 
-
 function turnHeaderRow(rowId: number, turnId = "t1"): ConversationRow {
   return {
     rowId,

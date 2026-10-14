@@ -94,16 +94,11 @@ describe("desktop e2e Electron service lifecycle", () => {
       "utf8",
     );
     const electronServiceSource = readFileSync(
-      new URL(
-        "../../../node_modules/wdio-electron-service/dist/esm/index.js",
-        import.meta.url,
-      ),
+      new URL("../../../node_modules/wdio-electron-service/dist/esm/index.js", import.meta.url),
       "utf8",
     );
     const contextIdHandler = electronServiceSource.slice(
-      electronServiceSource.indexOf(
-        "_ElectronCdpBridge_getContextIdHandler = function",
-      ),
+      electronServiceSource.indexOf("_ElectronCdpBridge_getContextIdHandler = function"),
       electronServiceSource.indexOf("function getInitializeScript()"),
     );
 

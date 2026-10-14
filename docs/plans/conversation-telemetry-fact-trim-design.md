@@ -38,11 +38,11 @@ CLI 会话事件(SessionEvent)
 
 `normalize()` 的 switch 只保留 3 个 case,其余整体删除:
 
-| 保留 | 说明 |
-| --- | --- |
-| `TurnStarted` | 记 `sourceCommandByTurn`,产 `turn.started`(含 automationAdmission / offPeak 归属) |
-| `TurnComplete` | 产 `turn.terminal`(success/interrupted),读并清 turn 状态 |
-| `TurnError` | 产 `turn.terminal`(failed),同上 |
+| 保留           | 说明                                                                              |
+| -------------- | --------------------------------------------------------------------------------- |
+| `TurnStarted`  | 记 `sourceCommandByTurn`,产 `turn.started`(含 automationAdmission / offPeak 归属) |
+| `TurnComplete` | 产 `turn.terminal`(success/interrupted),读并清 turn 状态                          |
+| `TurnError`    | 产 `turn.terminal`(failed),同上                                                   |
 
 删除的 8 个生产分支:`ModelNetworkStatus`(model.request.status)、`ModelStreaming`(stream.chunk)、`ToolCallScheduled/Started/Progress/Result/Error`(tool.lifecycle)、`PermissionRequested/Resolved/Denied`(permission.lifecycle)、`ModelComplete`(usage.delta)、`DynamicWorkflowRunProgress`(workflow.lifecycle)、`SubagentSpawned/Stopped`(subagent.lifecycle)、`CompactCompleted/Failed`(compaction.terminal)。
 
@@ -67,11 +67,11 @@ CLI 会话事件(SessionEvent)
 
 ### 3.4 已知取舍
 
-| 取舍 | 接受理由 |
-| --- | --- |
-| 上游 merge 带回 fact 生产分支时需再裁(评审实测:被删区域的上游演进**必然显式冲突**,不会静默溜回;schema 侧加分支则零冲突自动合并——已用 check-doc-sync 检查 D 常驻断言兜住) | 方向已由保留红线定死,冲突裁决是机械劳动;比留着 8 条防护面便宜 |
-| 新版 CLI 连旧版桌面时,旧桌面(若有埋点消费 8 种 fact)拿不到数据 | 社区版桌面无埋点;桌面与 CLI 同仓同版本分发,混布窗口极小 |
-| shared schema 留 8 个「暂时无人触发」的分支 | 换取旧对端兼容 + 上游 merge 缓冲;第二步观察后再收缩,见 §7 决策点 1 |
+| 取舍                                                                                                                                                                     | 接受理由                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| 上游 merge 带回 fact 生产分支时需再裁(评审实测:被删区域的上游演进**必然显式冲突**,不会静默溜回;schema 侧加分支则零冲突自动合并——已用 check-doc-sync 检查 D 常驻断言兜住) | 方向已由保留红线定死,冲突裁决是机械劳动;比留着 8 条防护面便宜      |
+| 新版 CLI 连旧版桌面时,旧桌面(若有埋点消费 8 种 fact)拿不到数据                                                                                                           | 社区版桌面无埋点;桌面与 CLI 同仓同版本分发,混布窗口极小            |
+| shared schema 留 8 个「暂时无人触发」的分支                                                                                                                              | 换取旧对端兼容 + 上游 merge 缓冲;第二步观察后再收缩,见 §7 决策点 1 |
 
 ## 4. 不做什么
 
@@ -111,14 +111,14 @@ CLI 会话事件(SessionEvent)
 
 ### 下次 merge 操作预案
 
-| 文件 | 预计形态 | 裁决动作 |
-| --- | --- | --- |
-| `conversation-telemetry-facts.ts` | 上游动了被删区域才会显式大空冲突块(唯一样本内两文件零改动,概率被高估但 v3.14.3 主题与 workflow 同源,趋势真实) | 冲突块保 HEAD(空侧)= 再裁;对保留区域(三 turn case + helper + imports)跑一次上游 diff,确认自动合并的 turn 链演进 |
-| `conversation-telemetry-workflow-facts.ts` | modify/delete 冲突 | `git rm` 保删除(只服务 workflow.lifecycle,无 turn 链依赖) |
-| `packages/shared/src/zcode-protocol-v4/telemetry.ts` | **大概率零冲突自动合并——最需人工看** | merge 后必 diff:上游加 fact 分支 → 登记 check-doc-sync 检查 D2(第二步裁剪候选);上游改 turn 两分支字段 → 对照 normalizer 产出,required 字段缺失须同步补生产,否则运行时 parse throw(低概率窄缝,E2E/心跳冒烟可抓) |
-| `v4-gateway.ts` | emitLiveTelemetryFact 内取值块已删(2026-09-26,见下节),上游若动该函数会小冲突 | 冲突块保 HEAD(无 config 取值块、normalize 只传 memoryEnabled);normalize 签名收敛后上游多传字段会直接 typecheck 报错,属预期兜底 |
-| `v4-bridge.ts` | 自动合并(本地未动) | 无需手动;normalize 签名变更由 typecheck 兜底 |
-| merge 后验证 | — | `node scripts/check-doc-sync.mjs`(检查 D)+ `pnpm typecheck` + 心跳冒烟 |
+| 文件                                                 | 预计形态                                                                                                      | 裁决动作                                                                                                                                                                                                       |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conversation-telemetry-facts.ts`                    | 上游动了被删区域才会显式大空冲突块(唯一样本内两文件零改动,概率被高估但 v3.14.3 主题与 workflow 同源,趋势真实) | 冲突块保 HEAD(空侧)= 再裁;对保留区域(三 turn case + helper + imports)跑一次上游 diff,确认自动合并的 turn 链演进                                                                                                |
+| `conversation-telemetry-workflow-facts.ts`           | modify/delete 冲突                                                                                            | `git rm` 保删除(只服务 workflow.lifecycle,无 turn 链依赖)                                                                                                                                                      |
+| `packages/shared/src/zcode-protocol-v4/telemetry.ts` | **大概率零冲突自动合并——最需人工看**                                                                          | merge 后必 diff:上游加 fact 分支 → 登记 check-doc-sync 检查 D2(第二步裁剪候选);上游改 turn 两分支字段 → 对照 normalizer 产出,required 字段缺失须同步补生产,否则运行时 parse throw(低概率窄缝,E2E/心跳冒烟可抓) |
+| `v4-gateway.ts`                                      | emitLiveTelemetryFact 内取值块已删(2026-09-26,见下节),上游若动该函数会小冲突                                  | 冲突块保 HEAD(无 config 取值块、normalize 只传 memoryEnabled);normalize 签名收敛后上游多传字段会直接 typecheck 报错,属预期兜底                                                                                 |
+| `v4-bridge.ts`                                       | 自动合并(本地未动)                                                                                            | 无需手动;normalize 签名变更由 typecheck 兜底                                                                                                                                                                   |
+| merge 后验证                                         | —                                                                                                             | `node scripts/check-doc-sync.mjs`(检查 D)+ `pnpm typecheck` + 心跳冒烟                                                                                                                                         |
 
 ### 下次裁剪候选(非本次范围)
 

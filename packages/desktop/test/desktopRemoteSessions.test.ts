@@ -282,11 +282,7 @@ describe("desktopRemoteSessions R1 window Host forwarding", () => {
     const win = createWindow(1, 101);
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const manager = createManager(new Map([[101, child]]), { logger });
-    const connecting = manager.createRemoteWorkspaceSession(
-      win as never,
-      sshTarget,
-      "connect-1",
-    );
+    const connecting = manager.createRemoteWorkspaceSession(win as never, sshTarget, "connect-1");
     await emitConnected({ child, requestId: "connect-1", remoteSessionId: "remote-session-1" });
     confirmLatestScopedAttachment(manager, win);
     await connecting;

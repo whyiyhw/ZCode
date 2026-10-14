@@ -91,9 +91,7 @@ import { ConversationWorkflowCompletion } from "@/v4/ConversationWorkflowComplet
 import { resolveWorkflowTurnDigests } from "@/v4/workflowTurnDigests.js";
 import { resolveWorkflowTurnCompletion } from "@/v4/workflowTurnCompletion.js";
 import { ConversationAssistantTextActions } from "@/v4/ConversationRowView.js";
-import type {
-  EditWorkspaceRewindAvailability,
-} from "@/v4/ConversationRowView.js";
+import type { EditWorkspaceRewindAvailability } from "@/v4/ConversationRowView.js";
 import {
   isConversationReasoningRowVisible,
   type ConversationRowRenderContext,
@@ -1019,7 +1017,7 @@ function ConversationTurnFlow({
           assistantCodeCommentProjectionEnabled={assistantCodeCommentProjectionEnabled}
           canForkLatestAssistant={canForkLatestAssistant}
           canRetryLatestAssistant={canRetryLatestAssistant}
-  // 社区版合并：保留 highspeed/远控透传；分享选择与赞/踩 feedback 链剔除
+          // 社区版合并：保留 highspeed/远控透传；分享选择与赞/踩 feedback 链剔除
           highspeed={highspeed}
           highspeedMeta={highspeedMeta}
         />
@@ -1578,7 +1576,7 @@ function ConversationTurnGroupImpl({
               entityId={latestAssistantTextRow.entityId}
               text={assistantCopyText}
               createdAt={latestAssistantTextRow.createdAt}
-  // 社区版合并：保留 highspeed/远控透传；分享选择与赞/踩 feedback 链剔除
+              // 社区版合并：保留 highspeed/远控透传；分享选择与赞/踩 feedback 链剔除
               compactForRemoteControl={context.compactForRemoteControl}
               onFork={canForkLatestAssistant ? onFork : undefined}
               onRetry={canRetryLatestAssistant ? onRetry : undefined}

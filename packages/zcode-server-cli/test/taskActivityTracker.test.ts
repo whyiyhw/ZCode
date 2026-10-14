@@ -115,9 +115,7 @@ describe("Core-local TaskActivityTracker", () => {
     fake.fireFact(targetA, fact("turn.terminal", "session-1"));
     expect(tracker.readRunningTaskCount()).toBe(1);
 
-    fake.fireLifecycle(
-      lifecycleEvent({ ...targetB, state: "unavailable" }),
-    );
+    fake.fireLifecycle(lifecycleEvent({ ...targetB, state: "unavailable" }));
     expect(tracker.readRunningTaskCount()).toBe(0);
     tracker.dispose();
   });

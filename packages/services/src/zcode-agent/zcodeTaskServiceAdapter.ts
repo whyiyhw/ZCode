@@ -10,10 +10,7 @@ import { createZCodeAgentConnectionScope } from "#src/zcode-agent/zcodeAgentConn
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-  Emitter,
-  Event,
-} from "@zcode/rpc";
+import { Emitter, Event } from "@zcode/rpc";
 import {
   coalesceConsecutiveZCodeAssistants,
   createSessionTraceId,
@@ -3013,7 +3010,6 @@ export function createZCodeTaskServiceAdapter(
       });
       return snapshot.settings.model.current ?? null;
     },
-
 
     async syncTaskSessionBinding(): Promise<ZCodeSyncTaskSessionBindingResult> {
       unsupported("syncTaskSessionBinding");

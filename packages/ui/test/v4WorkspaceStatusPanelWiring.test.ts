@@ -1,10 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type {
-  GitRepositorySummary,
-  ZCodeTaskChangeSummary,
-} from "@zcode/shared";
+import type { GitRepositorySummary, ZCodeTaskChangeSummary } from "@zcode/shared";
 // 社区版口径（PRIVACY-AUDIT §十五 死代码清理）：上游 V4ChatPane 已删，
 // 单 pane workspace 路径由 V4WorkspaceChatArea 承接（同 props 契约）。
 import { V4WorkspaceChatArea } from "@/v4/V4WorkspaceChatArea.js";
@@ -38,9 +35,7 @@ vi.mock("@/v4/V4ConversationContext.js", async () => {
   };
 });
 
-function gitSummary(
-  overrides: Partial<GitRepositorySummary> = {},
-): GitRepositorySummary {
+function gitSummary(overrides: Partial<GitRepositorySummary> = {}): GitRepositorySummary {
   return {
     workspacePath: "/repo",
     repoRoot: "/repo",

@@ -485,8 +485,6 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
     expect(env.ZCODE_BUILD_COMMIT_ID).toBe("commit-test");
   });
 
-
-
   it("Windows 打包态会从 resourcesPath 推导安装目录供数据目录保护使用", async () => {
     const { resolveWindowsAppInstallDirForDataBaseDirGuard } =
       await import("../src/main/desktopRuntimeEnv.js");

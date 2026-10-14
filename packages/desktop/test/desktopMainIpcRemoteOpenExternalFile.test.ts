@@ -136,16 +136,19 @@ describe("OpenExternal 对 file URL 的分流", () => {
   });
 
   // POSIX 专属：/tmp 形态的 file URL 在 Windows 的 fileURLToPath 会抛错（属预期差异），仅在非 win32 断言。
-  it.skipIf(process.platform === "win32")("带锚点的 file URL 剥掉 hash 后仍走 shell.openPath", async () => {
-    const { listener } = await registerOpenExternalListener();
-    const sender = { getURL: vi.fn(() => "about:blank") };
+  it.skipIf(process.platform === "win32")(
+    "带锚点的 file URL 剥掉 hash 后仍走 shell.openPath",
+    async () => {
+      const { listener } = await registerOpenExternalListener();
+      const sender = { getURL: vi.fn(() => "about:blank") };
 
-    listener({ sender }, "file:///tmp/report.html#section");
+      listener({ sender }, "file:///tmp/report.html#section");
 
-    await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledTimes(1));
-    expect(h.shellOpenPath).not.toHaveBeenCalledWith(expect.stringContaining("#"));
-    expect(h.shellOpenExternal).not.toHaveBeenCalled();
-  });
+      await vi.waitFor(() => expect(h.shellOpenPath).toHaveBeenCalledTimes(1));
+      expect(h.shellOpenPath).not.toHaveBeenCalledWith(expect.stringContaining("#"));
+      expect(h.shellOpenExternal).not.toHaveBeenCalled();
+    },
+  );
 
   it("http URL 仍走 shell.openExternal", async () => {
     const { listener } = await registerOpenExternalListener();
@@ -159,14 +162,17 @@ describe("OpenExternal 对 file URL 的分流", () => {
   });
 
   // POSIX 专属：UNC host 形态在 Windows 的 fileURLToPath 是合法路径（\server\share），仅非 win32 断言 warn 分支。
-  it.skipIf(process.platform === "win32")("file URL 无法转换为本地路径时记录 warn 且不回退到 shell.openExternal", async () => {
-    const { listener, options } = await registerOpenExternalListener();
-    const sender = { getURL: vi.fn(() => "about:blank") };
+  it.skipIf(process.platform === "win32")(
+    "file URL 无法转换为本地路径时记录 warn 且不回退到 shell.openExternal",
+    async () => {
+      const { listener, options } = await registerOpenExternalListener();
+      const sender = { getURL: vi.fn(() => "about:blank") };
 
-    listener({ sender }, "file://server/share/page.html");
+      listener({ sender }, "file://server/share/page.html");
 
-    await vi.waitFor(() => expect(options.logger.warn).toHaveBeenCalledTimes(1));
-    expect(h.shellOpenPath).not.toHaveBeenCalled();
-    expect(h.shellOpenExternal).not.toHaveBeenCalled();
-  });
+      await vi.waitFor(() => expect(options.logger.warn).toHaveBeenCalledTimes(1));
+      expect(h.shellOpenPath).not.toHaveBeenCalled();
+      expect(h.shellOpenExternal).not.toHaveBeenCalled();
+    },
+  );
 });

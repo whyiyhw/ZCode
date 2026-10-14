@@ -104,7 +104,6 @@ function isSameRemoteTarget(left: RemoteTarget, right: RemoteTarget): boolean {
   }
 }
 
-
 function closeMessagePort(port: MessagePortMain | undefined): void {
   if (!port) return;
   try {
@@ -454,7 +453,11 @@ export function createRemoteWorkspaceSessionManager(options: {
     }
   }
 
-  function retireActiveRoute(route: RemoteAttachmentRoute, reason: string, mutate: () => void): void {
+  function retireActiveRoute(
+    route: RemoteAttachmentRoute,
+    reason: string,
+    mutate: () => void,
+  ): void {
     mutate();
   }
 

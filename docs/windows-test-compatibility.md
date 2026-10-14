@@ -25,15 +25,15 @@ rebase 附带处理：staging 的 CUA 单包合并（broker 51 文件并入 `@zc
 
 ## 环境事实（先读这一节）
 
-| 事实                                                                        | 影响                                                                                             |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| 仓库 `core.autocrlf=true`；2026-10-14 起 fmt 管辖类型（ts/tsx/js 系/json/md/mdx/css/html/yaml）经 `.gitattributes` 强制 `eol=lf` checkout，其余类型仍为 CRLF | 所有"读源码断言片段"的测试必须换行归一化（LF 化后风险降低，规则保留兼容旧工作区）                 |
-| Git Bash 把 `/usr/bin`（GNU tar 1.35）注入 PATH 最前                        | GNU tar 把归档参数里的 `C:` 当远程主机；`zip`/`ditto` 等 macOS/Linux 命令缺失                    |
-| Windows 真实用户 PATH 中 System32 靠前（bsdtar）                            | 产品在用户机上用的是 bsdtar；测试环境需在 vitest.setup.ts 恢复同序                               |
-| NTFS 不保留 POSIX exec 位（0o111 恒 0）                                     | exec 位断言仅在 POSIX 宿主生效                                                                   |
-| Windows 无法删除任何进程 cwd 所在目录；持打开句柄期间 rename 同一目标 EPERM | 子进程生命周期类测试的 teardown 顺序有硬约束                                                     |
-| `node:fs` globSync 在 Windows 返回反斜杠路径                                | glob 结果必须归一化后再做前缀过滤                                                                |
-| 产品 control endpoint 在 Windows 使用 `\\\\.\\pipe\\...` named pipe         | IPC 测试必须按平台构造 endpoint，禁止因 POSIX socket fixture 在 Windows 报 EACCES 而跳过产品链路 |
+| 事实                                                                                                                                                         | 影响                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| 仓库 `core.autocrlf=true`；2026-10-14 起 fmt 管辖类型（ts/tsx/js 系/json/md/mdx/css/html/yaml）经 `.gitattributes` 强制 `eol=lf` checkout，其余类型仍为 CRLF | 所有"读源码断言片段"的测试必须换行归一化（LF 化后风险降低，规则保留兼容旧工作区）                |
+| Git Bash 把 `/usr/bin`（GNU tar 1.35）注入 PATH 最前                                                                                                         | GNU tar 把归档参数里的 `C:` 当远程主机；`zip`/`ditto` 等 macOS/Linux 命令缺失                    |
+| Windows 真实用户 PATH 中 System32 靠前（bsdtar）                                                                                                             | 产品在用户机上用的是 bsdtar；测试环境需在 vitest.setup.ts 恢复同序                               |
+| NTFS 不保留 POSIX exec 位（0o111 恒 0）                                                                                                                      | exec 位断言仅在 POSIX 宿主生效                                                                   |
+| Windows 无法删除任何进程 cwd 所在目录；持打开句柄期间 rename 同一目标 EPERM                                                                                  | 子进程生命周期类测试的 teardown 顺序有硬约束                                                     |
+| `node:fs` globSync 在 Windows 返回反斜杠路径                                                                                                                 | glob 结果必须归一化后再做前缀过滤                                                                |
+| 产品 control endpoint 在 Windows 使用 `\\\\.\\pipe\\...` named pipe                                                                                          | IPC 测试必须按平台构造 endpoint，禁止因 POSIX socket fixture 在 Windows 报 EACCES 而跳过产品链路 |
 
 ## 2026-10-14 补记：apps/zcode-cli/packages/bootstrap 套件 Windows 首跑对齐（183 例 → 0）
 

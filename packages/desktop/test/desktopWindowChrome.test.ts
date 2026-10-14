@@ -526,7 +526,6 @@ describe("desktopWindowChrome", () => {
     expect(windowOptions).not.toHaveProperty("backgroundMaterial");
   });
 
-
   it("routes normal webview popup requests into an in-app browser tab", async () => {
     const { createBrowserWindow } = await import("../src/main/desktopWindowChrome.js");
 

@@ -45,9 +45,9 @@ describe("stdio Desktop presentation surface", () => {
     // Windows 下 provider 进程句柄释放略滞后于测试结束，并发全量单测时 rmdir 会撞
     // EBUSY；Node 的 maxRetries/retryDelay 只对 EBUSY/EPERM/ENOTEMPTY 生效，属清理兜底。
     await Promise.all(
-      tempHomes.splice(0).map((home) =>
-        rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }),
-      ),
+      tempHomes
+        .splice(0)
+        .map((home) => rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })),
     );
   });
 
