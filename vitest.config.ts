@@ -114,6 +114,11 @@ export default defineConfig({
           // Node 24/macOS 的 threads 全量运行可触发 V8 SIGSEGV；诊断时切换进程隔离，测试范围不变。
           pool: process.env.ZCODE_TEST_POOL === "forks" ? "forks" : "threads",
           maxWorkers: process.env.ZCODE_TEST_POOL === "forks" ? 2 : 4,
+          // retry（项目级）：大 diff 推送时 pre-push 走 lint-staged 分块关联测试（几十个
+          // vitest 实例同机并发数小时），本机 HTTP/named-pipe/真实超时窗类用例会随机
+          // 假失败（bundled-config/releaseDownload/cli/coreHttp 先后命中，单跑均绿）。
+          // 项目级一次重试消除该负载型失败；fork-isolated 串行组 contention 低，不启用。
+          retry: 1,
           sequence: { groupOrder: 0 },
         },
       },

@@ -103,7 +103,9 @@ describe("release downloader", () => {
     await expect(stat(destination)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("aborts a JSON request at the application timeout", async () => {
+  // retry：真实 1s 应用超时窗在门禁满载（lint-staged 分块并发 + 全量套件）下的事件循环
+  // 拥塞会偶发假失败；重试一次消除负载型失败（先例：cli.test.ts up-to-date 用例）。
+  it("aborts a JSON request at the application timeout", { retry: 1 }, async () => {
     const server = createServer((_request, _response) => {
       // 保持请求打开，确保测试验证的是 AbortSignal 而不是服务端返回错误。
     });
@@ -122,7 +124,7 @@ describe("release downloader", () => {
     ).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("keeps an active archive stream alive past the idle timeout", async () => {
+  it("keeps an active archive stream alive past the idle timeout", { retry: 1 }, async () => {
     const payload = Buffer.from("abcdefgh");
     const sha256 = createHash("sha256").update(payload).digest("hex");
     const server = createServer((_request, response) => {

@@ -73,7 +73,11 @@ async function createTestReleaseArchive(
   return { archivePath, archiveSha256 };
 }
 
-describe("Server CLI routing", () => {
+// retry（describe 级）：本文件大量用例依赖 control named pipe / 本机 HTTP catalog 的
+// 10s 往返窗，在 pre-push 门禁的 lint-staged 分块并发（多 vitest 实例同机争用）下会
+// 轮流出现负载型假失败（ENOENT/update-guard/race/up-to-date 均出现过）；一次性重试
+// 消除该类失败，单跑与全量绿态不受影响（先例：releaseDownload/cli 单用例 retry）。
+describe("Server CLI routing", { retry: 1 }, () => {
   it("budgets apply-update timeout for the complete bounded rollback path", () => {
     expect(APPLY_UPDATE_TIMEOUT_MS).toBeGreaterThanOrEqual(51_000);
   });
