@@ -236,6 +236,8 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - @jridgewell/sourcemap-codec@1.5.5 — MIT
 
+- @jridgewell/sourcemap-codec@1.6.0 — MIT
+
 - @jridgewell/trace-mapping@0.3.31 — MIT
 
 - @kurkle/color@0.3.4 — MIT
@@ -1444,7 +1446,7 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - lexical@0.42.0 — MIT
 
-- lib0@0.2.117 — MIT
+- lib0@0.2.119 — MIT
 
 - lie@3.3.0 — MIT
 
@@ -2060,7 +2062,7 @@ Original copyright, license and NOTICE text is retained below. Identical text is
 
 - tinycolor2@1.6.0 — MIT
 
-- tinyexec@1.1.1 — MIT
+- tinyexec@1.3.1 — MIT
 
 - tldts-core@7.0.28 — MIT
 
@@ -2345,14 +2347,6 @@ Fig autocomplete source carries the repository's MIT license; the generated regi
 Electron/Chromium target-specific notices are shipped separately under Resources/licenses/electron. Distributions containing an independent Node runtime also include its exact-version LICENSE.node.txt; SEA includes that text in --licenses output.
 
 ## Modified npm packages
-
-- vitest@4.1.7: modified by ZCode; the changes are recorded in patches/vitest@4.1.7.patch in the source repository.
-
-- wdio-electron-service@9.2.1: modified by ZCode; the changes are recorded in patches/wdio-electron-service@9.2.1.patch in the source repository.
-
-- @ai-sdk/openai-compatible@2.0.60: modified by ZCode; the changes are recorded in patches/@ai-sdk__openai-compatible@2.0.60.patch in the source repository.
-
-- @ai-sdk/anthropic@3.0.81: modified by ZCode; the changes are recorded in patches/@ai-sdk__anthropic@3.0.81.patch in the source repository.
 
 ## License and NOTICE texts
 
@@ -4272,6 +4266,8 @@ SOFTWARE.
 
 - @jridgewell/sourcemap-codec@1.5.5: LICENSE
 
+- @jridgewell/sourcemap-codec@1.6.0: LICENSE
+
 - @jridgewell/trace-mapping@0.3.31: LICENSE
 
 
@@ -4330,6 +4326,8 @@ SOFTWARE.
 ### Notice 98bb58f02f63428bdcf9153ac14c74149b50d3995e363c17a3faea9f8248858c
 
 - @jridgewell/sourcemap-codec@1.5.5: README.md (license section)
+
+- @jridgewell/sourcemap-codec@1.6.0: README.md (license section)
 
 - deepmerge@4.3.1: readme.md (license section)
 
@@ -21464,7 +21462,7 @@ SOFTWARE.
 
 ### Notice 5446db1e43fe52faf3faab7e9959fe3762ac11bdc61c0945934c498affd52d73
 
-- lib0@0.2.117: LICENSE
+- lib0@0.2.119: LICENSE
 
 
 
@@ -21495,7 +21493,7 @@ SOFTWARE.
 
 ### Notice 2a88c16bef1c3bef4a5bd265bd61ea2e30b19d0a501e12e1d5d79e523ca4836c
 
-- lib0@0.2.117: README.md (license section)
+- lib0@0.2.119: README.md (license section)
 
 
 
@@ -34155,101 +34153,9 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ````
 
-### Notice 538cf6250ba4f1ecf9986515e6db7885fd8f28892ab593f4f3dfb78a5deb6159
-
-- tinyexec@1.1.1: dist/LICENSES.txt
-
-
-
-````text
-isexe:2.0.0 -- The ISC License
-
-Copyright (c) Isaac Z. Schlueter and Contributors
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-which:2.0.2 -- The ISC License
-
-Copyright (c) Isaac Z. Schlueter and Contributors
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-path-key:3.1.1 -- MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-cross-spawn:7.0.6 -- The MIT License (MIT)
-
-Copyright (c) 2018 Made With MOXY Lda <hello@moxy.studio>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-shebang-regex:3.0.0 -- MIT License
-
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-shebang-command:2.0.0 -- MIT License
-
-Copyright (c) Kevin Mårtensson <kevinmartensson@gmail.com> (github.com/kevva)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-````
-
 ### Notice f95f668fe64081ddb4153b322e34fdd719b991285ed08177d5ad7133b7988d92
 
-- tinyexec@1.1.1: LICENSE
+- tinyexec@1.3.1: LICENSE
 
 
 

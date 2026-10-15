@@ -27,6 +27,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(scriptDir, "..");
 const repoRoot = resolve(desktopRoot, "..", "..");
 const cliBundlePath = resolve(repoRoot, "apps/zcode-cli/packages/cli/dist/zcode.cjs");
+// 修复原因：v3.15.1 合并冲突解决时误删了上游的该常量，stageKoffiForCuaPlugin 仍引用它，
+// 桌面端生产构建在 prepare:agent-bundle 阶段 ReferenceError（单测不覆盖构建脚本，仅 build 可捕获）。
+const adaptersRoot = resolve(repoRoot, "apps/zcode-cli/packages/adapters");
 const pnpmRunEnv = {
   ...process.env,
   // pnpm 11 会在 apps/zcode-cli 子 workspace 执行 run 前触发 install；

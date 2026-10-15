@@ -2,6 +2,7 @@
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
     "packages/desktop/src/renderer/src/plugin-sandbox/genUiTweakRuntime.js",
+    "packages/zcode-cua/**",
     "apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/**",
     "THIRD-PARTY-NOTICES.md",
     "third-party/inventory.json",

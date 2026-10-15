@@ -43,6 +43,17 @@ rebase 附带处理：staging 的 CUA 单包合并（broker 51 文件并入 `@zc
   `tests/**` 会把 `helpers/*.ts` 等纯源文件也当 suite 吞入（报 No test suite
   found）；bootstrap 的 unit 项目 include 已限定 `tests/**/*.test.ts`。规则：
   子包自建 vitest.config 时 include 一律带 `*.test.ts`，与根仓同口径。
+- **首跑全量 `pnpm build` 揪出四层 Windows/合并缺陷并修复**（单测均不覆盖构建链）：
+  ① zcode-cua 入库 prebuilt 为合并前旧版（js 缺上游新导出、d.ts 却已更新，esbuild
+  打包 server-cli 时 No matching export）——整包恢复上游产物、保留 fork 的
+  package.json（含自有 `./runtime-staging` 导出），并加入 oxfmt ignore（vendored
+  产物不做格式化）；② `prepare-agent-node-bundle.mjs` 合并冲突解决时误删上游
+  `adaptersRoot` 常量 → prepare:agent-bundle 阶段 ReferenceError，已恢复；
+  ③ desktop tsup 残留已下线的 rewardsWebview 预载入口 → tsup exit 1，已移除
+  （PRIVACY-AUDIT §十六）；④ Gen UI vendor 的 `*.LICENSE` 无扩展名，autocrlf=true
+  的 Windows checkout 将其 smudge 为 CRLF，manifest sha256 校验必炸（上游 CI 为
+  LF 环境无感）——vendor/\*\* 加 `-text -whitespace` 按字节保存并按 index 恢复，
+  8 个哈希全部对齐。修复后全量 build exit 0。
 - `privateFilePersistence.ts` 的 rename 重试窗（10 次/约 5.6s，见 10-14 补记第 3 类）
   在 24 下复验通过；本次顺带补跑 oxfmt（该文件前次提交漏格式化——fmt 不在
   pre-push 门禁内，属已知缺口，提交前需自查 `pnpm fmt:check`）。

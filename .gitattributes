@@ -23,6 +23,11 @@
 # E2E PDF fixture 含规范 xref 尾空格，必须按二进制处理，避免 diff --check 误报。
 packages/desktop/test/e2e/fixtures/fs/**/*.pdf binary
 
+# Gen UI vendor 快照按字节保存（manifest sha256 校验工作区文件；autocrlf=true 的
+# Windows checkout 会把无扩展名的 *.LICENSE smudge 成 CRLF 导致哈希必炸，上游
+# CI 为 LF 环境无感）。与前述 licenses 条目同口径：第三方原文不做任何转换。
+apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/vendor/** -text -whitespace
+
 # 上游许可原文与生成的声明按字节保存，不能自动转换换行或裁剪空白。
 # 原文中的 License / ======= 是 Markdown 标题，不是合并冲突。
 THIRD-PARTY-NOTICES.md -text -whitespace conflict-marker-size=32 linguist-generated=true

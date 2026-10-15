@@ -289,7 +289,8 @@ export default defineConfig([
     entry: {
       "preload/embeddedBrowserJavaScriptDialog": "src/preload/embeddedBrowserJavaScriptDialog.ts",
       "preload/codingPlanWebview": "src/preload/codingPlanWebview.ts",
-      "preload/rewardsWebview": "src/preload/rewardsWebview.ts",
+      // 社区版口径（PRIVACY-AUDIT §十六）：rewards Webview 预载脚本已随奖励中心下线，
+      // 入口残留会让 tsup 以 exit 1 失败（Cannot find preload/rewardsWebview）。
       "preload/browserVideoRecorder": "src/preload/browserVideoRecorder.ts",
       "preload/index": "src/preload/index.ts",
       "preload/resourceManager": "src/preload/resourceManager.ts",
