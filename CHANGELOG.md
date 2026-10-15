@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.16.2](https://github.com/whyiyhw/ZCode/compare/v3.16.1...v3.16.2) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** 清剿 v3.15.1 合并残留的悬空引用，补悬空名称门禁（v3.16.1 启动崩溃） ([2053dd8](https://github.com/whyiyhw/ZCode/commit/2053dd8e0c2b602a89fcbd8a8c6638173449d481))
+  * 恢复丢失的 import（被引符号全部健在，纯合并损伤）：hostname（node:os）、
+  * 类型入口错位：IStorageService 改取自 @zcode/services；StorageRootSpec 改取自
+  * RemoteUsageRemoteKind 在 shared 从未存在，改用生产方口径 RemoteTarget["kind"]
+  * 复审补刀：desktopWindowLifecycle 关窗回调的 browserWindowId（TS2552 建议变体，
+  * tsconfig.main lib 补 DOM（browserPlaywrightExecutor 在页面上下文用 document）
+  * 新增 danglingNameGate.test.ts：三子工程 TS2304/TS2305/TS2552 必须为零，
+  * 登记 docs/monitoring/remote-usage-arms-telemetry.md 失效（ARMS 通道已随 §十五 删除）
+
 ## [3.16.1](https://github.com/whyiyhw/ZCode/compare/v3.16.0...v3.16.1) (2026-10-15)
 
 ### Bug Fixes
