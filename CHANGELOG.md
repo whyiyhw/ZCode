@@ -1,6 +1,6 @@
 # Changelog
 
-## [](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-10-15)
+## [3.16.0](https://github.com/whyiyhw/ZCode/compare/v3.15.1...v3.16.0) (2026-10-15)
 
 ### Bug Fixes
 
@@ -20,7 +20,7 @@
 
 * **telemetry:** 裁剪跟进收尾——normalize 签名收敛 memoryEnabled、陈旧注释纠偏、taskActivityTracker 补单测 ([bf844b2](https://github.com/whyiyhw/ZCode/commit/bf844b2c6589fecf057b4d14ddad0ba74cda42b3))
 
-## [3.15.0](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-09-27)
+## [3.15.0](https://github.com/whyiyhw/ZCode/compare/v3.14.3...v3.15.0) (2026-09-27)
 
 ### Features
 
@@ -119,7 +119,7 @@
 
 * 清理全部 62 条 oxlint 告警并启用 lint --deny-warnings ([9b1a99f](https://github.com/whyiyhw/ZCode/commit/9b1a99f01e8fa4ec4e55aa940239c39675301701))
 
-## [3.14.3](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-09-23)
+## [3.14.3](https://github.com/whyiyhw/ZCode/compare/v3.14.2...v3.14.3) (2026-09-23)
 
 ### Features
 
@@ -170,7 +170,7 @@
   * README / NOTICE / zcode-cua 包描述从「占位包不可用」更新为
   * NOTICE 移除分享链路与桌面自动更新的过期表述
 
-## [3.14.2](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-09-22)
+## [3.14.2](https://github.com/whyiyhw/ZCode/compare/v3.14.1...v3.14.2) (2026-09-22)
 
 ### Bug Fixes
 
@@ -193,7 +193,7 @@
   * Stop hook 本机接线在 .zcode/（gitignored，见 AGENTS.md 记录）
   * AGENTS.md 核心原则与命令表登记
 
-## [3.14.1](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-09-22)
+## [3.14.1](https://github.com/whyiyhw/ZCode/compare/v3.14.0...v3.14.1) (2026-09-22)
 
 ### Features
 
@@ -228,7 +228,7 @@
   * README: drop a duplicated bootstrap paragraph, add the three missing
   * AGENTS.md: add a log-location section (prod/dev vs Preview roots,
 
-## [3.14.0](https://github.com/whyiyhw/ZCode/compare/v3.15.0...vnull) (2026-09-22)
+## [3.14.0](https://github.com/whyiyhw/ZCode/compare/v3.14.0...v3.14.0) (2026-09-22)
 
 ### Features
 
