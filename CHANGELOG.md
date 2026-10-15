@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.16.1](https://github.com/whyiyhw/ZCode/compare/v3.16.0...v3.16.1) (2026-10-15)
+
+### Bug Fixes
+
+* **desktop:** 摘除 v3.15.1 合并残留的打包遥测注入链，修复安装包启动 ReferenceError ([73299c2](https://github.com/whyiyhw/ZCode/commit/73299c2751fe5eb8df7954915c0c7a4ef687efb4))
+  * desktopRuntimeEnv.ts 打包分支恒返回空对象（ZCODE_BASE_URL 等链接由
+  * tsup 删除该 define、resolveBuildPackagedAgentTelemetryEnv（含 CI release 门控）
+  * e2e 构建缓存指纹移除 CI/CI_COMMIT_*/ZCODE_PACKAGED_AGENT_OTEL_* 六个失效变量
+  * 新增打包态契约测试（不读本地 .env、恒空对象）防上游合并回潮
+  * 同步 PRIVACY-AUDIT §十五补记、build-time-optional-capabilities 与 TTFT checklist 口径
+
+
+### Chores
+
+* **release:** oxfmt 收敛 CHANGELOG 存量格式（v3.16.0 手工编辑后未过 fmt 门禁） ([1b8b829](https://github.com/whyiyhw/ZCode/commit/1b8b829c6f1f1305cb0e5ec2950cfebebb90e0a8))
+
+* **release:** 修正 CHANGELOG 各版本 compare 链接（writer 生成 vnull/空版本的存量缺陷） ([574b5b1](https://github.com/whyiyhw/ZCode/commit/574b5b16ec4ad32b9d6fa59883463c9a1944e86d))
+
 ## [3.16.0](https://github.com/whyiyhw/ZCode/compare/v3.15.1...v3.16.0) (2026-10-15)
 
 ### Bug Fixes
