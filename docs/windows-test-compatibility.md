@@ -35,6 +35,18 @@ rebase 附带处理：staging 的 CUA 单包合并（broker 51 文件并入 `@zc
 | `node:fs` globSync 在 Windows 返回反斜杠路径                                                                                                                 | glob 结果必须归一化后再做前缀过滤                                                                |
 | 产品 control endpoint 在 Windows 使用 `\\\\.\\pipe\\...` named pipe                                                                                          | IPC 测试必须按平台构造 endpoint，禁止因 POSIX socket fixture 在 Windows 报 EACCES 而跳过产品链路 |
 
+## 2026-10-15 补记：本机 Node 对齐 24.14.0（mise.toml 口径）后的兼容收口
+
+- 本机经 nvm-windows 安装并切换 Node 24.14.0（`NVM_SYMLINK=D:\soft\nodejs`）。
+  根仓全量 15983 过 / bootstrap 全量 2907 例 2890 过，与 22 下结果一致。
+- **vitest include 必须显式限定测试文件**：Node 24 下 vitest 对无扩展名约束的
+  `tests/**` 会把 `helpers/*.ts` 等纯源文件也当 suite 吞入（报 No test suite
+  found）；bootstrap 的 unit 项目 include 已限定 `tests/**/*.test.ts`。规则：
+  子包自建 vitest.config 时 include 一律带 `*.test.ts`，与根仓同口径。
+- `privateFilePersistence.ts` 的 rename 重试窗（10 次/约 5.6s，见 10-14 补记第 3 类）
+  在 24 下复验通过；本次顺带补跑 oxfmt（该文件前次提交漏格式化——fmt 不在
+  pre-push 门禁内，属已知缺口，提交前需自查 `pnpm fmt:check`）。
+
 ## 2026-10-14 补记：apps/zcode-cli/packages/bootstrap 套件 Windows 首跑对齐（183 例 → 0）
 
 上游 v3.15.1 合入后，bootstrap 包（dev-only、不在 pre-push 门禁）在 Windows 首次全量运行

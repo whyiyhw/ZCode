@@ -18,7 +18,9 @@ export default defineConfig({
       {
         test: {
           name: "unit",
-          include: ["tests/**"],
+          // 限定 *.test.ts：Node 24 下 vitest 对无扩展名约束的 tests/** 会把 helpers
+          // 等纯源文件也当 suite 吞入（No test suite found）；与根仓 include 口径一致。
+          include: ["tests/**/*.test.ts"],
           exclude: ["tests/workflow-fault-matrix*.test.ts"],
           ...baseTimeouts,
           sequence: { groupOrder: 0 },

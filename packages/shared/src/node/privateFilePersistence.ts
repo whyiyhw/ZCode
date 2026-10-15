@@ -11,9 +11,7 @@ const DEFAULT_LOCK_MAX_WAIT_MS = 8_000;
 // 目标替换；原 5 次/1.55s 预算在全量单测并发与真实扫描器下均可能耗尽（EPERM 假失败，
 // 2026-10-14 bundled-config-replacement 两轮复现）。加长到 10 次/约 5.6s，仅影响
 // 重试路径，首试成功时无额外延迟。
-const DEFAULT_RENAME_RETRY_DELAYS_MS = [
-  50, 100, 200, 400, 800, 800, 800, 800, 800, 800,
-] as const;
+const DEFAULT_RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 800, 800, 800, 800, 800] as const;
 const processFileLockTails = new Map<string, Promise<void>>();
 
 export interface SharedFileLockOptions {
