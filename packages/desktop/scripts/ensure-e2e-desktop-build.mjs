@@ -67,11 +67,6 @@ export const DEFAULT_E2E_DESKTOP_BUILD_INPUTS = [
 
 export const E2E_DESKTOP_BUILD_ENV_NAMES = [
   "CDN_DOMAIN",
-  // Bugfix: tsup 会根据 CI 分支或 Tag 判断是否为正式发布构建；这些值必须参与缓存指纹，
-  // 否则可能把未注入 Agent OTLP 配置的普通构建错误复用到发布场景。
-  "CI",
-  "CI_COMMIT_BRANCH",
-  "CI_COMMIT_TAG",
   "NODE_ENV",
   "OSS_PATH_PREFIX",
   "VITE_CODING_PLAN_WEBVIEW_ORIGIN",
@@ -93,11 +88,11 @@ export const E2E_DESKTOP_BUILD_ENV_NAMES = [
   "ZCODE_ENV",
   "ZCODE_E2E_COVERAGE",
   "ZCODE_E2E_KEEP_BUILD_CACHE",
-  "ZCODE_PACKAGED_AGENT_OTEL_ENDPOINT",
-  "ZCODE_PACKAGED_AGENT_OTEL_HEADERS",
-  "ZCODE_PACKAGED_AGENT_OTEL_SERVICE_NAME",
   "ZCODE_PRODUCTION_BASE_URL",
   "ZCODE_TEST_BASE_URL",
+  // CI/CI_COMMIT_*/ZCODE_PACKAGED_AGENT_OTEL_* 曾因 tsup 按分支/Tag 门控打包遥测注入而参与
+  // 缓存指纹；该门控随隐私裁剪连根摘除（v3.16.0 启动崩溃修复，见 PRIVACY-AUDIT §十五），
+  // 不再影响构建产物，故从指纹中移除。若未来恢复按 CI 门控编译期注入，必须同步加回。
 ];
 
 const WORKSPACE_DEPENDENCY_FIELDS = [

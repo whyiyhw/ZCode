@@ -10,11 +10,11 @@ Status: in-progress
 
 ## 现状
 
-| 门       | 现状                                                                                                                                                                                            | 由谁打开                                                           |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 写入地址 | 接入点已验证可写（同一 base 收 traces 与 metrics）。桌面 main 的 metrics reader 在没有 endpoint 时不创建（`packages/desktop/src/main/localTtftExporter.ts:46`），打包版靠构建期注入，该路径未验 | 阶段 1                                                             |
-| 灰度开关 | `rendererActionTrace.localTtftEnabled` 缺省 false（`packages/shared/src/rendererActionTrace.ts:21`）                                                                                            | 阶段 2：服务端 `/api/v1/client/configs` 下发；单机可用环境变量强开 |
-| 平台验收 | 已完成：查询、瀑布、标签、入库时延均核对通过；控制台界面目视与保留期/费用未做                                                                                                                   | 阶段 3                                                             |
+| 门       | 现状                                                                                                                                                                                                                                                                                                          | 由谁打开                                                           |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 写入地址 | ~~接入点已验证可写（同一 base 收 traces 与 metrics）。桌面 main 的 metrics reader 在没有 endpoint 时不创建（`packages/desktop/src/main/localTtftExporter.ts:46`），打包版靠构建期注入，该路径未验~~（2026-10-15 失效：构建期注入链已随隐私裁剪删除，打包态本地 env 恒为空对象，见 PRIVACY-AUDIT §十五补记。） | 阶段 1                                                             |
+| 灰度开关 | `rendererActionTrace.localTtftEnabled` 缺省 false（`packages/shared/src/rendererActionTrace.ts:21`）                                                                                                                                                                                                          | 阶段 2：服务端 `/api/v1/client/configs` 下发；单机可用环境变量强开 |
+| 平台验收 | 已完成：查询、瀑布、标签、入库时延均核对通过；控制台界面目视与保留期/费用未做                                                                                                                                                                                                                                 | 阶段 3                                                             |
 
 灰度开关与旧 Renderer/Agent Trace 的 `enabled`、`sampleRatio` 相互独立，只开 TTFT 不改变旧 Trace 的采样与父子归属。
 
@@ -24,7 +24,7 @@ Status: in-progress
 
 - [x] 取现有 `zcode-cli-agent` 在用的那对接入值（CI 变量 `ZCODE_PACKAGED_AGENT_OTEL_ENDPOINT` / `ZCODE_PACKAGED_AGENT_OTEL_HEADERS`）。写入密钥不进看板、不进本仓库文档。
 - [x] **确认该 endpoint 是 OTLP base。** 实测 base 为 `/apm/trace/opentelemetry`；`base + /v1/traces` 与 `base + /v1/metrics` 都返回 200，独立的 `/apm/metric/opentelemetry/v1/metrics` 反而是 404。原先担心的"base 里带 trace 段导致 metrics 打到不存在的 URL"不成立，`packages/desktop/src/main/localTtftExporter.ts:31` 的拼接可用。
-- [x] 确认后端同一接入点接受 metrics signal。**结论：接受**，因此不需要给桌面 main 增加独立 metrics endpoint 注入通道（注入白名单 `packages/desktop/src/main/desktopRuntimeEnv.ts:216` 保持现状即可）。
+- [x] 确认后端同一接入点接受 metrics signal。**结论：接受**，因此不需要给桌面 main 增加独立 metrics endpoint 注入通道（~~注入白名单 `packages/desktop/src/main/desktopRuntimeEnv.ts:216` 保持现状即可~~；2026-10-15 注：该白名单属打包遥测注入链，已随隐私裁剪整体删除）。
 - [x] 用真实运行产生受控样本。实际用两个真实 E2E（`conversation-session-ttft-stages` 跑 2 次，各 3/3 通过；`conversation-session-ttft-diagnostics` 6/6 通过），共 12 次发送；出口按线上形态只设 base endpoint，未单独设置 `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`。转发 85 次全部 200，无失败。
 - [x] Trace 验收：`service.name = zcode-local-ttft` 可查（此前为 0）；`observation_id` 去连字符确实等于 traceID；单条发送 62 个 span，根 701.70ms 与六个主阶段并集 701.69ms 对账一致，`unattributed_ms=0` 得到印证；`local_ttft.checkpoint`、`.start`、`.first_text` 与根同属一条 Trace；`.started` 点记录 duration 为 0。
 - [x] 核对指标实际序列名：**不追加单位后缀**，查询合同里的 `zcode_local_ttft_*` 默认名成立。
@@ -43,8 +43,8 @@ Status: in-progress
 
 需要 CI 变量权限（发布/CI owner）。
 
-- [ ] 确认 CI 变量在目标构建上可用。`resolveBuildPackagedAgentTelemetryEnv`（`packages/desktop/tsup.config.ts:84`）要求 endpoint 与 headers 成对出现、生产必须 HTTPS，release 分支/tag 缺失会直接让构建失败。变量到位时桌面 main 自动获得 metrics 出口，**不需要新增构建配置**。
-- [ ] 出一个 dev/preview 包，从 Finder / 开始菜单启动验证一次。安装包启动时没有 shell 环境变量，历史上 Agent 因此静默落入 Noop，注释见 `packages/desktop/src/main/desktopRuntimeEnv.ts:213`。这是阶段 0 唯一没覆盖到的写入路径：阶段 0 走的是运行时 env 注入。
+- [ ] ~~确认 CI 变量在目标构建上可用。`resolveBuildPackagedAgentTelemetryEnv`（`packages/desktop/tsup.config.ts:84`）要求 endpoint 与 headers 成对出现、生产必须 HTTPS，release 分支/tag 缺失会直接让构建失败。变量到位时桌面 main 自动获得 metrics 出口，**不需要新增构建配置**。~~（2026-10-15 失效：该函数与 `ZCODE_PACKAGED_AGENT_OTEL_*` 注入链已随隐私裁剪删除，见 PRIVACY-AUDIT §十五补记。）
+- [ ] ~~出一个 dev/preview 包，从 Finder / 开始菜单启动验证一次。安装包启动时没有 shell 环境变量，历史上 Agent 因此静默落入 Noop，注释见 `packages/desktop/src/main/desktopRuntimeEnv.ts:213`。这是阶段 0 唯一没覆盖到的写入路径：阶段 0 走的是运行时 env 注入。~~（2026-10-15 失效：打包态本地 env 已恒为空对象，该写入路径不存在。）
 - [x] ~~若阶段 0 发现 metrics 需要独立接入点，先完成注入通道改动再打包。~~ 阶段 0 已确认同一 base 收 metrics，无需改动。
 
 ## 阶段 2：开灰度

@@ -37,8 +37,6 @@ import {
 } from "./remoteCdn.js";
 import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
 
-declare const __ZCODE_PACKAGED_AGENT_TELEMETRY_ENV__: Readonly<Record<string, string>> | undefined;
-
 const isLocalDevelopmentRuntime = !isElectronAppPackaged();
 export const desktopRuntimeEnv: ZCodeRuntimeEnv = isLocalDevelopmentRuntime
   ? "development"
@@ -155,7 +153,12 @@ function resolveWorkspaceRootForEnvFiles(): string | null {
 
 export function loadHostProcessEnvFromLocalFiles(): Record<string, string> {
   if (isElectronAppPackaged()) {
-    return resolvePackagedAgentTelemetryEnv();
+    // 修复依据：上游 v3.15.1 的打包分支会经 resolvePackagedAgentTelemetryEnv 读取编译期 OTLP
+    // 遥测配置，但本仓隐私裁剪（PRIVACY-AUDIT §十五）已删除 shared 的
+    // readZCodeAgentTelemetryEnv，v3.16.0 合并残留该调用导致打包版启动即抛 ReferenceError。
+    // 遥测链已连根摘除，打包分支恒返回空对象；ZCODE_BASE_URL 等链接由
+    // buildHostProcessEnv 的 applySelectedZCodeEnvLinks 统一补齐，这里无需预填。
+    return {};
   }
 
   const desktopRoot = resolve(import.meta.dirname, "../..");
@@ -198,28 +201,6 @@ export function loadHostProcessEnvFromLocalFiles(): Record<string, string> {
   }
 
   return applySelectedZCodeEnvLinks(merged);
-}
-
-export function resolvePackagedAgentTelemetryEnv(
-  compiledEnv:
-    | Readonly<Record<string, string>>
-    | undefined = typeof __ZCODE_PACKAGED_AGENT_TELEMETRY_ENV__ === "undefined"
-    ? undefined
-    : __ZCODE_PACKAGED_AGENT_TELEMETRY_ENV__,
-): Record<string, string> {
-  if (!compiledEnv) {
-    return {};
-  }
-
-  // 修复原因：开发版通过启动进程继承 OTLP 配置，正式安装包从 Finder/开始菜单启动时没有
-  // 这组运行时环境，Agent 因而静默落入 Noop。构建默认值只允许连接字段进入 Main；
-  // UID、Device MID 和 runtime surface 仍由 Host 的可信运行时上下文生成。
-  return readZCodeAgentTelemetryEnv({
-    OTEL_EXPORTER_OTLP_ENDPOINT: compiledEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
-    OTEL_EXPORTER_OTLP_HEADERS: compiledEnv.OTEL_EXPORTER_OTLP_HEADERS,
-    OTEL_SERVICE_NAME: compiledEnv.OTEL_SERVICE_NAME,
-    ZCODE_TELEMETRY_RUNTIME_DISTRIBUTION: compiledEnv.ZCODE_TELEMETRY_RUNTIME_DISTRIBUTION,
-  });
 }
 
 function resolveDevelopmentMockCdnDir(): string {

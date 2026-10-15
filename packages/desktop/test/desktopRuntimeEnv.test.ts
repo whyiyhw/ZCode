@@ -98,18 +98,6 @@ vi.mock("@zcode/shared", () => ({
     }
     return sanitized;
   },
-  readZCodeAgentTelemetryEnv: (env: Record<string, string | undefined>) =>
-    Object.fromEntries(
-      Object.entries(env).filter(([key, value]) => {
-        const upperKey = key.toUpperCase();
-        return (
-          value != null &&
-          (upperKey.startsWith("OTEL_") ||
-            upperKey.startsWith("ZCODE_TELEMETRY_") ||
-            upperKey === "ZCODE_MODEL_TELEMETRY_ENABLED")
-        );
-      }),
-    ),
   buildZCodeToolEnvPassthroughEnv: (env: Record<string, string | undefined>) => {
     const captured: Record<string, string> = {};
     for (const [key, value] of Object.entries(env)) {
@@ -711,6 +699,16 @@ describe("desktopRuntimeEnv buildHostProcessEnv", () => {
     expect(env.ZAI_OAUTH_ORIGIN).toBe("https://chat.z.ai");
     expect(env.ZAI_BUSINESS_BASE_URL).toBe("https://api.z.ai");
     expect(env.ZAI_OAUTH_CLIENT_ID).toBe("client_P8X5CMWmlaRO9gyO-KSqtg");
+  });
+
+  it("打包态 host 进程不读本地 .env，本地 env 恒为空对象", async () => {
+    // 回归依据：v3.16.0 打包分支经 resolvePackagedAgentTelemetryEnv 引用了已被隐私裁剪删除的
+    // readZCodeAgentTelemetryEnv，打包版启动即在 main 进程抛 ReferenceError。该链路已连根摘除，
+    // 这里锁定打包分支契约：不读 .env、恒返回空对象，防止上游合并把遥测分支悄悄带回来。
+    appMock.isPackaged = true;
+    const { loadHostProcessEnvFromLocalFiles } = await import("../src/main/desktopRuntimeEnv.js");
+
+    expect(loadHostProcessEnvFromLocalFiles()).toEqual({});
   });
 
   it("main 进程 endpoint 临时覆盖优先读取命令行环境变量", async () => {

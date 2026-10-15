@@ -269,6 +269,7 @@
 - **本地 TTFT 全链删除**（超出 §十五初稿范围）：shared `localTtft.ts` schema、协议信封 `ttft` 字段与 ACK `ttftExcluded`、`v4/telemetry/local-ttft` 通知、CLI `LocalTtftRecorder`/compaction/clock 三件、v4-gateway 全部接线（receive/admitted/event/帧附加/queryCommands 时钟探测）、UI observer/transport 校准、desktop exporter、services `onDynamicLocalTtftFacts` 事件面、contracts `local-turn-preparation` 追踪与 core `beginLocalTurnPreparation` 接线。`ZCODE_LOCAL_TTFT_ENABLED` 逃生口随之消失。
 - **依赖与产物**：`@arms/rum-electron` 依赖 + `patches/@arms__rum-electron@0.0.3.patch` + `@babel/runtime`（其 peer）移除；THIRD-PARTY-NOTICES 与 npm-overrides 的三条 @arms 条目手工等价清理（本机 `pnpm -r ls` 撞 EMFILE 无法本地再生成，CI 首跑会复核）；保留的 `@opentelemetry/*` 均为 action-trace 调试链在用。
 - **desktop 遗留核验**：crash 本地取证回落（`remoteCrashReporterEnabled=false`）、`rendererActionTraceIpc` 的 localTtftEnabled 标志、`desktopRuntimeEnv` 的 OTLP 定向转发与 shared runtimeEnv 采集区（`readZCodeAgentTelemetryEnv` 等）均已摘除；env 清洗仍会从 tool env 剥离 OTEL 键（防泄漏兜底，保留）。
+- **desktop 打包遥测注入链补删（2026-10-15，v3.16.0 启动崩溃修复）**：上游 v3.15.1 合并把 `resolvePackagedAgentTelemetryEnv`（调用已删除的 `readZCodeAgentTelemetryEnv`）带回 `desktopRuntimeEnv.ts`，而 tsup 仍向 Main 注入 `__ZCODE_PACKAGED_AGENT_TELEMETRY_ENV__`，打包版启动即在 main 进程抛 `ReferenceError`（v3.16.0 安装包实锤）。已连根摘除：desktop 的打包分支恒返回空对象、tsup 的该 define 与 `resolveBuildPackagedAgentTelemetryEnv`（含 CI release 门控）、`ZCODE_PACKAGED_AGENT_OTEL_*` 构建变量及 e2e 构建缓存指纹中的相关条目全部移除。教训：`packages/desktop/tsconfig.main.json` 不在根 `pnpm typecheck` 列表内，主进程悬空引用只有运行时才暴露。
 
 ### §十五补记二：assistant 赞/踩删除（2026-09-24）
 
