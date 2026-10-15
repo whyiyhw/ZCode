@@ -1,4 +1,5 @@
-import type { StorageRootSpec } from "@zcode/services";
+// StorageRootSpec 由 @zcode/shared 的 storage.ts 导出；services 两个入口都不转发该类型。
+import type { StorageRootSpec } from "@zcode/shared";
 import type { StorageScanProgress } from "@zcode/services/node";
 
 export interface StorageScanWorkerData {

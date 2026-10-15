@@ -39,8 +39,9 @@ import {
 import type { UtilityProcess as ElectronUtilityProcess } from "electron";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import {
+  createCredentialService,
   createSettingService,
   buildRuntimeProcessEnvPatch,
   captureLoginShellEnvSnapshot,
@@ -65,6 +66,14 @@ import {
   HostMessageTypes,
 } from "@zcode/shared";
 import { logger, webRemoteControlRelayLogger } from "./logger.js";
+// v3.15.1 合并把手机远控 platformHandlers 的这些引用带回 index.ts 却丢了 import，
+// 打包版一启动就在 main 进程抛 ReferenceError（v3.16.0 的 readZCodeAgentTelemetryEnv 同类损伤）。
+import { createTempTextAttachment } from "./tempTextAttachment.js";
+import {
+  loadCliMcpFromUserDirectory,
+  migrateLegacyCommonMcp,
+  saveCliMcpToUserDirectory,
+} from "./mcpUserDirectory/index.js";
 import { createCuaPipFocusRouter, resolveCuaPipWindowKey } from "./cuaPipFocusRouter.js";
 import { BroadcastHub } from "./broadcastHub.js";
 import { TaskRealtimeBus } from "./taskRealtimeBus.js";

@@ -131,6 +131,7 @@ export {
   createOpenInEditorRemoteTarget,
 } from "./platform.js";
 export type {
+  BrowserViewSurfaceScaleMode,
   DesktopZoomState,
   RemoteWorkspaceConnectTrigger,
   WindowControlsOverlayMetrics,

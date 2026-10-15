@@ -1,6 +1,8 @@
 import { BrowserWindow, MessageChannelMain } from "electron";
 import type { MessagePortMain, UtilityProcess as ElectronUtilityProcess } from "electron";
-import { HostMessageTypes, type RemoteUsageRemoteKind } from "@zcode/shared";
+// v3.15.1 合并残留：shared 从未导出 RemoteUsageRemoteKind，按 producer（desktopRemoteSessions）
+// 的实际返回类型 RemoteTarget["kind"] 对齐。
+import { HostMessageTypes, type RemoteTarget } from "@zcode/shared";
 
 type WebRemoteControlSharedHostKind = "local" | "remote";
 
@@ -17,7 +19,7 @@ interface WebRemoteControlSharedHostAttachment {
   attachmentId: string;
   process: ElectronUtilityProcess;
   port: MessagePortMain;
-  remoteKind?: RemoteUsageRemoteKind;
+  remoteKind?: RemoteTarget["kind"];
 }
 
 interface WebRemoteControlSharedHostError extends Error {
@@ -51,7 +53,7 @@ export function createWebRemoteControlSharedHostAttachments(dependencies: {
   }) => {
     process: ElectronUtilityProcess;
     port: MessagePortMain;
-    remoteKind: RemoteUsageRemoteKind;
+    remoteKind: RemoteTarget["kind"];
   };
   logger: {
     info: (...args: unknown[]) => void;

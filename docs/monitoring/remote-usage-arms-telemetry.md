@@ -1,5 +1,7 @@
 # 远程工作区连接 ARMS 自定义事件埋点
 
+> **⚠️ 已失效（2026-10-15 登记）**：本ARMS 埋点通道已随隐私裁剪整体删除（PRIVACY-AUDIT §十五），本文仅作历史设计记录，不再描述现行代码；文中引用的 shared `RemoteUsageRemoteKind` 等符号在现行代码中不存在。
+
 > 状态：已实现，待测试环境 ARMS 验收
 > 关联分支：`fix/add-arms-for-remote`
 > 关联规范：[远程场景使用量埋点 V1](./remote-usage-telemetry-v1.md)（数仓 `/report` 通道；本文档是其 ARMS 通道补充，不取代 V1）

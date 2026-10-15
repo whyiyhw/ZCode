@@ -125,6 +125,11 @@ export function createWindow(options: {
   }
 
   const wcId = win.webContents.id;
+  // webRemoteControlManager 的 windowId 语义是 BrowserWindow.id（desktopMainIpcPlatform 以
+  // win.id 调 syncWebRemoteControlWorkspaces），与 wcId 是两套键；closed 后窗口已销毁，
+  // 必须像 wcId 一样提前捕获。v3.15.1 合并丢失该捕获后，closed 回调引用悬空的
+  // browserWindowId，打包版每次关窗都会抛 ReferenceError。
+  const browserWindowId = win.id;
   // 资源遥测据此把主窗口 renderer 归 renderer_main；辅助窗口与 DevTools 归 chromium_other。
   registerMainApplicationWindow(wcId);
   let domReadyGeneration = 0;

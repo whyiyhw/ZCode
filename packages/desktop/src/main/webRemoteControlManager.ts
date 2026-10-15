@@ -32,7 +32,7 @@ import {
   type WebRemoteControlWorkspaceBridgeOpenPayload,
   type WebRemoteControlWorkspaceListResult,
   type WebRemoteControlWorkspaceTarget,
-  type RemoteUsageRemoteKind,
+  type RemoteTarget,
   measureWebRemoteControlRpcRelayEnvelopeBytes,
 } from "@zcode/shared";
 import {
@@ -50,7 +50,9 @@ interface WebRemoteControlHostAttachmentHandle {
   attachmentId: string;
   process: ElectronUtilityProcess;
   port: MessagePortMain;
-  remoteKind?: RemoteUsageRemoteKind;
+  // v3.15.1 合并残留：shared 从未导出 RemoteUsageRemoteKind，producer（desktopRemoteSessions）
+  // 实际返回的是 RemoteTarget["kind"]，按生产方口径对齐。
+  remoteKind?: RemoteTarget["kind"];
 }
 
 interface WorkspaceBridgeRuntime {

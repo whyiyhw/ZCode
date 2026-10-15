@@ -4,7 +4,8 @@
  * 遍历、分类、聚合逻辑全部来自 @zcode/services（单一扫描路径）。
  */
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
-import type { StorageRootSpec } from "@zcode/services";
+// StorageRootSpec 由 @zcode/shared 的 storage.ts 导出；services 两个入口都不转发该类型。
+import type { StorageRootSpec } from "@zcode/shared";
 import { runStorageScan } from "@zcode/services/node";
 import {
   isStorageScanWorkerCommand,
