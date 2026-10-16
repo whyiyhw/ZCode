@@ -6,7 +6,7 @@
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Change                | `ZCODE_ENV=test` 的全平台桌面安装包使用 `ZCode Preview` 产品身份，并可从 MR 流水线手动触发生产级构建、签名和公证链路                                                                                                    |
 | User-visible surfaces | 安装包名、应用名、系统安装记录、任务栏/Dock、About、CUA 权限引导                                                                                                                                                        |
-| Existing docs         | `docs/cua-permission-broker/zcode-cua-permission-broker.md`、`docs/cua-permission-broker/cua-helper-installation.md`、`docs/desktop/auto-update-superseded-ready-package.md`                                            |
+| Existing docs         | `docs/cua-permission-broker/zcode-cua-permission-broker.md`、`docs/cua-permission-broker/cua-helper-installation.md`（原 `auto-update-superseded-ready-package.md` 已随更新子系统删除口径移除）                          |
 | Existing code owners  | `packages/desktop/electron-builder.config.js`、`packages/desktop/src/main/desktopRuntimeEnv.ts`、`packages/desktop/src/main/autoUpdater.ts`、`packages/services/src/cua-permission-broker/*`、`.gitlab/ci/30-build.yml` |
 | Out of scope          | 独立账号/任务/配置目录、独立协议 scheme、Preview 自动更新、生产与 Preview 同时执行 CUA 输入                                                                                                                             |
 
@@ -341,3 +341,18 @@ MR !2636 合入后 bug scanner 报出两项，均成立，本轮修正：
 
 - `pnpm typecheck`：通过。`oxlint` 改动文件：0 errors；仅格式化新增行（含上一轮遗留的 `notify-feishu.mjs` 长调用行）。
 - `vitest`：`autoUpdaterReadyState`、`desktopProductIdentity`、`ciNodeVersionConfig`、`desktopCommandHandlers`、`desktopApplicationMenu`、`desktopMainIpcPlatform`、`notifyFeishuScript`、`publishReleaseScript`、`notarizeMacosScript`、`runtime-asset-scripts`、`uploadOssScript`、`macosReleaseAppDoctor`、`viteRendererConfig`、`tsupChunkIsolation`、`electronBuilderLinuxPackageTargets` 15 文件 263 用例通过。
+
+## 追记 2026-10-15：发布门禁——只有真实启动冒烟通过后才能发布
+
+**规则（硬约束）：只有「真实启动冒烟」通过后才能发布安装包（创建 GitHub Release / 上传产物）。构建成功、产物校验通过都不构成发布依据。**
+
+背景：v3.16.0（`readZCodeAgentTelemetryEnv`）与 v3.16.1（`createCredentialService`）两起安装包启动即崩的事故，全链路验证（typecheck、lint、单测、bundle 产物审计）都是绿的——因为 desktop main/scheduler/preload 子工程不在类型门禁内，坏引用只有真实启动才暴露。静态校验再全，也代替不了「跑一次」。
+
+冒烟流程（v3.16.2 起为标准动作）：
+
+1. 从打包产物真实启动：`dist/win-unpacked/<产品名>.exe`（或安装后的正式路径），不要用 dev 模式代替——dev 不走打包分支；
+2. 等待 ≥10s，断言：进程存活（主/GPU/渲染多进程在）、无标题为 "Error" 的弹窗、stdout/日志无 `ReferenceError` / `A JavaScript error occurred in the main process`、主进程初始化日志正常（crash-capture / deep-link / startup 等）；
+3. 冒烟完成后关闭实例（注意只杀本次冒烟进程，别误杀用户正在用的实例）；
+4. 以上全部通过，才允许 `gh release create` + 上传产物。
+
+单实例注意：启动冒烟前先确认没有同身份实例在跑（Electron 单实例锁会让第二个实例静默退出，得到假阴性）。
