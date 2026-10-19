@@ -69,7 +69,13 @@ const shouldEnableMacSigning =
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const desktopPackageRoot = import.meta.dirname;
 // Computer Use Helper（macOS .app、Windows runtime）只随真实 producer 打包；开源占位包下跳过随包资源与校验。
-const shouldPackageComputerUseHelper = isRealComputerUseProducerInstalled({ desktopPackageRoot });
+// 本地出包例外：ZCODE_CUA_BUNDLE_HELPER=1 显式带上 bundled-tools 里已暂存的 Helper 运行时
+// （scripts/prepare-cua-helper.mjs 产出）；公开 CI 不设该 env，产物继续不带
+// （spec：packages/zcode-cua/spec/computer-use-restore.md 验收场景 3）。
+// 缺暂存资产时 electron-builder extraResources 解析直接失败，不会静默出半缺包。
+const shouldPackageComputerUseHelper =
+  isRealComputerUseProducerInstalled({ desktopPackageRoot }) ||
+  process.env.ZCODE_CUA_BUNDLE_HELPER === "1";
 const HELPER_FILENAME = "zcode-browser-import-helper.exe";
 const runtimeModuleLookupRoots = [
   desktopPackageRoot,

@@ -29,5 +29,6 @@ Sharp 的暂存与校验仍以“producer 是否声明 Sharp 依赖”为准（`
 
 1. 闭源（真实 producer）：上述步骤行为不变。
 2. 占位包：`pnpm dev:desktop` 的准备脚本可加载，开发态插件运行时暂存返回空，Windows 不准备 Helper，
-   打包不附带也不校验 Helper。
+   打包不附带也不校验 Helper（例外：本地出包显式设 `ZCODE_CUA_BUNDLE_HELPER=1` 时附带并校验，
+   见 `packages/zcode-cua/spec/computer-use-restore.md` 验收场景 3；公开 CI 不设）。
 3. 单测：`packages/desktop/test/placeholderProducerDetection.test.ts` 覆盖真实、占位、未安装三种情况与暂存跳过。
