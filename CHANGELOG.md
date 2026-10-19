@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.17.0](https://github.com/whyiyhw/ZCode/compare/v3.16.2...v3.17.0) (2026-10-19)
+
+### Features
+
+* **build:** ZCODE_CUA_BUNDLE_HELPER 本地出包开关——显式带上已暂存的 CUA Helper 运行时 ([642107f](https://github.com/whyiyhw/ZCode/commit/642107ff0b23a2617a928813346c68f0a2e36db3))
+  * electron-builder.config.js：shouldPackageComputerUseHelper 增加
+  * 新增 electronBuilderCuaHelperBundling.test.ts（3/3）：占位默认不注入、
+  * computer-use-producer-detection.md 验收补开关例外口径
+
+* **cua:** 恢复 v3.16.0 被整包回退的 Computer Use 真实现（补 v3.15.1 导出面） ([a495068](https://github.com/whyiyhw/ZCode/commit/a495068879c4683f30a0509ad7d892b19c1d3bff))
+  * 自 0e1e50e3（实现）+ 9b1a99f0（lint 清理）恢复 9 文件；3 个私有函数
+  * spec 补「维护史」（回退始末与盲区：.mjs 测试不在 vitest 收集范围，
+  * 验证：node --test 18/18、typecheck/lint/doc-sync 全绿、全量 pnpm
+
+
+### Documentation
+
+* 落档发布门禁——真实启动冒烟通过后才能发布安装包 ([04e11b0](https://github.com/whyiyhw/ZCode/commit/04e11b09bcd959fc5084b441f35e0609fa7d68b6))
+  * PRIVACY-AUDIT.md §十五补记追加用户裁定（2026-10-15）：v3.16.0 与 v3.16.1
+  * docs/desktop/zcode-preview-packaging.md 追记 2026-10-15 节：冒烟四步标准流程
+
 ## [3.16.2](https://github.com/whyiyhw/ZCode/compare/v3.16.1...v3.16.2) (2026-10-15)
 
 ### Bug Fixes
