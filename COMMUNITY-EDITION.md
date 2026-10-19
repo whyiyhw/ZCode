@@ -137,7 +137,7 @@
 - **防重放语义保留**：possibly_sent 状态的动作请求绝不自动重试，以 CUA_NOT_READY 信封交给模型侧决策。
 - macOS 侧（.app 安装/LaunchServices/TCC/PiP）按契约实现，**未在真机验证**，清单见 spec 迁移边界。
 - 插件 wrapper（skill/docs/client 脚本）取自官方 MIT 文件（`apps/zcode-cli/packages/zcode-cua-plugin/`），保留 Z.ai 署名。
-- **首次运行自动激活（Windows）**：安装后无需手动脚本——宿主在 Helper 运行时缺失时自动从**本机已有的官方安装**（`ZCODE_CUA_HELPER_SOURCE` / 注册表卸载项 / 标准路径三级发现）搬运运行时到 `~/.zcode/cua-helper-runtime`，sha256 实测校验后生效；纯本机复制、无网络、不构成分发，`ZCODE_CUA_HELPER_AUTO_STAGE=0` 可关闭。无官方安装的机器给出指引并保持不可用（fail-closed）。
+- **首次运行自动激活（Windows）**：安装后无需手动脚本——宿主在 Helper 运行时缺失时自动从**本机已有的官方安装**（`ZCODE_CUA_HELPER_SOURCE` / 注册表卸载项 / 标准路径三级发现）搬运运行时到 `~/.zcode/cua-helper-runtime`，sha256 实测校验后生效；纯本机复制、无网络、不构成分发，`ZCODE_CUA_HELPER_AUTO_STAGE=0` 可关闭。无官方安装的机器给出指引并保持不可用（fail-closed）。2026-10-19 起该恢复链同时覆盖 agent 凭据下发（spawn env）与 Helper 拉起两条链（此前 spawn env 不可见暂存目录，公开包用户拿不到凭据）。
 - **重实现包内环境开关登记**（2026-10-19 恢复时补记；实现见 `packages/zcode-cua/broker-server.js`，均默认未设置、生产无需配置）：
   - `ZCODE_CUA_LAUNCHER_PID`：标识拉起者 pid（Helper 安装与宿主生命周期关联）。
   - `ZCODE_CUA_DEV_EXPOSE_BROKER=1`：**仅 dev 测试 harness**——把 broker socket 路径写入 `~/.zcode/computer-use/run` 供外部进程连测；生产严禁开启。

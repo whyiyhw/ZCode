@@ -504,7 +504,6 @@ import {
   type CuaPermissionStatusResult,
 } from "#src/cua-permission-broker/index.js";
 import {
-  resolveWindowsCuaRuntime,
   WindowsCuaDevRuntimeResolutionError,
   type WindowsCuaRuntime,
 } from "#src/cua-permission-broker/windowsCuaDevRuntime.js";
@@ -512,7 +511,8 @@ import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHe
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
 import {
   getStableCuaPipeName,
-  resolveStableCuaWinRecipe,
+  createStableCuaWinRuntimeResolver,
+  type StableCuaWinRecipe,
 } from "#src/cua-permission-broker/stableCuaTransport.js";
 import { HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import { resolveBrokerSocketPath } from "@zcode/zcode-cua/broker/socketPath";
@@ -795,6 +795,74 @@ export function createDynamicCuaProductMcpServerResolver(options: {
 
 let orphanHelperReaperHasRun = false;
 
+/**
+ * Windows CUA 运行时恢复上下文：auto-stage 三件套（搬运/单次守卫/失败冷却）+
+ * 共享解析器（三层路由 + 一次恢复重试 + 成功缓存）。
+ *
+ * createNodeServices 构建一次并注入两处消费——helper host 拉起与 agent spawn env
+ * 凭据下发——单次搬运、冷却与缓存语义必须是进程级共享。2026-10-19 修复前 spawn env
+ * 链走无参解析：看不到暂存目录也不触发搬运，公开包用户即使本机有官方安装也拿不到
+ * broker 凭据（fail-closed）。工厂未注入时自建独立实例（独立调用方/测试场景）。
+ */
+function createCuaWindowsRuntimeRecovery(): ReturnType<typeof createStableCuaWinRuntimeResolver> {
+  const logger = createServiceLogger("cua-product-helper");
+  // auto-stage：运行时解析失败（新装机尚未搬运/暂存损坏）时，从本机官方安装把
+  // Helper 运行时复制到用户数据根下的 cua-helper-runtime 并重试一次解析。
+  // 纯本机复制、无网络；进程内单次守卫 + 失败冷却，可用
+  // ZCODE_CUA_HELPER_AUTO_STAGE=0 关闭。合规与语义见
+  // packages/zcode-cua/spec/computer-use-restore.md「运行时契约」。
+  const env = process.env;
+  const userStagedRoot = join(getZCodeDataRootDir(), USER_STAGED_RUNTIME_DIR_NAME);
+  let autoStageInFlight: Promise<boolean> | undefined;
+  let autoStageFailedAt = 0;
+  const AUTO_STAGE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
+  const attemptAutoStage = (): Promise<boolean> => {
+    autoStageInFlight ??= (async () => {
+      if (!isAutoStageEnabled(env)) return false;
+      if (Date.now() - autoStageFailedAt < AUTO_STAGE_FAILURE_COOLDOWN_MS) return false;
+      try {
+        const sourceRoot = await findWindowsCuaHelperSource(env);
+        if (!sourceRoot) {
+          logger.warn(
+            undefined,
+            "Computer Use Helper auto-stage skipped: no local official install found. Install the official ZCode once, set ZCODE_CUA_HELPER_SOURCE, or run scripts/prepare-cua-helper.mjs.",
+          );
+          autoStageFailedAt = Date.now();
+          return false;
+        }
+        const { staged, manifest } = await stageCuaHelperRuntime({
+          sourceRoot,
+          targetRoot: userStagedRoot,
+          arch: process.arch,
+          electronVersion: process.versions.electron,
+        });
+        logger.info(
+          undefined,
+          staged
+            ? `Computer Use Helper runtime auto-staged ${manifest.packageVersion} from ${sourceRoot} to ${userStagedRoot}.`
+            : `Computer Use Helper runtime already staged (${manifest.packageVersion}).`,
+        );
+        return true;
+      } catch (error) {
+        autoStageFailedAt = Date.now();
+        logger.warn(
+          undefined,
+          "Computer Use Helper auto-stage failed; keeping fail-closed behavior.",
+          {
+            error: error instanceof Error ? error.message : String(error),
+            code: (error as { code?: unknown }).code ?? null,
+          },
+        );
+        return false;
+      } finally {
+        autoStageInFlight = undefined;
+      }
+    })();
+    return autoStageInFlight;
+  };
+  return createStableCuaWinRuntimeResolver({ userStagedRoot, attemptAutoStage });
+}
+
 type CreateDefaultCuaProductHelperOptions = {
   // 转发给 resolver，restart 前用来判断是否有活跃 turn（见 cuaProductMcpResolver.ts）。
   // desktop-local agent service 会提供真实的 CUA turn 状态；其他调用方没有该状态时才回退为 false。
@@ -804,7 +872,13 @@ type CreateDefaultCuaProductHelperOptions = {
   resourcesPath?: string;
   arch?: NodeJS.Architecture;
   electronVersion?: string;
-  resolveWindowsRuntime?: () => Promise<WindowsCuaRuntime>;
+  resolveWindowsRuntime?: (options: {
+    platform: NodeJS.Platform;
+    env: NodeJS.ProcessEnv;
+    resourcesPath?: string;
+    arch?: NodeJS.Architecture;
+    electronVersion?: string;
+  }) => Promise<WindowsCuaRuntime>;
   createMacHost?: () => CuaHelperHost;
   createWindowsHost?: (runtime: WindowsCuaRuntime) => ManagedCuaProductHelperHost;
 };
@@ -986,87 +1060,19 @@ export function createDefaultCuaProductHelper(
       });
     host = macPermissionHost;
   } else {
-    // auto-stage：运行时解析失败（新装机尚未搬运/暂存损坏）时，从本机官方安装把
-    // Helper 运行时复制到用户数据根下的 cua-helper-runtime 并重试一次解析。
-    // 纯本机复制、无网络；进程内单次守卫 + 失败冷却，可用
-    // ZCODE_CUA_HELPER_AUTO_STAGE=0 关闭。合规与语义见
-    // packages/zcode-cua/spec/computer-use-restore.md「运行时契约」。
-    const userStagedRoot = join(getZCodeDataRootDir(), USER_STAGED_RUNTIME_DIR_NAME);
-    let autoStageInFlight: Promise<boolean> | undefined;
-    let autoStageFailedAt = 0;
-    const AUTO_STAGE_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
-    const attemptAutoStage = (): Promise<boolean> => {
-      autoStageInFlight ??= (async () => {
-        if (!isAutoStageEnabled(env)) return false;
-        if (Date.now() - autoStageFailedAt < AUTO_STAGE_FAILURE_COOLDOWN_MS) return false;
-        try {
-          const sourceRoot = await findWindowsCuaHelperSource(env);
-          if (!sourceRoot) {
-            logger.warn(
-              undefined,
-              "Computer Use Helper auto-stage skipped: no local official install found. Install the official ZCode once, set ZCODE_CUA_HELPER_SOURCE, or run scripts/prepare-cua-helper.mjs.",
-            );
-            autoStageFailedAt = Date.now();
-            return false;
-          }
-          const { staged, manifest } = await stageCuaHelperRuntime({
-            sourceRoot,
-            targetRoot: userStagedRoot,
-            arch: options.arch ?? process.arch,
-            electronVersion: options.electronVersion ?? process.versions.electron,
-          });
-          logger.info(
-            undefined,
-            staged
-              ? `Computer Use Helper runtime auto-staged ${manifest.packageVersion} from ${sourceRoot} to ${userStagedRoot}.`
-              : `Computer Use Helper runtime already staged (${manifest.packageVersion}).`,
-          );
-          return true;
-        } catch (error) {
-          autoStageFailedAt = Date.now();
-          logger.warn(
-            undefined,
-            "Computer Use Helper auto-stage failed; keeping fail-closed behavior.",
-            {
-              error: error instanceof Error ? error.message : String(error),
-              code: (error as { code?: unknown }).code ?? null,
-            },
-          );
-          return false;
-        } finally {
-          autoStageInFlight = undefined;
-        }
-      })();
-      return autoStageInFlight;
-    };
+    // 共享恢复解析器：优先用调用方注入的进程级实例（createNodeServices 同时把它
+    // 用于 agent spawn env，单次搬运/冷却/缓存必须共享）；未注入时自建（独立调用
+    // 方/测试场景）。
+    const resolveWindowsCuaRuntimeWithRecovery =
+      options.resolveWindowsRuntime ?? createCuaWindowsRuntimeRecovery();
     host = createWindowsCuaHelperHost({
-      resolveRuntime:
-        options.resolveWindowsRuntime ??
-        (async () => {
-          try {
-            return await resolveWindowsCuaRuntime({
-              platform,
-              env,
-              resourcesPath: options.resourcesPath,
-              arch: options.arch,
-              electronVersion: options.electronVersion,
-              userStagedRoot,
-            });
-          } catch (error) {
-            if (error instanceof WindowsCuaDevRuntimeResolutionError) {
-              if (await attemptAutoStage()) {
-                return await resolveWindowsCuaRuntime({
-                  platform,
-                  env,
-                  resourcesPath: options.resourcesPath,
-                  arch: options.arch,
-                  electronVersion: options.electronVersion,
-                  userStagedRoot,
-                });
-              }
-            }
-            throw error;
-          }
+      resolveRuntime: async () =>
+        resolveWindowsCuaRuntimeWithRecovery({
+          platform,
+          env,
+          resourcesPath: options.resourcesPath,
+          arch: options.arch,
+          electronVersion: options.electronVersion,
         }),
       createHost:
         options.createWindowsHost ??
@@ -1630,6 +1636,9 @@ export function createLocalServices(options: {
       env: process.env,
       workingDirectory: context?.workspacePath,
     });
+  // 进程级共享的 Windows CUA 恢复解析器：helper host 与 agent spawn env 凭据链共用
+  // （单次搬运/失败冷却/成功缓存共享；2026-10-19 修复 spawn env 链不可见暂存目录的缺口）。
+  const cuaWindowsRuntimeResolver = createCuaWindowsRuntimeRecovery();
   const defaultCuaProductHelperLifecycle =
     new CuaHelperLifecycleManager<ManagedDefaultCuaProductHelper>(async (managed) => {
       await managed.helper.host.stop();
@@ -1640,6 +1649,8 @@ export function createLocalServices(options: {
     const helper = createDefaultCuaProductHelper({
       // 转发活跃-turn 查询（前向引用，zcodeAgentService 建好后赋值）。
       hasActiveTurn: () => hasActiveTurnRef?.() ?? false,
+      // 共享 Windows 恢复解析器：与下方 resolveSpawnEnv 的 broker 凭据链同一实例。
+      resolveWindowsRuntime: cuaWindowsRuntimeResolver,
     });
     if (!helper) return undefined;
 
@@ -2152,7 +2163,19 @@ export function createLocalServices(options: {
           [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: randomBytes(16).toString("hex"),
         };
         if (process.platform === "win32") {
-          const recipe = await resolveStableCuaWinRecipe();
+          // 与 helper host 同一条恢复链（三层路由 + auto-stage）：公开包产物缺
+          // packaged 资产时，本机有官方安装即可经搬运恢复 broker 凭据；最终失败
+          // 才收敛为 UNAVAILABLE 戳（fail-closed）。arch/electronVersion 缺省取
+          // 本进程值，与 packaged manifest 校验口径一致。
+          let recipe: StableCuaWinRecipe | null = null;
+          try {
+            recipe = await cuaWindowsRuntimeResolver({
+              platform: process.platform,
+              env: process.env,
+            });
+          } catch {
+            recipe = null;
+          }
           if (recipe) {
             cuaProductHelperEnv["ZCODE_CUA_WIN_HELPER_RECIPE"] = JSON.stringify({
               ...recipe,

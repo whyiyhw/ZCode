@@ -78,6 +78,14 @@
    runtime-staging 4）、lint 0 告警、全量 `pnpm build` exit 0，互操作冒烟重演 1a
    （spawn+ipc 拉起官方 0.6.4 Helper：transport_ready/ready 消息、`broker_info` 握手
    pid 匹配、`list_applications` 返回真实清单）。
+6. （本机已验，2026-10-19）公开包恢复链（spawn env 接入 auto-stage）：修复前 spawn env
+   凭据链走无参解析，看不到暂存目录也不触发搬运——公开包用户即使本机有官方安装也
+   fail-closed。修复后 helper host 与 spawn env 共享同一恢复解析器
+   （`createCuaWindowsRuntimeRecovery`，单次搬运/失败冷却/成功缓存进程级共享）。
+   端到端复刻：公开包产物 resourcesPath（无 tools/cua-helper）首解析按预期失败
+   （invalid-runtime-manifest）→ 官方安装源发现 → 真实搬运至数据根
+   `cua-helper-runtime`（0.6.4，契约补写+校验）→ 同参重试成功返回 recipe。factory
+   行为由 `packages/services/test/stableCuaTransport.test.ts`（6/6）锁定。
 
 ## 维护史
 
@@ -93,3 +101,8 @@
   （resolveHelperAppName / resolveCuaHelperInstallRoot / injectPermissionBrokerAgentMcpServers）
   恢复版本已含真实现；仅 standaloneHelperCandidatePaths 以桥接同义的
   standaloneHelperExecutablePaths 补名，不引入占位行为。恢复后各门禁见验收场景 5。
+- 2026-10-19（同日第二项）：修复 spawn env 凭据链不可见暂存目录的缺口——原
+  `resolveStableCuaWinRecipe` 无参解析既不传 `userStagedRoot` 也不触发 auto-stage，
+  公开包用户（即使本机有官方安装）始终拿不到 broker 凭据；helper host 与 spawn env
+  改为共享 `createCuaWindowsRuntimeRecovery()`（三层路由 + auto-stage 一次恢复 +
+  成功缓存，进程级单例），端到端验证见验收场景 6。
