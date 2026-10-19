@@ -57,6 +57,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm --dir apps/zcode-cli typecheck
+      # CUA 协议测试（node:test 驱动，不在 vitest 收集范围）：占位回退护栏——
+      # v3.16.0 曾整包回退上游占位桩且全部门禁绿灯（spec「维护史」盲区），本步骤
+      # 与 packages/zcode-cua/test/placeholder-guard.test.ts（vitest）双保险拦截。
+      # UDS 目录需预建：fake helper 的 server.listen 不建目录，win32 管道无此依赖。
+      - name: CUA protocol tests (placeholder-regression guard)
+        run: |
+          mkdir -p /tmp/zcode-cua
+          XDG_RUNTIME_DIR=/tmp node --test packages/zcode-cua/test/*.mjs
 
   build-desktop:
     needs: check

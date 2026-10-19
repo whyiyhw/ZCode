@@ -106,3 +106,8 @@
   公开包用户（即使本机有官方安装）始终拿不到 broker 凭据；helper host 与 spawn env
   改为共享 `createCuaWindowsRuntimeRecovery()`（三层路由 + auto-stage 一次恢复 +
   成功缓存，进程级单例），端到端验证见验收场景 6。
+- 2026-10-19（同日第三项，防回退加固）：针对「整包回退全绿漏过」盲区加双保险——
+  `packages/zcode-cua/test/placeholder-guard.test.ts`（vitest 收集，同步行为断言锁定
+  真实现特征；注入上游占位版实测 6/6 红灯、真实现 6/6 绿）与 CI check job 的
+  `node --test packages/zcode-cua/test/*.mjs` 步骤（协议全量 18 用例；Linux 需预建
+  UDS 目录并设 XDG_RUNTIME_DIR，win32 管道无此依赖，Docker node:24 实测通过）。
