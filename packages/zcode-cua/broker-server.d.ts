@@ -31,12 +31,21 @@ export interface CuaHelperVerifierDependencies {
   [key: string]: unknown;
 }
 
+// 三个可注入验签依赖（官方 defaultCuaHelperVerifierDependencies）：lipo -archs、
+// codesign --verify --deep --strict、codesign -dv 的 TeamIdentifier 解析。
+export interface CuaHelperVerifierDependencySet {
+  readExecutableArchs?: (executablePath: string) => Promise<string[]>;
+  verifyCodeSignature?: (appPath: string) => Promise<void>;
+  verifyTeamIdentifier?: (appPath: string) => Promise<string | null>;
+  [key: string]: unknown;
+}
+
 export interface CuaHelperInstallerOptions {
   env?: NodeJS.ProcessEnv;
   logger?: unknown;
   bundledAppPath?: string;
   plan?: unknown;
-  dependencies?: Partial<CuaHelperVerifierDependencies>;
+  dependencies?: CuaHelperVerifierDependencySet;
 }
 
 export interface CuaHelperInstaller {
@@ -249,6 +258,7 @@ export declare function requestHelperScreenRecordingPermissionViaLaunchServices(
 
 export type { CuaPermissionRestartOptions, CuaPermissionRestartResult };
 
+// 上游 v3.15.1 新增导出面（2026-10-19 恢复重实现时补齐，开源最小实现见 broker-server.js 尾注）。
 export declare function resolveHelperAppName(env?: NodeJS.ProcessEnv): string;
 export declare function resolveCuaHelperInstallRoot(env: NodeJS.ProcessEnv): string | null;
 export declare function standaloneHelperCandidatePaths(env?: NodeJS.ProcessEnv): string[];

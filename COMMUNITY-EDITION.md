@@ -138,5 +138,14 @@
 - macOS 侧（.app 安装/LaunchServices/TCC/PiP）按契约实现，**未在真机验证**，清单见 spec 迁移边界。
 - 插件 wrapper（skill/docs/client 脚本）取自官方 MIT 文件（`apps/zcode-cli/packages/zcode-cua-plugin/`），保留 Z.ai 署名。
 - **首次运行自动激活（Windows）**：安装后无需手动脚本——宿主在 Helper 运行时缺失时自动从**本机已有的官方安装**（`ZCODE_CUA_HELPER_SOURCE` / 注册表卸载项 / 标准路径三级发现）搬运运行时到 `~/.zcode/cua-helper-runtime`，sha256 实测校验后生效；纯本机复制、无网络、不构成分发，`ZCODE_CUA_HELPER_AUTO_STAGE=0` 可关闭。无官方安装的机器给出指引并保持不可用（fail-closed）。
+- **重实现包内环境开关登记**（2026-10-19 恢复时补记；实现见 `packages/zcode-cua/broker-server.js`，均默认未设置、生产无需配置）：
+  - `ZCODE_CUA_LAUNCHER_PID`：标识拉起者 pid（Helper 安装与宿主生命周期关联）。
+  - `ZCODE_CUA_DEV_EXPOSE_BROKER=1`：**仅 dev 测试 harness**——把 broker socket 路径写入 `~/.zcode/computer-use/run` 供外部进程连测；生产严禁开启。
+  - `ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER`：broker 凭据刷新标记文件路径（宿主下发，`packages/shared/src/runtimeEnv.ts` 同名消费）。
+  - `ZCODE_CUA_PACKAGE_SPEC`：Helper 安装包 spec 覆盖（macOS 安装器链）。
+  - `ZCODE_CUA_HELPER_BUNDLE_ID`：dev 模式下 Helper bundle id 覆盖。
+  - `ZCODE_CUA_DISABLE_CPS_ACTIVATION`：置位禁用 CPS 激活流程。
+  - `ZCODE_CUA_HELPER_BUILD_ID`：Helper 安装 build id 覆盖（1-128 位 ASCII 字母/数字/点/下划线/连字符）。
+  - `ZCODE_CUA_HELPER_MAX_DOWNLOAD_BYTES` / `ZCODE_CUA_HELPER_DOWNLOAD_TIMEOUT_MS`：Helper（macOS）下载的字节上限与超时窗。
 
 一句话总结：**上游开源给了我们"能看"的条件，社区版把它变成"可证"的现实——默认不采、指纹最小、本地受控、分发包可验，且每一项主张都有可复现的 grep 与命令作为证据。**

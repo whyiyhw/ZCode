@@ -71,5 +71,25 @@
    1b. （本机已验，2026-09-22）构建链：desktop host bundle（tsup noExternal 内联）含新客户端（chunk 内 clientApiVersion/管道前缀）；`build-desktop-agent-cli` + `prepare-agent-node-bundle` 产出含真实执行器的 node-repl-host bundle，三官方插件（browser-use/node-repl-host/zcode-cua-plugin）均暂存进 bundled-agents。
    1c. （本机已验，2026-09-22）auto-stage E2E：空数据根模拟新装机 → `findWindowsCuaHelperSource`（注册表无 InstallLocation 时解析 DisplayIcon/UninstallString 目录，无 env 亦可发现 `D:\soft\zcode`）→ `stageCuaHelperRuntime` 搬运至 `<dataRoot>/.zcode/cua-helper-runtime`（契约补写 + sha 实测）→ 从用户暂存目录以产品 fork 形态拉起真实 Helper，健康握手 pid 匹配、`list_applications` 返回真实清单。
 2. （本机可验，待用户桌面复验）dev E2E：`node scripts/prepare-cua-helper.mjs` 暂存后 dev.mjs 自动设 `ZCODE_CUA_DEV_ROOT`，`pnpm dev:desktop` 会话内 node_repl 调 `list_windows` 返回真实窗口列表；`stop_computer_control` 可中断。
-3. （本机可验，待执行）本地打包：`ZCODE_CUA_BUNDLE_HELPER=1 pnpm bundle:desktop` 产物含 `resources/tools/cua-helper` 且 manifest 校验通过；不设 env 时产物不含该目录。
+3. （本机已验，2026-10-19）本地打包：`ZCODE_CUA_BUNDLE_HELPER=1 ZCODE_TARGET_OS=win32 ZCODE_TARGET_ARCH=x64 pnpm bundle:desktop` 产出 `dist/ZCode-3.16.2-win-x64.exe`（152.8 MiB），win-unpacked 含 `resources/tools/cua-helper`，afterPack 校验通过，产物以 packaged 路由同实现解析成功；不设 env 时产物不含该目录（开关求值与注入由 `packages/desktop/test/electronBuilderCuaHelperBundling.test.ts` 3/3 锁定）。安装包真实启动冒烟（发布门禁）未随本验证执行。
 4. （待真机）macOS：.app 安装/签名校验/LaunchServices 拉起/TCC 权限面板/PiP 会话。
+5. （本机已验，2026-10-19）恢复重实现（回退史见下方「维护史」）：自 0e1e50e3/9b1a99f0
+   恢复 9 个实现文件并补齐 v3.15.1 新增导出面；`node --test` 18/18（协议 14 +
+   runtime-staging 4）、lint 0 告警、全量 `pnpm build` exit 0，互操作冒烟重演 1a
+   （spawn+ipc 拉起官方 0.6.4 Helper：transport_ready/ready 消息、`broker_info` 握手
+   pid 匹配、`list_applications` 返回真实清单）。
+
+## 维护史
+
+- 2026-09-22（0e1e50e3）：clean-room 重实现落地（本 spec 主体）；9b1a99f0 随后做 lint 清理。
+- 2026-10-15（fcfb4749，v3.16.0）：上游 v3.15.1 为 zcode-cua 新增导出名
+  （resolveCuaHelperInstallRoot 等），fork 重实现缺新名导致 esbuild 打包 server-cli
+  报 "No matching export"、全量 build 失败；发版压力下将 9 个实现文件整包回退上游
+  占位产物（约 -7444 行），仅保留 runtime-staging 与本 spec。agent 侧桥因此退化为
+  无条件抛错的桩（运行时表象 "Computer Use is not available in this build"），spec
+  验收记录未同步，形成口径与实现脱节。本包 `.mjs` 测试不在根 vitest 收集范围
+  （unit 项目只收 `*.test.ts`），回退未触发任何门禁告警——这是当时回退未被察觉的盲区。
+- 2026-10-19：恢复真实现并补 v3.15.1 导出面。取舍：上游新增 4 个导出名中 3 个
+  （resolveHelperAppName / resolveCuaHelperInstallRoot / injectPermissionBrokerAgentMcpServers）
+  恢复版本已含真实现；仅 standaloneHelperCandidatePaths 以桥接同义的
+  standaloneHelperExecutablePaths 补名，不引入占位行为。恢复后各门禁见验收场景 5。
