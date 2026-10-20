@@ -350,11 +350,15 @@ export function createZCodeTaskServiceAdapter(
   async function resolveProductMcpServers(
     servers: ZCodeAgentMcpServer[] | undefined,
   ): Promise<ZCodeAgentMcpServer[] | undefined> {
-    const configuredServers = (servers?.length ?? 0) > 0 ? servers : undefined;
-    if (!configuredServers || !options.cuaProductMcpServerResolver) {
-      return configuredServers;
+    if (!options.cuaProductMcpServerResolver) {
+      return servers;
     }
-    return options.cuaProductMcpServerResolver.resolveMcpServers(configuredServers);
+    // 空 servers 也必须过 resolver（2026-10-19 修复）：resolver 对空/无 CUA server 的
+    // 列表执行 Helper 后台预热（warmHelperForBuiltInPlugin），这是宿主侧「首次使用
+    // 自动启动」的关键触发点；此前空列表在此提前短路，Helper 永远无人拉起——
+    // 3.17.1 实测 agent 装配成功但零拉起/零命名管道，调用全部卡 not accepting。
+    // resolver 对空列表的行为是「预热后原样返回」，语义安全且幂等（host.running 防重）。
+    return options.cuaProductMcpServerResolver.resolveMcpServers(servers);
   }
 
   function workspaceKey(params: { workspacePath: string; workspaceIdentity?: string }): string {

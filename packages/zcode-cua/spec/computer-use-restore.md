@@ -111,3 +111,12 @@
   真实现特征；注入上游占位版实测 6/6 红灯、真实现 6/6 绿）与 CI check job 的
   `node --test packages/zcode-cua/test/*.mjs` 步骤（协议全量 18 用例；Linux 需预建
   UDS 目录并设 XDG_RUNTIME_DIR，win32 管道无此依赖，Docker node:24 实测通过）。
+- 2026-10-19（同日第四项，拉起触发缺口）：3.17.1 实测 Helper 零拉起（系统零
+  `zcode-cua-helper-*` 命名管道、日志零拉起记录），根因在 zcodeTaskServiceAdapter
+  的 resolveProductMcpServers——空 MCP servers 列表时提前短路，resolver（对空列表
+  执行 warmHelperForBuiltInPlugin 后台预热，宿主侧「首次使用自动启动」的关键触发点）
+  从不被调用。修复：空列表也过 resolver（幂等，host.running 防重）；护栏用例锁定
+  「createTask 不带 mcpServers 时 resolver 仍被调用且收到 undefined」。同日实测链
+  另证伪两处误诊：cua-pip-session wiring 的 enabled:false 是 darwin 专属浮窗口径
+  （非 CUA 服务关闭）；meta/install-lock 是 macOS 安装器产物（Windows packaged 路由
+  无需）。

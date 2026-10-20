@@ -1220,6 +1220,23 @@ describe("ZCode legacy task compat task index", () => {
     ]);
   });
 
+  it("passes empty mcpServers through the product resolver for helper warmup", async () => {
+    // 2026-10-19 修复护栏：resolver 对空/无 CUA server 列表执行 Helper 后台预热
+    // （宿主侧「首次使用自动启动」的唯一触发点）；adapter 曾在空列表时提前短路，
+    // 导致 Helper 永远无人拉起（3.17.1 实测零拉起/零命名管道、调用全卡 not accepting）。
+    const resolver = {
+      resolveMcpServers: vi.fn(async (servers) => servers),
+    } satisfies CuaProductMcpServerResolver;
+    const { agent, service } = createService({ cuaProductMcpServerResolver: resolver });
+
+    await service.createTask({ workspacePath: "/repo", provider: "glm" });
+
+    expect(resolver.resolveMcpServers).toHaveBeenCalledTimes(1);
+    expect(resolver.resolveMcpServers).toHaveBeenCalledWith(undefined);
+    const createParams = vi.mocked(agent.createSession).mock.calls[0]?.[0];
+    expect(createParams?.mcpServers).toBeUndefined();
+  });
+
   it("restarts only the current workspace agent process", async () => {
     const { agent, service } = createService();
 
